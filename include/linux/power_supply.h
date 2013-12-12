@@ -18,6 +18,7 @@
 #include <linux/types.h>
 #include <linux/spinlock.h>
 #include <linux/notifier.h>
+#include <linux/types.h>
 
 struct device;
 
