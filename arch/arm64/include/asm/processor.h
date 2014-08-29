@@ -139,7 +139,7 @@ extern struct task_struct *cpu_switch_to(struct task_struct *prev,
 #define KSTK_EIP(tsk)	((unsigned long)task_pt_regs(tsk)->pc)
 
 #ifndef CONFIG_COMPAT
-#define KSTK_ESP(tsk)	((unsigned long)task_pt_regs(tsk)->sp)
+#define KSTK_ESP(tsk)	user_stack_pointer(task_pt_regs(tsk))
 #else
 extern unsigned long KSTK_ESP(struct task_struct *task);
 #endif
