@@ -7,9 +7,6 @@ All Rights Reserved
 #define seq_printf fprintf
 #include "rdp.h"
 
-typedef unsigned char u8;
-typedef unsigned short u16;
-
 #include "i2c-logger.h"
 
 //...
@@ -105,5 +102,9 @@ bail:
 		if (ret)
 			unlink(txtname);
 	}
+	if (binname)
+		free(binname);
+	if (txtname)
+		free(txtname);
 	return ret;
 }

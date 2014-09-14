@@ -4,6 +4,10 @@ All Rights Reserved
 ------------------------------------------------------------*/
 #ifndef _RDP_H_
 #define _RDP_H_
+
+typedef unsigned char u8;
+typedef unsigned short u16;
+
 typedef unsigned char UINT8;
 typedef unsigned short UINT16;
 typedef unsigned long UINT32;

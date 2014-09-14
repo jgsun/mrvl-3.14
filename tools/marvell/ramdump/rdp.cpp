@@ -101,10 +101,10 @@ All Rights Reserved
 		fails to avoid failures due to random content in it.
 	5.5 (antone@marvell.com): Restore rdc.header.pgd when missing
 		while ttbr1 is known (aarch64 only).
-
+	5.6 (arielh@marvell.com): Add parser for printk buffer (for kernel 3.10 and up).
 */
 
-#define VERSION_STRING "5.5"
+#define VERSION_STRING "5.6"
 
 #include <stdio.h>
 #include "rdp.h"
@@ -122,68 +122,6 @@ const char *comExtraDdrFileName = "com_EXTRA_DDR.bin";
 FILE* rdplog;
 const char *rdpPath;
 enum aarch_type_e aarch_type;
-
-char* changeExt(const char* inName,const char* ext)
-{
-	char* outName=(char*)malloc(strlen(inName)+strlen(ext)+1+1); //+ext+'.'+\0
-	int i,exti;
-	if(outName)
-	{
-	  for(i=0, exti=-1;inName[i];i++)
-	  {
-		  if((outName[i]=inName[i])=='.') exti=i;
-	  }
-
-	  if(exti<0) //no dot
-	  {
-		  exti=i;
-		  outName[exti]='.';
-	  }
-	  strcpy(&outName[exti+1],ext);
-	}
-    return outName;
-}
-
-// Inherit the path
-char* changeNameExt(const char* inName,const char* nameext)
-{
-	int len;
-	const char *p;
-	const char *pp=0;
-
-	// Find path last '\'
-	for(p=inName; p=strchr(p,PATH_SLASH); pp=++p);
-	len = pp?pp-inName:0;
-
-	char* outName=(char*)malloc(strlen(nameext)+len+1); // +\0
-
-	if(outName)
-	{
-		strncpy(outName, inName, len);
-		outName[len]=0;
-		strcat(outName, nameext);
-	}
-    return outName;
-}
-
-const char* getExt(const char* inName)
-{
-	int i,exti;
-	  for(i=0, exti=-1;inName[i];i++)
-	  {
-		  if(inName[i]=='.') exti=i;
-	  }
-
-	  if(exti<0) //no dot
-	  {
-		  exti=i;
-	  }
-	  else
-	  {
-		  exti++;
-	  }
-    return &inName[exti];
-}
 
 #define PAGE_SIZE 0x1000
 #define MAXBUF PAGE_SIZE /* One MMU page */
@@ -873,6 +811,7 @@ typedef int parser_f(const char* inName, FILE *fin, const char *name, struct rdc
 //-----------------------------------------------------------------------------------------------------------------------------------------
 extern int pmlog_parser(const char* inName, FILE *fin, const char *name, struct rdc_dataitem *rdi, int nw);
 extern int i2clog_parser(const char* inName, FILE *fin, const char *name, struct rdc_dataitem *rdi, int nw);
+extern int printk_parser(const char* inName, FILE *fin, const char *name, struct rdc_dataitem *rdi, int nw);
 
 const struct parser_def {
 	/* filename as appears in the rdi object .name field */
@@ -884,6 +823,7 @@ const struct parser_def {
 } parser_table[] = {
 	{ "pmlog", NULL, &pmlog_parser },
 	{ "i2clog", NULL, &i2clog_parser },
+	{ "printk", NULL, &printk_parser },
 };
 //-----------------------------------------------------------------------------------------------------------------------------------------
 //                                                       END OF PARSER TABLE
