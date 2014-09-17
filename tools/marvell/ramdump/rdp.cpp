@@ -99,9 +99,12 @@ All Rights Reserved
 		Fix RDI CBUF parsing with cur wrap case.
 	5.4 (antone@marvell.com): Zero RDC content when RDC detection
 		fails to avoid failures due to random content in it.
+	5.5 (antone@marvell.com): Restore rdc.header.pgd when missing
+		while ttbr1 is known (aarch64 only).
+
 */
 
-#define VERSION_STRING "5.4"
+#define VERSION_STRING "5.5"
 
 #include <stdio.h>
 #include "rdp.h"
@@ -379,6 +382,7 @@ unsigned v2p64(u64 va, FILE *fin) {
 	unsigned pa;
 	unsigned base = rdc.header.pgd;
 	u64 offsetmask;
+	u64 va_org = va;
 	int lvl; /* level */
 	int i;
 	if ((va & MMU64_REGIONMASK) != MMU64_REGIONMASK) {
@@ -408,7 +412,7 @@ unsigned v2p64(u64 va, FILE *fin) {
 				if (fseek(fin, off, SEEK_SET) || (fread(&mmu64.pagetable[0], sizeof(mmu64.pagetable[0]), MMU64_PT_SIZE, fin)
 						!= MMU64_PT_SIZE)) {
 					fprintf(rdplog, "v2p(0x%.8x%.8x) failed: cannot read level#%d table at offset 0x%.8x\n",
-						hi32(va), lo32(va), lvl, off);
+						hi32(va_org), lo32(va_org), lvl, off);
 					return BADPA;
 				}
 				fseek(fin, pos, SEEK_SET);
@@ -419,7 +423,7 @@ unsigned v2p64(u64 va, FILE *fin) {
 			mmu64.desc[lvl]=mmu64.pagetable[index];
 		if ((mmu64.desc[lvl]&MMU64_DESCT_MASK) == MMU64_DESCT_BLOCK) {
 			if ((lvl==0) || (lvl==3)) {
-				fprintf(rdplog, "v2p(0x%.8x%.8x) failed: block desc at level#%d\n", hi32(va), lo32(va), lvl);
+				fprintf(rdplog, "v2p(0x%.8x%.8x) failed: block desc at level#%d\n", hi32(va_org), lo32(va_org), lvl);
 				return BADPA;
 			}
 			lvl++; /* we go one back after the loop exits this way or another */
@@ -1406,6 +1410,16 @@ static int extractCpuState_64(const char* inName, const char* outShortName, FILE
 	if (rdd.spr.ttbr1) {
 		fprintf(fout, "per.set SPR:0x30201 0x%.8x%.8x ; TTBR1\n", hi32(rdd.spr.ttbr1),lo32(rdd.spr.ttbr1));
 		fprintf(fout, "per.set SPR:0x30202 0x%.8x%.8x ; TCR\n", hi32(rdd.spr.tcr), lo32(rdd.spr.tcr));
+		if (!rdc.header.pgd) {
+			/*
+			 * init_mm.pgd is missing, but we have ttbr1:
+			 * restore the pgd for rdp translations, e.g. in rdi's etc.
+			 * Note, that this is only done for aarch64, because current TTB in aarch32
+			 * won't contain all kernel mappings, and is therefore not really suitable.
+			 */
+			rdc.header.pgd = lo32(rdd.spr.ttbr1);
+			fprintf(rdplog, "pgd in RDC header is 0: set based on TTBR1 value\n");
+		}
 	} else {
 		// Note: there's a compiler bug with implicit case: hi32(unsigned value) returns lo32(value) instead of 0
 		u64 base_pa = (u64)segments[seg0].pa;
