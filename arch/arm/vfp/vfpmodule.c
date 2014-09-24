@@ -187,11 +187,16 @@ static int vfp_notifier(struct notifier_block *self, unsigned long cmd, void *v)
 			vfp_save_state(vfp_current_hw_state[cpu], fpexc);
 #endif
 
+		fpexc = thread->vfpstate.hard.fpexc;
+		if (fpexc & FPEXC_EN) {
+			vfp_restore_state(&thread->vfpstate);
+			vfp_current_hw_state[cpu] = &thread->vfpstate;
+		}
 		/*
 		 * Always disable VFP so we can lazily save/restore the
 		 * old state.
 		 */
-		fmxr(FPEXC, fpexc & ~FPEXC_EN);
+		/* fmxr(FPEXC, fpexc & ~FPEXC_EN); */
 		break;
 
 	case THREAD_NOTIFY_FLUSH:

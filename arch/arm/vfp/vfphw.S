@@ -226,6 +226,33 @@ process_exception:
 					@ retry the faulted instruction
 ENDPROC(vfp_support_entry)
 
+ENTRY(vfp_restore_state)
+	@r0 - restore location
+	VFPFMRX	r1, FPEXC		@ Is the VFP enabled?
+	orr	r1, r1, #FPEXC_EN	@ user FPEXC has the enable bit set
+	bic	r1, r1, #FPEXC_EX	@ make sure exceptions are disabled
+	VFPFMXR	FPEXC, r1		@ enable VFP, disable any pending
+					@ exceptions, so we can get at the
+					@ rest of it
+	VFPFLDMIA r0, r1		@ reload the working registers while
+					@ FPEXC is in a safe state
+	ldmia	r0, {r1, r2, r3, r12}	@ load FPEXC, FPSCR, FPINST, FPINST2
+
+#ifndef CONFIG_CPU_FEROCEON
+	tst	r1, #FPEXC_EX		@ is there additional state to restore?
+	beq	1f
+	VFPFMXR	FPINST, r3		@ restore FPINST (only if FPEXC.EX is set)
+	tst	r1, #FPEXC_FP2V		@ is there an FPINST2 to write?
+	beq	1f
+	VFPFMXR	FPINST2, r12		@ FPINST2 if needed (and present)
+1:
+#endif
+	VFPFMXR	FPSCR, r2		@ restore status
+	VFPFMXR	FPEXC, r1		@ Restore FPEXC last
+	mov	pc, lr
+
+ENDPROC(vfp_restore_state)
+
 ENTRY(vfp_save_state)
 	@ Save the current VFP state
 	@ r0 - save location

@@ -378,3 +378,4 @@ struct op {
 };
 
 extern void vfp_save_state(void *location, u32 fpexc);
+extern void vfp_restore_state(void *location);
