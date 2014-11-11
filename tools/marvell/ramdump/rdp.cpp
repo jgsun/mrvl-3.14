@@ -102,9 +102,10 @@ All Rights Reserved
 	5.5 (antone@marvell.com): Restore rdc.header.pgd when missing
 		while ttbr1 is known (aarch64 only).
 	5.6 (arielh@marvell.com): Add parser for printk buffer (for kernel 3.10 and up).
+	5.7 (mnissim@marvell.com): Add logcat parser.
 */
 
-#define VERSION_STRING "5.6"
+#define VERSION_STRING "5.7"
 
 #include <stdio.h>
 #include "rdp.h"
@@ -810,6 +811,7 @@ typedef int parser_f(const char* inName, FILE *fin, const char *name, struct rdc
 //                                                          PARSER TABLE
 //-----------------------------------------------------------------------------------------------------------------------------------------
 extern int pmlog_parser(const char* inName, FILE *fin, const char *name, struct rdc_dataitem *rdi, int nw);
+extern int logcat_parser(const char* inName, FILE *fin, const char *name, struct rdc_dataitem *rdi, int nw);
 extern int i2clog_parser(const char* inName, FILE *fin, const char *name, struct rdc_dataitem *rdi, int nw);
 extern int printk_parser(const char* inName, FILE *fin, const char *name, struct rdc_dataitem *rdi, int nw);
 
@@ -821,6 +823,10 @@ const struct parser_def {
 	/* The 2st parser is invoked after of the 1st default/non-default parser is done; the default 1st already produced the binary file (name) */
 	parser_f *parser_2;
 } parser_table[] = {
+	{ "radio", NULL, &logcat_parser },
+	{ "main", NULL, &logcat_parser },
+	{ "events", NULL, &logcat_parser },
+	{ "system", NULL, &logcat_parser },
 	{ "pmlog", NULL, &pmlog_parser },
 	{ "i2clog", NULL, &i2clog_parser },
 	{ "printk", NULL, &printk_parser },

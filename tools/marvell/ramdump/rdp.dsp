@@ -111,6 +111,10 @@ SOURCE=.\rdp.cpp
 SOURCE=.\emmd_elf.cpp
 # End Source File
 
+# Begin Source File
+SOURCE=.\logcat_logger.cpp
+# End Source File
+
 # End Group
 # Begin Group "Header Files"
 
