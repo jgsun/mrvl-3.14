@@ -103,9 +103,11 @@ All Rights Reserved
 		while ttbr1 is known (aarch64 only).
 	5.6 (arielh@marvell.com): Add parser for printk buffer (for kernel 3.10 and up).
 	5.7 (mnissim@marvell.com): Add logcat parser.
+	5.8 (antone@marvell.com): Fix bug in aarch64 v2p caching.
+		Add RDC location for Nezha3.
 */
 
-#define VERSION_STRING "5.7"
+#define VERSION_STRING "5.8"
 
 #include <stdio.h>
 #include "rdp.h"
@@ -227,6 +229,9 @@ static int findRdc(FILE* in)
 		if(!checkRdc(in, bankSizeOptions[i])) return 0;
 	if (!checkRdc_alt(in, 0x08140400))
 		return 0;
+	if (!checkRdc_alt(in, 0x04A00400))
+		return 0;
+
 	memset(&rdc,0,sizeof(rdc));
 	return -1;
 }
@@ -341,10 +346,11 @@ unsigned v2p64(u64 va, FILE *fin) {
 		if (!mmu64.desc[lvl] || ((va^mmu64.va) & mask)) {
 			/* We need this level table to get the descriptor */
 			for (i=lvl;i<MMU64_LEVELS;i++) mmu64.desc[i]=0;
+			/* From now on valid desc[i] match this va */
+			mmu64.va = va;
 			if ((mmu64.table_lvl-1) != lvl) {
 				unsigned pos = ftell(fin);
 				/* previous state is not relevant any more */
-				mmu64.va = va;
 				mmu64.table_lvl = 0;
 
 				off = FILE_OFFSET(base);
