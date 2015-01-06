@@ -105,9 +105,11 @@ All Rights Reserved
 	5.7 (mnissim@marvell.com): Add logcat parser.
 	5.8 (antone@marvell.com): Fix bug in aarch64 v2p caching.
 		Add RDC location for Nezha3.
+	5.9 (antone@marvell.com): Fix bug in getRdiNw to recover
+		the last RDI word.
 */
 
-#define VERSION_STRING "5.8"
+#define VERSION_STRING "5.9"
 
 #include <stdio.h>
 #include "rdp.h"
@@ -858,7 +860,6 @@ static int getRdiNw(struct rdc_dataitem *rdi)
 	int size = rdi->size - RDI_HEAD_SIZE;
 	int item_size = sizeof(unsigned);
 	if (aarch_type == aarch64) {
-		size -= sizeof(unsigned);
 		item_size = sizeof(u64);
 	}
 	if (size < 0) return -1;
