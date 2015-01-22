@@ -891,10 +891,10 @@ static int b52isp_ctrl_set_expo_bias(int idx, int id, struct b52_sensor *sensor)
 	else
 		offset = ev_bias_offset[idx];
 
-	/* (low_def[id]+ high_def[id])/2+(EV offset) */
-	low_target = ((low_def[id] + high_def[id]) >> 1) + offset;
+	low_target = low_def[id] + offset;
 	low_target = clamp(low_target, 0, 0xFF);
-	high_target = low_target;
+	high_target = high_def[id] + offset;
+	high_target = clamp(high_target, 0, 0xFF);
 	b52_writeb(base + REG_FW_AEC_TARGET_LOW, low_target);
 	b52_writeb(base + REG_FW_AEC_TARGET_HIGH, high_target);
 	ev_ext = ev_ext_offset[idx];
