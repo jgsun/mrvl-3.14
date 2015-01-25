@@ -107,9 +107,10 @@ All Rights Reserved
 		Add RDC location for Nezha3.
 	5.9 (antone@marvell.com): Fix bug in getRdiNw to recover
 		the last RDI word.
+	5.10 (ymarkman@marvell.com): "printk" parser version 0.2; .cmm uses "printkBUF.bin" instead of "printks.txt"
 */
 
-#define VERSION_STRING "5.9"
+#define VERSION_STRING "5.10"
 
 #include <stdio.h>
 #include "rdp.h"
@@ -975,7 +976,13 @@ void stripTextCR(char* text)
 	}
 }
 
-const char PRINTK_FILE_NAME[] = "printks.txt";
+/* There RDP-package has 2 ways to obtain printk-text
+ *  1. Fetch printk.bin buffer and parse it into printk.txt by exec "rdp" or/and "printk"
+ *  2. Fetch buffer by T32-emulator with .CMM script but not parse the buffer.
+ *     Obtained file contains ZEROs and other non-print-chars
+ */
+const char PRINTK_FILE_NAME[] = "printkBUF.bin";
+
 static int extractCpuState(const char* inName, const char* outShortName, FILE* fin, unsigned addr)
 {
 	unsigned offset;

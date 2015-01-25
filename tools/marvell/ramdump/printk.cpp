@@ -5,7 +5,17 @@ All Rights Reserved
 
 #include "rdp.h"
 
-#define VERSION_STRING "0.1"
+/* Enable STAND_ALONE for WIN printk.exe compilation
+ * Linux compile-script already make with -DSTAND_ALONE
+ */
+//#define STAND_ALONE
+
+#define VERSION_STRING "0.2"
+/* Revision history:
+ *  0.2: log_check() for alignment 4 or/and 8
+ *       TAB is printable character
+ *       Print format "dmesg" without PRINT_CONT_CHAR
+ */
 
 /* From kernel 3.10, file kernel/printk.c */
 enum log_flags {
@@ -41,14 +51,22 @@ static char *log_dict(const struct log *msg)
 
 static int log_check(const struct log *msg)
 {
-	int len = sizeof(*msg) + msg->text_len + msg->dict_len;
-	int align = sizeof(unsigned) - 1;
-	if (((len + align) & ~align) != msg->len)
-		return -1;
+	int len;
+
 	if ((msg->len - sizeof(*msg)) >= MAX_RECORD)
+		return -1;
+
+	len = sizeof(*msg) + msg->text_len + msg->dict_len;
+	/* alignment of total len might be either 8  OR  4
+	 * (depending upon CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS)
+	 * Fail only if both variants are failed
+	 */
+	if ((((len + 3) & ~3) != msg->len)
+	 && (((len + 7) & ~7) != msg->len))
 		return -1;
 	return 0;
 }
+
 /* the function converting the records to pure text
  * and return the number of valid records found */
 int convert_printk(FILE *fin, FILE *fout)
@@ -76,7 +94,7 @@ int convert_printk(FILE *fin, FILE *fout)
 		if (log_check(msg)) {
 			fprintf(stderr, "Skipping to the next valid header from 0x%.8x...", foffs);
 			do {
-				foffs += sizeof(unsigned);
+				foffs += sizeof(unsigned); //Good for both alignments - 4 and 8 bytes
 				if (fseek(fin, foffs, SEEK_SET))
 					goto done; /* eof */
 				if (fread(msg, sizeof(*msg), 1, fin) != 1)
@@ -118,16 +136,22 @@ int convert_printk(FILE *fin, FILE *fout)
                  ((prev & LOG_CONT) && !(msg->flags & LOG_PREFIX)))
                 cont = '+';
 
+#ifdef PRINT_CONT_CHAR
         fprintf(fout, "<%u> [%5u.%06u],%c;",
                       (msg->facility << 3) | msg->level,
                       ts_sec, ts_usec, cont);
+#else
+        fprintf(fout, "<%u> [%5u.%06u] ",
+                      (msg->facility << 3) | msg->level,
+                      ts_sec, ts_usec);
+#endif
         prev = msg->flags;
 
         /* escape non-printable characters */
         for (i = 0; i < msg->text_len; i++) {
                 unsigned char c = log_text(msg)[i];
 
-                if (c!=0x0a && !isprint(c))//c < ' ' || c >= 127 || c == '\\')
+                if (c!=0x0a && c!=0x09/*TAB*/&& !isprint(c))//c < ' ' || c >= 127 || c == '\\')
                         fprintf(fout, "\\x%02x", c);
                 else
                         fprintf(fout, "%c", c);
