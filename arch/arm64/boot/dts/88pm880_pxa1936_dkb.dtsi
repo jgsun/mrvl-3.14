@@ -190,6 +190,7 @@
 	};
 
 	vbus {
-		gpadc-number = <3>;
+		marvell,enable-usb-id-detection;
+		marvell,usb-id-gpadc = "88pm88x-gpadc3";
 	};
 };
