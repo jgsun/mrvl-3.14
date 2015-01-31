@@ -1858,17 +1858,15 @@ static int mv_udc_vbus_session(struct usb_gadget *gadget, int is_active)
 {
 	struct mv_udc *udc;
 	unsigned long flags;
-#ifdef CONFIG_USB_GADGET_CHARGE_ONLY
-	unsigned int vbus;
-#endif /* CONFIG_USB_GADGET_CHARGE_ONLY */
 	int retval = 0;
 
 	udc = container_of(gadget, struct mv_udc, gadget);
 
 #ifdef CONFIG_USB_GADGET_CHARGE_ONLY
 	if (is_charge_only_mode()) {
-		pxa_usb_extern_call(udc->pdata->id, vbus, get_vbus, &vbus);
-		is_active = vbus;
+		is_active = extcon_get_cable_state(udc->extcon, "VBUS");
+		dev_info(&udc->dev->dev, "%s: charge_only_mode: vbus = %d\n",
+			 __func__, is_active);
 	}
 #endif /* CONFIG_USB_GADGET_CHARGE_ONLY */
 
@@ -3001,7 +2999,7 @@ static int mv_udc_vbus_notifier_call(struct notifier_block *nb,
 	struct mv_udc *udc = container_of(nb, struct mv_udc, notifier);
 
 	/* polling VBUS and init phy may cause too much time*/
-	if (udc->qwork && val == EVENT_VBUS)
+	if (udc->qwork)
 		queue_work(udc->qwork, &udc->vbus_work);
 
 	return 0;
@@ -3011,17 +3009,12 @@ static void mv_udc_vbus_work(struct work_struct *work)
 {
 	struct mv_udc *udc;
 	unsigned int vbus = 0;
-	int ret;
 
 	udc = container_of(work, struct mv_udc, vbus_work);
-	if (!(udc->pdata->extern_attr & MV_USB_HAS_VBUS_DETECTION))
-		return;
 
-	ret = pxa_usb_extern_call(udc->pdata->id, vbus, get_vbus, &vbus);
-	if (ret)
-		return;
-
+	vbus = extcon_get_cable_state(udc->extcon, "VBUS");
 	dev_info(&udc->dev->dev, "vbus is %d\n", vbus);
+
 	mv_udc_vbus_session(&udc->gadget, vbus);
 }
 
@@ -3308,7 +3301,7 @@ static int mv_udc_remove(struct platform_device *pdev)
 
 	if (udc->pdata && (udc->pdata->extern_attr & MV_USB_HAS_VBUS_DETECTION)
 		&& udc->clock_gating && udc->transceiver == NULL)
-		pxa_usb_unregister_notifier(udc->pdata->id, &udc->notifier);
+		extcon_unregister_interest(&udc->vbus_dev);
 
 	if (udc->qwork) {
 		flush_workqueue(udc->qwork);
@@ -3519,9 +3512,10 @@ static int mv_udc_probe(struct platform_device *pdev)
 
 	if (pdata->mode == MV_USB_MODE_OTG) {
 		udc->transceiver = devm_usb_get_phy_dev(&pdev->dev,
-					MV_USB2_OTG_PHY_INDEX);
+							MV_USB2_OTG_PHY_INDEX);
+		/* try again */
 		if (IS_ERR_OR_NULL(udc->transceiver))
-			return PTR_ERR(udc->transceiver);
+			return -EPROBE_DEFER;
 	}
 
 	/* udc only have one sysclk. */
@@ -3551,7 +3545,7 @@ static int mv_udc_probe(struct platform_device *pdev)
 
 	udc->phy = devm_usb_get_phy_dev(&pdev->dev, MV_USB2_PHY_INDEX);
 	if (IS_ERR_OR_NULL(udc->phy))
-		return PTR_ERR(udc->phy);
+		return -EPROBE_DEFER;
 
 	/* we will acces controller register, so enable the clk */
 	retval = mv_udc_enable_internal(udc);
@@ -3655,26 +3649,26 @@ static int mv_udc_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&udc->delayed_charger_work, do_delayed_charger_work);
 	udc->charger_type = NULL_CHARGER;
 
-	/* VBUS detect: we can disable/enable clock on demand.*/
-	if (!pxa_usb_has_extern_call(udc->pdata->id, vbus, get_vbus))
-		pdata->extern_attr &=
-				   (unsigned int)(~MV_USB_HAS_VBUS_DETECTION);
-	if (!pxa_usb_has_extern_call(udc->pdata->id, idpin, get_idpin))
-		pdata->extern_attr &=
-				   (unsigned int)(~MV_USB_HAS_IDPIN_DETECTION);
-
-	retval = mv_udc_psy_register(udc);
-	if (retval < 0) {
-		dev_err(&pdev->dev, "%s: Register udc psy fails.\n", __func__);
-		goto err_destroy_dma;
-	}
-
+	/*--------------------handle vbus-----------------------------*/
+	/* TODO: use device tree to parse extcon device name */
+	udc->extcon = extcon_get_extcon_dev("88pm88x-extcon");
+	if (!udc->extcon)
+		return -EPROBE_DEFER;
 	if ((pdata->extern_attr & MV_USB_HAS_VBUS_DETECTION)
-		 || udc->transceiver)
+	    || udc->transceiver)
 		udc->clock_gating = 1;
 
 	if ((pdata->extern_attr & MV_USB_HAS_VBUS_DETECTION)
-		 && udc->transceiver == NULL) {
+	    && udc->transceiver == NULL) {
+
+		udc->notifier.notifier_call = mv_udc_vbus_notifier_call;
+		retval = extcon_register_interest(&udc->vbus_dev,
+						  "88pm88x-extcon",
+						  "VBUS", &udc->notifier);
+		if (retval)
+			return retval;
+
+		udc->vbus_active = extcon_get_cable_state(udc->extcon, "VBUS");
 		udc->qwork = create_singlethread_workqueue("mv_udc_queue");
 		if (!udc->qwork) {
 			dev_err(&pdev->dev, "cannot create workqueue\n");
@@ -3683,15 +3677,19 @@ static int mv_udc_probe(struct platform_device *pdev)
 		}
 
 		INIT_WORK(&udc->vbus_work, mv_udc_vbus_work);
-		udc->notifier.notifier_call = mv_udc_vbus_notifier_call;
-		pxa_usb_register_notifier(udc->pdata->id, &udc->notifier);
 	}
 
-	/*
-	 * When clock gating is supported, we can disable clk and phy.
-	 * If not, it means that VBUS detection is not supported, we
-	 * have to enable vbus active all the time to let controller work.
-	 */
+	retval = mv_udc_psy_register(udc);
+	if (retval < 0) {
+		dev_err(&pdev->dev, "%s: Register udc psy fails.\n", __func__);
+		goto err_destroy_dma;
+	}
+
+	 /*
+	  * When clock gating is supported, we can disable clk and phy.
+	  * If not, it means that VBUS detection is not supported, we
+	  * have to enable vbus active all the time to let controller work.
+	  */
 	if (udc->clock_gating)
 		mv_udc_disable_internal(udc);
 	else
@@ -3758,7 +3756,7 @@ err_create_workqueue:
 		flush_workqueue(udc->qwork);
 		destroy_workqueue(udc->qwork);
 	}
-	pxa_usb_unregister_notifier(udc->pdata->id, &udc->notifier);
+	extcon_unregister_interest(&udc->vbus_dev);
 err_destroy_dma:
 	dma_pool_destroy(udc->dtd_pool);
 err_free_dma:

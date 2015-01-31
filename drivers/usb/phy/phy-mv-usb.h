@@ -11,6 +11,7 @@
 #define	__MV_USB_OTG_CONTROLLER__
 
 #include <linux/types.h>
+#include <linux/extcon.h>
 
 /* Command Register Bit Masks */
 #define USBCMD_RUN_STOP			(0x00000001)
@@ -159,6 +160,7 @@ struct mv_otg {
 	struct mv_usb_platform_data *pdata;
 	struct notifier_block notifier;
 	struct notifier_block notifier_charger;
+	struct notifier_block notifier_empty;
 
 	struct pm_qos_request   qos_idle;
 	s32                     lpm_qos;
@@ -167,6 +169,12 @@ struct mv_otg {
 	unsigned int clock_gating;
 	struct clk *clk;
 	unsigned int charger_type;
+
+	/* for vbus detection */
+	struct extcon_specific_cable_nb vbus_dev;
+	/* for id detection */
+	struct extcon_specific_cable_nb id_dev;
+	struct extcon_dev *extcon;
 };
 
 #endif

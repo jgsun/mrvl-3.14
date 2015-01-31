@@ -11,6 +11,7 @@
 #define __MV_UDC_H
 
 #include <linux/power_supply.h>
+#include <linux/extcon.h>
 
 #define VUSBHS_MAX_PORTS	8
 
@@ -368,6 +369,10 @@ struct mv_udc {
 #ifdef CONFIG_USB_GADGET_DEBUG_FILES
 	struct mv_udc_stats stats;
 #endif
+
+	/* for vbus detection */
+	struct extcon_specific_cable_nb vbus_dev;
+	struct extcon_dev *extcon;
 };
 
 /* endpoint data structure */

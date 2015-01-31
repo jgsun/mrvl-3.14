@@ -105,6 +105,7 @@ static int mv_otg_set_vbus(struct usb_otg *otg, bool on)
 		pm_qos_update_request(&mvotg->qos_idle, mvotg->lpm_qos);
 	}
 
+	/* TODO: rework later */
 	ret = pxa_usb_extern_call(mvotg->pdata->id, vbus, set_vbus, on);
 
 	/* release constraint after turn off vbus */
@@ -387,7 +388,9 @@ static void mv_otg_update_inputs(struct mv_otg *mvotg)
 
 	if (mvotg->pdata->extern_attr & MV_USB_HAS_VBUS_DETECTION) {
 		unsigned int vbus;
-		pxa_usb_extern_call(mvotg->pdata->id, vbus, get_vbus, &vbus);
+		vbus = extcon_get_cable_state(mvotg->extcon, "VBUS");
+		dev_info(&mvotg->pdev->dev, "-->%s: vbus = %d\n", __func__, vbus);
+
 		if (vbus == VBUS_HIGH) {
 			otg_ctrl->b_sess_vld = 1;
 			otg_ctrl->b_sess_end = 0;
@@ -402,8 +405,11 @@ static void mv_otg_update_inputs(struct mv_otg *mvotg)
 
 	if (mvotg->pdata->extern_attr & MV_USB_HAS_IDPIN_DETECTION) {
 		unsigned int id;
-		pxa_usb_extern_call(mvotg->pdata->id, idpin, get_idpin, &id);
-		otg_ctrl->id = !!id;
+		/* id = 0 means the otg cable is absent. */
+		id = extcon_get_cable_state(mvotg->extcon, "USB-ID");
+		dev_info(&mvotg->pdev->dev, "-->%s: id = %d\n", __func__, id);
+
+		otg_ctrl->id = !id;
 	} else {
 		otg_ctrl->id = !!(otgsc & OTGSC_STS_USB_ID);
 	}
@@ -843,8 +849,10 @@ static int mv_otg_remove(struct platform_device *pdev)
 	}
 
 	if (mvotg->pdata->extern_attr
-		& (MV_USB_HAS_VBUS_DETECTION | MV_USB_HAS_IDPIN_DETECTION))
-		pxa_usb_unregister_notifier(mvotg->pdata->id, &mvotg->notifier);
+		& (MV_USB_HAS_VBUS_DETECTION | MV_USB_HAS_IDPIN_DETECTION)) {
+			extcon_unregister_interest(&mvotg->vbus_dev);
+			extcon_unregister_interest(&mvotg->id_dev);
+	}
 
 	mv_otg_disable(mvotg);
 
@@ -1004,14 +1012,29 @@ static int mv_otg_probe(struct platform_device *pdev)
 
 	if (pdata->extern_attr
 		& (MV_USB_HAS_VBUS_DETECTION | MV_USB_HAS_IDPIN_DETECTION)) {
-		mvotg->notifier.notifier_call = mv_otg_notifier_callback;
-		pxa_usb_register_notifier(mvotg->pdata->id, &mvotg->notifier);
-		if (pdata->extern_attr & MV_USB_HAS_VBUS_DETECTION) {
+
+		/* TODO: use device tree to parse extcon device name */
+		mvotg->extcon = extcon_get_extcon_dev("88pm88x-extcon");
+		if (!mvotg->extcon)
+			return -EPROBE_DEFER;
+
+		if (pdata->extern_attr & MV_USB_HAS_VBUS_DETECTION)
 			mvotg->clock_gating = 1;
-			pxa_usb_extern_call(mvotg->pdata->id, vbus, init);
+
+		mvotg->notifier.notifier_call = mv_otg_notifier_callback;
+
+		retval = extcon_register_interest(&mvotg->vbus_dev,
+						  "88pm88x-extcon", "VBUS",
+						  &mvotg->notifier);
+		if (retval)
+			return retval;
+		retval = extcon_register_interest(&mvotg->id_dev,
+						  "88pm88x-extcon", "USB-ID",
+						  &mvotg->notifier);
+		if (retval) {
+			extcon_unregister_interest(&mvotg->vbus_dev);
+			return retval;
 		}
-		if (pdata->extern_attr & MV_USB_HAS_IDPIN_DETECTION)
-			pxa_usb_extern_call(mvotg->pdata->id, idpin, init);
 	}
 
 	mvotg->notifier_charger.notifier_call = mv_otg_notifier_charger_callback;
@@ -1089,8 +1112,10 @@ err_remove_otg_phy:
 err_disable_clk:
 	mv_otg_disable_internal(mvotg);
 	if (pdata->extern_attr
-		& (MV_USB_HAS_VBUS_DETECTION | MV_USB_HAS_IDPIN_DETECTION))
-		pxa_usb_unregister_notifier(mvotg->pdata->id, &mvotg->notifier);
+		& (MV_USB_HAS_VBUS_DETECTION | MV_USB_HAS_IDPIN_DETECTION)) {
+			extcon_unregister_interest(&mvotg->vbus_dev);
+			extcon_unregister_interest(&mvotg->id_dev);
+	}
 err_destroy_workqueue:
 	flush_workqueue(mvotg->qwork);
 	destroy_workqueue(mvotg->qwork);
