@@ -74,4 +74,11 @@ config EXTCON_PALMAS
 	  Say Y here to enable support for USB peripheral and USB host
 	  detection by palmas usb.
 
+config EXTCON_88PM88X
+	tristate "88pm88x EXTCON support"
+	depends on MFD_88PM88X
+	help
+	  Say Y here to enable extcon support for Marvell PMIC 88pm88x
+	  to detect vbus and id pin.
+
 endif # MULTISTATE_SWITCH
