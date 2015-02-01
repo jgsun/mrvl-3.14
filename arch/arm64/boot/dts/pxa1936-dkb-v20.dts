@@ -14,6 +14,13 @@
 	model = "Marvell PXA1936 DKB V20 Development Board";
 	compatible = "marvell,pxa1936-dkb", "marvell,pxa1936";
 	soc {
+		axi@d4200000 {  /* AXI */
+			otg: otg@d4208100 {
+				vbus_otg-supply = <&votg>;
+				status = "okay";
+			};
+		};
+
 		apb@d4000000 {
 			twsi1: i2c@d4010800 {
 				touch1: s3202@720p {

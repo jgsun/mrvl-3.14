@@ -63,4 +63,8 @@
 		#io-channel-cells = <1>;
 		io-channel-ranges;
 	};
+
+	votg: virtual-regulator1 {
+		compatible = "marvell,88pm88x-votg";
+	};
 };
