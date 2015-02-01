@@ -175,6 +175,8 @@ struct mv_otg {
 	/* for id detection */
 	struct extcon_specific_cable_nb id_dev;
 	struct extcon_dev *extcon;
+
+	struct regulator *vbus_otg;
 };
 
 #endif

@@ -19,6 +19,7 @@
 #include <linux/usb/mv_usb2_phy.h>
 #include <linux/platform_data/mv_usb.h>
 #include <dt-bindings/usb/mv_usb.h>
+#include <linux/regulator/consumer.h>
 
 #define CAPLENGTH_MASK         (0xff)
 
@@ -37,6 +38,9 @@ struct ehci_hcd_mv {
 	struct mv_usb_platform_data *pdata;
 
 	struct clk *clk;
+
+	struct regulator *vbus_otg;
+
 };
 
 static void ehci_clock_enable(struct ehci_hcd_mv *ehci_mv)
@@ -281,7 +285,17 @@ static int mv_ehci_probe(struct platform_device *pdev)
 		/* otg will enable clock before use as host */
 		mv_ehci_disable(ehci_mv);
 	} else {
-		pxa_usb_extern_call(pdata->id, vbus, set_vbus, 1);
+		ehci_mv->vbus_otg = regulator_get(dev, "vbus_otg");
+
+		if (IS_ERR(ehci_mv->vbus_otg)) {
+			pr_err("%s: unable to get vbus_otg.\n", __func__);
+			return PTR_ERR(ehci_mv->vbus_otg);
+		}
+
+		retval = regulator_enable(ehci_mv->vbus_otg);
+		if (retval)
+			pr_err("%s: failed to set vbus_otg.\n", __func__);
+		regulator_put(ehci_mv->vbus_otg);
 
 		retval = usb_add_hcd(hcd, hcd->irq, IRQF_SHARED);
 		if (retval) {
@@ -299,7 +313,15 @@ static int mv_ehci_probe(struct platform_device *pdev)
 	return 0;
 
 err_set_vbus:
-	pxa_usb_extern_call(pdata->id, vbus, set_vbus, 0);
+	ehci_mv->vbus_otg = regulator_get(dev, "vbus_otg");
+	if (IS_ERR(ehci_mv->vbus_otg)) {
+		pr_err("%s: unable to get vbus_otg.\n", __func__);
+		return PTR_ERR(ehci_mv->vbus_otg);
+	}
+	retval = regulator_disable(ehci_mv->vbus_otg);
+	if (retval)
+		pr_err("%s: failed to clear vbus_otg.\n", __func__);
+	regulator_put(ehci_mv->vbus_otg);
 err_disable_clk:
 	mv_ehci_disable(ehci_mv);
 err_clear_drvdata:
@@ -314,6 +336,7 @@ static int mv_ehci_remove(struct platform_device *pdev)
 {
 	struct ehci_hcd_mv *ehci_mv = platform_get_drvdata(pdev);
 	struct usb_hcd *hcd = ehci_mv->hcd;
+	int retval;
 
 	if (hcd->rh_registered)
 		usb_remove_hcd(hcd);
@@ -322,7 +345,15 @@ static int mv_ehci_remove(struct platform_device *pdev)
 		otg_set_host(ehci_mv->otg->otg, NULL);
 
 	if (ehci_mv->mode == MV_USB_MODE_HOST) {
-		pxa_usb_extern_call(ehci_mv->pdata->id, vbus, set_vbus, 0);
+		ehci_mv->vbus_otg = regulator_get(&pdev->dev, "vbus_otg");
+		if (IS_ERR(ehci_mv->vbus_otg)) {
+			pr_err("%s: unable to get vbus_otg.\n", __func__);
+			return PTR_ERR(ehci_mv->vbus_otg);
+		}
+		retval = regulator_disable(ehci_mv->vbus_otg);
+		if (retval)
+			pr_err("%s: failed to clear vbus_otg.\n", __func__);
+		regulator_put(ehci_mv->vbus_otg);
 
 		mv_ehci_disable(ehci_mv);
 

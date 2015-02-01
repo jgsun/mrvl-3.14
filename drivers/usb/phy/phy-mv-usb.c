@@ -30,6 +30,7 @@
 #include <linux/of_address.h>
 #include <dt-bindings/usb/mv_usb.h>
 #include <linux/pm_qos.h>
+#include <linux/regulator/consumer.h>
 
 #include "phy-mv-usb.h"
 
@@ -105,8 +106,20 @@ static int mv_otg_set_vbus(struct usb_otg *otg, bool on)
 		pm_qos_update_request(&mvotg->qos_idle, mvotg->lpm_qos);
 	}
 
-	/* TODO: rework later */
-	ret = pxa_usb_extern_call(mvotg->pdata->id, vbus, set_vbus, on);
+	mvotg->vbus_otg = regulator_get(&mvotg->pdev->dev, "vbus_otg");
+	if (IS_ERR(mvotg->vbus_otg)) {
+		pr_err("%s: unable to get vbus_otg.\n", __func__);
+		return PTR_ERR(mvotg->vbus_otg);
+	}
+
+	if (on)
+		ret = regulator_enable(mvotg->vbus_otg);
+	else
+		ret = regulator_disable(mvotg->vbus_otg);
+	if (ret)
+		pr_err("%s: failed to set/clear vbus_otg, on = %d\n", __func__, on);
+
+	regulator_put(mvotg->vbus_otg);
 
 	/* release constraint after turn off vbus */
 	if (!on) {
