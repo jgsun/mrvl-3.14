@@ -110,6 +110,7 @@
 		wib_1v8-supply = <&buck2>;
 		3v3-ldo-gpio = <&gpio 14 0>;
 		edge-wakeup-gpio = <&gpio 39 0>;
+		marvell,sdh-tuning-dvfs;
 		status = "okay";
 	};
 
