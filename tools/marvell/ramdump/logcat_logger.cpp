@@ -52,8 +52,10 @@ static int handle_print_log_entry(FILE * ftxt, char *buf, logger_entry_t * logge
 	ptm = localtime(&timeObj);
 #endif
 
-	strftime(timeBuf, sizeof(timeBuf), "%m-%d %H:%M:%S", ptm);
-
+	if (ptm)
+		strftime(timeBuf, sizeof(timeBuf), "%m-%d %H:%M:%S", ptm);
+	else
+		strcpy(timeBuf, "00-00 00:00:00.000");
 	memset(tag_name, 0, sizeof(tag_name));
 	memset(buf_name, 0, sizeof(buf_name));
 

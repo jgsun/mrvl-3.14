@@ -108,9 +108,12 @@ All Rights Reserved
 	5.9 (antone@marvell.com): Fix bug in getRdiNw to recover
 		the last RDI word.
 	5.10 (ymarkman@marvell.com): "printk" parser version 0.2; .cmm uses "printkBUF.bin" instead of "printks.txt"
+	5.11 (antone@marvell.com): Fix file offset calculation in RDI(pbuffer)
+		extract with ELF input.
+		Fix crash in logcat parser when localtime returns NULL due to invalid input.
 */
 
-#define VERSION_STRING "5.10"
+#define VERSION_STRING "5.11"
 
 #include <stdio.h>
 #include "rdp.h"
@@ -798,7 +801,7 @@ static int extractPhysicalBuffer(const char* inName, FILE *fin, const char *name
 	if (aarch_type == aarch64) i++; /* no support for physical address >32 bit for now */
 
 	fprintf(rdplog, "RDI_PBUF: 0x%.8x, 0x%.8x\n", addr, size);
-	return extractFile(inName, name, fin, addr, size, 0, 0);
+	return extractFile(inName, name, fin, FILE_OFFSET(addr), size, 0, 0);
 }
 
 int readObjectAtVa(FILE *fin, void *buf, u64 addr, int size)
