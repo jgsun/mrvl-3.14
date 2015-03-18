@@ -30,10 +30,13 @@
 #include "regs-addr.h"
 #include "pxa1936_lowpower.h"
 #include <linux/pxa1936_powermode.h>
-
+#include <linux/cputype.h>
 
 #define APCR_PER_PORTS_SET	\
 	(PMUM_AXISD | PMUM_SLPEN | PMUM_DDRCORSD | PMUM_APBSD | PMUM_VCTCXOSD | PMUM_STBYEN)
+
+#define APCR_PER_PORTS_ALWAYS_ON_PXA1956 \
+	(PMUM_BBSD | PMUM_MSASLPEN)
 
 #define APCR_PER_PORTS_ALWAYS_ON \
 	(PMUM_DTCMSD | PMUM_BBSD | PMUM_MSASLPEN)
@@ -50,8 +53,11 @@ static DEFINE_SPINLOCK(cpuidle_apcr_qos_lock);
 
 int cpuidle_setmode(int qos_min)
 {
-	u32 apcr_per = readl_relaxed(mpmu_virt_addr + APCR_PER);
-	u32 apcr_clear = 0, apcr_set = 0;
+	u32 apcr_per, apcr_clear = 0, apcr_set = 0;
+	if (cpu_is_pxa1956())
+		apcr_per = readl_relaxed(mpmu_virt_addr + APCR_PER_PXA1956);
+	else
+		apcr_per = readl_relaxed(mpmu_virt_addr + APCR_PER);
 
 	switch (qos_min) {
 	case PM_QOS_CPUIDLE_BLOCK_C1:
@@ -107,9 +113,15 @@ int cpuidle_setmode(int qos_min)
 	/* set apcr_per bit */
 	apcr_per |= apcr_set;
 
-	writel_relaxed(apcr_per, mpmu_virt_addr + APCR_PER);
-	/* RAW for barrier */
-	apcr_per = readl_relaxed(mpmu_virt_addr + APCR_PER);
+	if (cpu_is_pxa1956()) {
+		writel_relaxed(apcr_per, mpmu_virt_addr + APCR_PER_PXA1956);
+		/* RAW for barrier */
+		apcr_per = readl_relaxed(mpmu_virt_addr + APCR_PER_PXA1956);
+	} else {
+		writel_relaxed(apcr_per, mpmu_virt_addr + APCR_PER);
+		/* RAW for barrier */
+		apcr_per = readl_relaxed(mpmu_virt_addr + APCR_PER);
+	}
 	return 0;
 
 }
@@ -133,21 +145,37 @@ void lowpower_init(void)
 {
 	u32 apcr_per, apcr_cluster0, apcr_cluster1, apslpw;
 	mpmu_virt_addr = regs_addr_get_va(REGS_ADDR_MPMU);
-	apcr_per = readl_relaxed(mpmu_virt_addr + APCR_PER);
-	apcr_per |= APCR_PER_PORTS_ALWAYS_ON;
-	apcr_per |= APCR_PER_PORTS_SET;
-	writel_relaxed(apcr_per, mpmu_virt_addr + APCR_PER);
+	if (cpu_is_pxa1956()) {
+		apcr_per = readl_relaxed(mpmu_virt_addr + APCR_PER_PXA1956);
+		apcr_per |= APCR_PER_PORTS_ALWAYS_ON_PXA1956;
+		apcr_per |= APCR_PER_PORTS_SET;
+		writel_relaxed(apcr_per, mpmu_virt_addr + APCR_PER_PXA1956);
 
-	apcr_cluster0 = readl_relaxed(mpmu_virt_addr + APCR_CLUSTER0);
-	apcr_cluster0 |= APCR_PER_PORTS_ALWAYS_ON;
-	apcr_cluster0 &= ~(PMUM_STBYEN);
-	writel_relaxed(apcr_cluster0, mpmu_virt_addr + APCR_CLUSTER0);
+		apcr_cluster0 = readl_relaxed(mpmu_virt_addr + APCR_CLUSTER0_PXA1956);
+		apcr_cluster0 |= APCR_PER_PORTS_ALWAYS_ON_PXA1956;
+		apcr_cluster0 &= ~(PMUM_STBYEN);
+		writel_relaxed(apcr_cluster0, mpmu_virt_addr + APCR_CLUSTER0_PXA1956);
 
-	apcr_cluster1 = readl_relaxed(mpmu_virt_addr + APCR_CLUSTER1);
-	apcr_cluster1 |= APCR_PER_PORTS_ALWAYS_ON;
-	apcr_cluster1 &= ~(PMUM_STBYEN);
-	writel_relaxed(apcr_cluster1, mpmu_virt_addr + APCR_CLUSTER1);
+		apcr_cluster1 = readl_relaxed(mpmu_virt_addr + APCR_CLUSTER1_PXA1956);
+		apcr_cluster1 |= APCR_PER_PORTS_ALWAYS_ON_PXA1956;
+		apcr_cluster1 &= ~(PMUM_STBYEN);
+		writel_relaxed(apcr_cluster1, mpmu_virt_addr + APCR_CLUSTER1_PXA1956);
+	} else {
+		apcr_per = readl_relaxed(mpmu_virt_addr + APCR_PER);
+		apcr_per |= APCR_PER_PORTS_ALWAYS_ON;
+		apcr_per |= APCR_PER_PORTS_SET;
+		writel_relaxed(apcr_per, mpmu_virt_addr + APCR_PER);
 
+		apcr_cluster0 = readl_relaxed(mpmu_virt_addr + APCR_CLUSTER0);
+		apcr_cluster0 |= APCR_PER_PORTS_ALWAYS_ON;
+		apcr_cluster0 &= ~(PMUM_STBYEN);
+		writel_relaxed(apcr_cluster0, mpmu_virt_addr + APCR_CLUSTER0);
+
+		apcr_cluster1 = readl_relaxed(mpmu_virt_addr + APCR_CLUSTER1);
+		apcr_cluster1 |= APCR_PER_PORTS_ALWAYS_ON;
+		apcr_cluster1 &= ~(PMUM_STBYEN);
+		writel_relaxed(apcr_cluster1, mpmu_virt_addr + APCR_CLUSTER1);
+	}
 	apslpw = readl_relaxed(mpmu_virt_addr + APSLPW);
 	apslpw &= ~(DISABLE_ALL_WAKEUP_PORTS);
 	writel_relaxed(apslpw, mpmu_virt_addr + APSLPW);

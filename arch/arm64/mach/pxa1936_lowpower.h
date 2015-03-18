@@ -68,6 +68,10 @@
 #define AWUCRM			0x104c
 #define PWRMODE_STATUS		0x1030
 
+#define APCR_CLUSTER0_PXA1956       0x1090
+#define APCR_CLUSTER1_PXA1956       0x1094
+#define APCR_PER_PXA1956        0x1098
+
 /* APBC regs offset */
 #define TIMER0			0x034
 #define TIMER1			0x044
