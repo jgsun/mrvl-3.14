@@ -658,28 +658,32 @@ static u32 wakeup_source_check(void)
 	int len_s = 0, len = 0;
 	void __iomem *mpmu = regs_addr_get_va(REGS_ADDR_MPMU);
 	void __iomem *apmu = regs_addr_get_va(REGS_ADDR_APMU);
+	u32 awucrm, cwucrm, awucrs, cwucrs;
+	u32 apcr_cluster0, apcr_cluster1, apcr_per, apslpw;
+	u32 cpcr, cpsr, pwrmode_status, core_status, pwr_status;
+	u32 sav_wucrs, sav_wucrm, sav_xpcr, sav_slpw, real_wus;
 
-	u32 awucrm = __raw_readl(mpmu + AWUCRM);
-	u32 cwucrm = __raw_readl(mpmu + CWUCRM);
+	awucrm = __raw_readl(mpmu + AWUCRM);
+	cwucrm = __raw_readl(mpmu + CWUCRM);
 
-	u32 awucrs = __raw_readl(mpmu + AWUCRS);
-	u32 cwucrs = __raw_readl(mpmu + CWUCRS);
+	awucrs = __raw_readl(mpmu + AWUCRS);
+	cwucrs = __raw_readl(mpmu + CWUCRS);
 
-	u32 apcr_cluster0 = __raw_readl(mpmu + APCR_CLUSTER0);
-	u32 apcr_cluster1 = __raw_readl(mpmu + APCR_CLUSTER1);
-	u32 apcr_per = __raw_readl(mpmu + APCR_PER);
-	u32 apslpw = __raw_readl(mpmu + APSLPW);
-	u32 cpcr = __raw_readl(mpmu + CPCR);
-	u32 cpsr = __raw_readl(mpmu + CPSR);
-	u32 pwrmode_status = __raw_readl(mpmu + PWRMODE_STATUS);
-	u32 core_status = __raw_readl(apmu + CORE_STATUS);
-	u32 pwr_status = __raw_readl(apmu + PWR_STATUS);
+	apcr_cluster0 = __raw_readl(mpmu + APCR_CLUSTER0);
+	apcr_cluster1 = __raw_readl(mpmu + APCR_CLUSTER1);
+	apcr_per = __raw_readl(mpmu + APCR_PER);
+	apslpw = __raw_readl(mpmu + APSLPW);
+	cpcr = __raw_readl(mpmu + CPCR);
+	cpsr = __raw_readl(mpmu + CPSR);
+	pwrmode_status = __raw_readl(mpmu + PWRMODE_STATUS);
+	core_status = __raw_readl(apmu + CORE_STATUS);
+	pwr_status = __raw_readl(apmu + PWR_STATUS);
 
-	u32 sav_wucrs = awucrs | cwucrs;
-	u32 sav_wucrm = awucrm | cwucrm;
-	u32 sav_xpcr = apcr_cluster0 | apcr_cluster1 | apcr_per | cpcr;
-	u32 sav_slpw = apslpw | cpcr;
-	u32 real_wus = sav_wucrs & sav_wucrm & PMUM_AP_WAKEUP_MASK;
+	sav_wucrs = awucrs | cwucrs;
+	sav_wucrm = awucrm | cwucrm;
+	sav_xpcr = apcr_cluster0 | apcr_cluster1 | apcr_per | cpcr;
+	sav_slpw = apslpw | cpcr;
+	real_wus = sav_wucrs & sav_wucrm & PMUM_AP_WAKEUP_MASK;
 
 	pr_info("After SUSPEND");
 	pr_info("PWRMODE_STAUTS: 0x%x\n", pwrmode_status);
