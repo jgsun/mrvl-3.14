@@ -27,8 +27,21 @@
 #include <sound/pcm_params.h>
 #include <sound/soc.h>
 #include <linux/delay.h>
+#ifdef CONFIG_SND_MMP_MAP
 #include <linux/mfd/mmp-map.h>
+#else
+#include <linux/mfd/mmp-map-v2.h>
+#endif
 #include "mmp-tdm.h"
+
+/* MAP 1.0 and 2.0 TDM definition is different */
+#ifdef CONFIG_SND_MMP_MAP
+#define	SLOT_BITS	4
+#define	SLOT_MASK	0xf
+#else
+#define	SLOT_BITS	5
+#define	SLOT_MASK	0x1f
+#endif
 
 struct tdm_manage_private {
 	/* tdm mode select */
@@ -74,8 +87,6 @@ struct slot_info {
 struct tdm_dai_private {
 	struct device *dev;
 	struct map_private *map_priv;
-	struct regmap *regmap;
-
 	/* point to tdm management*/
 	struct tdm_manage_private *tdm_manage_priv;
 
@@ -323,6 +334,7 @@ static inline int mmp_tdm_bus_config(struct tdm_manage_private *tdm_man_priv)
 {
 	int tdm_ctrl1;
 
+#ifdef CONFIG_SND_MMP_MAP
 	/*
 	 * need to configure LR rate before release out int
 	 * the clock frequency is fixed at 48k
@@ -331,6 +343,19 @@ static inline int mmp_tdm_bus_config(struct tdm_manage_private *tdm_man_priv)
 
 	/* reset/release out interface */
 	map_reset_port(tdm_man_priv->map_priv, I2S_OUT);
+#else
+	/*
+	 * no register to set sample rate.
+	 * same as dsp1/1a(high one)
+	 * can reset tdm on MAP2.0
+	 */
+	tdm_ctrl1 = map_raw_read(tdm_man_priv->map_priv, MAP_TOP_CTRL_REG_1);
+	tdm_ctrl1 |= TDM_RESET;
+	map_raw_write(tdm_man_priv->map_priv, MAP_TOP_CTRL_REG_1, tdm_ctrl1);
+
+	tdm_ctrl1 &= ~TDM_RESET;
+	map_raw_write(tdm_man_priv->map_priv, MAP_TOP_CTRL_REG_1, tdm_ctrl1);
+#endif
 
 	/*
 	 * Fixme: configure tdm_double_edge, slot_size
@@ -1251,8 +1276,8 @@ static int mmp_tdm_set_out1_channel_map(struct snd_soc_dai *dai,
 				continue;
 
 			if (cntrl_reg_id != TDM_CONTRL_REG2) {
-				slot_1 |= (tx_slot[i] << ((channel_id-1) * 4));
-				mask |= 0xf << ((channel_id-1) * 4);
+				slot_1 |= (tx_slot[i] << ((channel_id-1) * SLOT_BITS));
+				mask |= SLOT_MASK << ((channel_id-1) * SLOT_BITS);
 				tdm_reg_update(dai->dev, TDM_CTRL_REG2,
 						mask, slot_1);
 				tdm_out1_tx[tdm_dai_priv->
@@ -1266,8 +1291,8 @@ static int mmp_tdm_set_out1_channel_map(struct snd_soc_dai *dai,
 					TDM_CONTRL_REG2;
 				tdm_dai_priv->tdm_out1_tx_num++;
 			} else {
-				slot_2 |= (tx_slot[i] << ((channel_id-1) * 4));
-				mask |= 0xf << ((channel_id-1) * 4);
+				slot_2 |= (tx_slot[i] << ((channel_id-1) * SLOT_BITS));
+				mask |= SLOT_MASK << ((channel_id-1) * SLOT_BITS);
 				tdm_reg_update(dai->dev, TDM_CTRL_REG3,
 						mask, slot_2);
 				tdm_out1_tx[tdm_dai_priv->
@@ -1296,17 +1321,17 @@ static int mmp_tdm_set_out1_channel_map(struct snd_soc_dai *dai,
 
 			/* reduce the slot */
 			if (tdm_out1_tx[i].cntrl_reg_id == TDM_CONTRL_REG2) {
-				slot_1 &= ~(0xf <<
-					((tdm_out1_tx[i].channel_id - 1) * 4));
-				mask |= 0xf <<
-					((tdm_out1_tx[i].channel_id - 1) * 4);
+				slot_1 &= ~(SLOT_MASK <<
+					((tdm_out1_tx[i].channel_id - 1) * SLOT_BITS));
+				mask |= SLOT_MASK <<
+					((tdm_out1_tx[i].channel_id - 1) * SLOT_BITS);
 				tdm_reg_update(dai->dev, TDM_CTRL_REG2,
 						mask, slot_1);
 			} else {
-				slot_2 &= ~(0xf <<
-					((tdm_out1_tx[i].channel_id - 1) * 4));
-				mask |= 0xf <<
-					((tdm_out1_tx[i].channel_id - 1) * 4);
+				slot_2 &= ~(SLOT_MASK <<
+					((tdm_out1_tx[i].channel_id - 1) * SLOT_BITS));
+				mask |= SLOT_MASK <<
+					((tdm_out1_tx[i].channel_id - 1) * SLOT_BITS);
 				tdm_reg_update(dai->dev, TDM_CTRL_REG3,
 						mask, slot_2);
 			}
@@ -1331,10 +1356,10 @@ static int mmp_tdm_set_out1_channel_map(struct snd_soc_dai *dai,
 			if ((tx_slot[i] == 0) &&
 				(tdm_out1_tx[i].cntrl_reg_id ==
 					TDM_CONTRL_REG2)) {
-				slot_1 &= ~(0xf <<
-					((tdm_out1_tx[i].channel_id - 1) * 4));
-				mask |= 0xf <<
-					((tdm_out1_tx[i].channel_id - 1) * 4);
+				slot_1 &= ~(SLOT_MASK <<
+					((tdm_out1_tx[i].channel_id - 1) * SLOT_BITS));
+				mask |= SLOT_MASK <<
+					((tdm_out1_tx[i].channel_id - 1) * SLOT_BITS);
 				tdm_reg_update(dai->dev, TDM_CTRL_REG2,
 						mask, slot_1);
 				tdm_out1_tx[i].slot = 0;
@@ -1344,10 +1369,10 @@ static int mmp_tdm_set_out1_channel_map(struct snd_soc_dai *dai,
 			} else if ((tx_slot[i] == 0) &&
 				(tdm_out1_tx[i].cntrl_reg_id ==
 					TDM_CONTRL_REG3)) {
-				slot_2 &= ~(0xf <<
-					((tdm_out1_tx[i].channel_id - 1) * 4));
-				mask |= 0xf <<
-					((tdm_out1_tx[i].channel_id - 1) * 4);
+				slot_2 &= ~(SLOT_MASK <<
+					((tdm_out1_tx[i].channel_id - 1) * SLOT_BITS));
+				mask |= SLOT_MASK <<
+					((tdm_out1_tx[i].channel_id - 1) * SLOT_BITS);
 				tdm_reg_update(dai->dev, TDM_CTRL_REG3,
 						mask, slot_2);
 				tdm_out1_tx[i].slot = 0;
@@ -1413,8 +1438,8 @@ static int mmp_tdm_set_out2_channel_map(struct snd_soc_dai *dai,
 				continue;
 
 			if (cntrl_reg_id != TDM_CONTRL_REG2) {
-				slot_1 |= (tx_slot[i] << ((channel_id-1) * 4));
-				mask |= 0xf << ((channel_id-1) * 4);
+				slot_1 |= (tx_slot[i] << ((channel_id-1) * SLOT_BITS));
+				mask |= SLOT_MASK << ((channel_id-1) * SLOT_BITS);
 				tdm_reg_update(dai->dev, TDM_CTRL_REG2,
 						mask, slot_1);
 				tdm_out2_tx[tdm_dai_priv->
@@ -1428,8 +1453,8 @@ static int mmp_tdm_set_out2_channel_map(struct snd_soc_dai *dai,
 					TDM_CONTRL_REG2;
 				tdm_dai_priv->tdm_out2_tx_num++;
 			} else {
-				slot_2 |= (tx_slot[i] << ((channel_id-1) * 4));
-				mask |= 0xf << ((channel_id-1) * 4);
+				slot_2 |= (tx_slot[i] << ((channel_id-1) * SLOT_BITS));
+				mask |= SLOT_MASK << ((channel_id-1) * SLOT_BITS);
 				tdm_reg_update(dai->dev, TDM_CTRL_REG3,
 						mask, slot_2);
 				tdm_out2_tx[tdm_dai_priv->
@@ -1457,17 +1482,17 @@ static int mmp_tdm_set_out2_channel_map(struct snd_soc_dai *dai,
 				continue;
 			/* reduce the slot */
 			if (tdm_out2_tx[i].cntrl_reg_id == TDM_CONTRL_REG2) {
-				slot_1 &= ~(0xf <<
-					((tdm_out2_tx[i].channel_id - 1) * 4));
-				mask |= 0xf <<
-					((tdm_out2_tx[i].channel_id - 1) * 4);
+				slot_1 &= ~(SLOT_MASK <<
+					((tdm_out2_tx[i].channel_id - 1) * SLOT_BITS));
+				mask |= SLOT_MASK <<
+					((tdm_out2_tx[i].channel_id - 1) * SLOT_BITS);
 				tdm_reg_update(dai->dev, TDM_CTRL_REG2,
 						mask, slot_1);
 			} else {
-				slot_2 &= ~(0xf <<
-					((tdm_out2_tx[i].channel_id-1) * 4));
-				mask |= 0xf <<
-					((tdm_out2_tx[i].channel_id-1) * 4);
+				slot_2 &= ~(SLOT_MASK <<
+					((tdm_out2_tx[i].channel_id-1) * SLOT_BITS));
+				mask |= SLOT_MASK <<
+					((tdm_out2_tx[i].channel_id-1) * SLOT_BITS);
 				tdm_reg_update(dai->dev, TDM_CTRL_REG3,
 						mask, slot_2);
 			}
@@ -1492,10 +1517,10 @@ static int mmp_tdm_set_out2_channel_map(struct snd_soc_dai *dai,
 			if ((tx_slot[i] == 0) &&
 				(tdm_out2_tx[i].cntrl_reg_id ==
 					TDM_CONTRL_REG2)) {
-				slot_1 &= ~(0xf <<
-					((tdm_out2_tx[i].channel_id - 1) * 4));
-				mask |= 0xf <<
-					((tdm_out2_tx[i].channel_id - 1) * 4);
+				slot_1 &= ~(SLOT_MASK <<
+					((tdm_out2_tx[i].channel_id - 1) * SLOT_BITS));
+				mask |= SLOT_MASK <<
+					((tdm_out2_tx[i].channel_id - 1) * SLOT_BITS);
 				tdm_reg_update(dai->dev, TDM_CTRL_REG2,
 						mask, slot_1);
 				tdm_out2_tx[i].slot = 0;
@@ -1505,10 +1530,10 @@ static int mmp_tdm_set_out2_channel_map(struct snd_soc_dai *dai,
 			} else if ((tx_slot[i] == 0) &&
 					(tdm_out2_tx[i].cntrl_reg_id ==
 						TDM_CONTRL_REG3)) {
-				slot_2 &= ~(0xf <<
-					((tdm_out2_tx[i].channel_id - 1) * 4));
-				mask |= 0xf <<
-					((tdm_out2_tx[i].channel_id - 1) * 4);
+				slot_2 &= ~(SLOT_MASK <<
+					((tdm_out2_tx[i].channel_id - 1) * SLOT_BITS));
+				mask |= SLOT_MASK <<
+					((tdm_out2_tx[i].channel_id - 1) * SLOT_BITS);
 				tdm_reg_update(dai->dev,
 						TDM_CTRL_REG3, mask, slot_2);
 				tdm_out2_tx[i].slot = 0;
@@ -1537,9 +1562,9 @@ static int mmp_tdm_set_mic1_channel_map(struct snd_soc_dai *dai,
 	unsigned int mask;
 
 	/* FixME: For MIC1, we assume it use the [4-7] bits */
-	mask = 0xff;
+	mask = SLOT_MASK | (SLOT_MASK << SLOT_BITS);
 	rx_slot_1 |= rx_slot[0];
-	rx_slot_1 |= rx_slot[1] << 4;
+	rx_slot_1 |= rx_slot[1] << SLOT_BITS;
 	tdm_reg_update(dai->dev, TDM_CTRL_REG5, mask, rx_slot_1);
 
 	tdm_dai_priv->tdm_codec_mic1_rx[0] = rx_slot[0];
@@ -1562,9 +1587,10 @@ static int mmp_tdm_set_mic2_channel_map(struct snd_soc_dai *dai,
 	unsigned int mask;
 
 	/* FixME: For MIC2, we assume it use the [8-11] bits */
-	mask = 0xff00;
-	rx_slot_1 |= rx_slot[0] << 8;
-	rx_slot_1 |= rx_slot[1] << 12;
+	mask = SLOT_MASK << (SLOT_BITS * 2);
+	mask |= SLOT_MASK << (SLOT_BITS * 3);
+	rx_slot_1 |= rx_slot[0] << (SLOT_BITS * 2);
+	rx_slot_1 |= rx_slot[1] << (SLOT_BITS * 3);
 	tdm_reg_update(dai->dev, TDM_CTRL_REG5, mask, rx_slot_1);
 
 	tdm_dai_priv->tdm_codec_mic2_rx[0] = rx_slot[0];
@@ -1838,7 +1864,6 @@ static int mmp_tdm_dai_probe(struct platform_device *pdev)
 	}
 
 	tdm_dai_priv->map_priv = map_priv;
-	tdm_dai_priv->regmap = map_priv->regmap;
 	tdm_dai_priv->tdm_manage_priv = tdm_priv;
 
 	/* tdm fclk i2s_id is fixed to 4 */

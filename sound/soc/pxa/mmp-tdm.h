@@ -15,8 +15,11 @@
  */
 #ifndef _MMP_TDM_H
 #define _MMP_TDM_H
-
+#ifdef CONFIG_SND_MMP_MAP
 #include <linux/mfd/mmp-map.h>
+#else
+#include <linux/mfd/mmp-map-v2.h>
+#endif
 /*
  * TDM Registers
  */
