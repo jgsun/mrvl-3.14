@@ -8,6 +8,7 @@ snd-soc-mmp-pcm-hostless-objs := mmp-pcm-hostless.o
 snd-soc-pxa-objs := pxa-pcm.o
 snd-soc-mmp-sspa-objs := mmp-sspa.o
 snd-soc-mmp-map-be-dai-objs := mmp-map-be-dai.o
+snd-soc-mmp-map-be-dai-v2-objs := mmp-map-be-dai-v2.o
 snd-soc-mmp-tdm-objs := mmp-tdm.o
 snd-soc-pxa-objs := pxa-pcm.o
 
@@ -20,6 +21,7 @@ obj-$(CONFIG_SND_MMP_PCM_HOSTLESS) += snd-soc-mmp-pcm-hostless.o
 obj-$(CONFIG_SND_MMP_SOC_SSPA) += snd-soc-mmp-sspa.o
 obj-$(CONFIG_SND_PXA_SOC) += snd-soc-pxa.o
 obj-$(CONFIG_SND_MMP_MAP_BE_DAI) += snd-soc-mmp-map-be-dai.o
+obj-$(CONFIG_SND_MMP_MAP_BE_DAI_V2) += snd-soc-mmp-map-be-dai-v2.o
 obj-$(CONFIG_SND_MMP_TDM) += snd-soc-mmp-tdm.o
 
 # PXA Machine Support
