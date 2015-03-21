@@ -16,7 +16,11 @@
 #include <linux/err.h>
 #include <linux/delay.h>
 #include <linux/slab.h>
+#ifdef CONFIG_SND_MMP_MAP
 #include <linux/mfd/mmp-map.h>
+#else
+#include <linux/mfd/mmp-map-v2.h>
+#endif
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <dt-bindings/clock/marvell-audio-map.h>
@@ -110,6 +114,187 @@ static void helanx_power_on(void __iomem *apmu_base, int pwr_on)
 		val = readl_relaxed(apmu_base + APMU_AUD_CLK);
 		val &= ~0xf;
 		writel_relaxed(val, apmu_base + APMU_AUD_CLK);
+	}
+}
+
+static int audio_power_times;
+#if 0
+static void helan4_hw_power_on(void __iomem *apmu_base, struct clk *puclk, int pwr_on)
+{
+	u32 val, timeout = 2000;
+	if (pwr_on) {
+		val = readl(apmu_base + APMU_AUD_CLK);
+		/*
+		 * first time power on, de-assert fuse load mask
+		 * second time and after, assert fuse load mask
+		 */
+		if (!audio_power_times) {
+			audio_power_times++;
+			val &= ~(0x1 << 10);
+			val |= (0x1 << 4) | (0x1 << 5) | (0x1 << 11)
+					| (0x1 << 12) | (0x1 << 14);
+		} else
+			val |= (0x1 << 4) | (0x1 << 5) | (0x1 << 10)
+				| (0x1 << 11) | (0x1 << 12) | (0x1 << 14);
+		writel(val, apmu_base + APMU_AUD_CLK);
+		val = readl(apmu_base + APMU_AUD_CLK);
+		while (((val >> 13) & 0x1) && timeout) {
+			udelay(1);
+			val = readl(apmu_base + APMU_AUD_CLK);
+			timeout--;
+		}
+		if (!timeout) {
+			pr_err("Soc get audio power control authority failed.\n");
+			return;
+		}
+		writel(0x000f0f0f, apmu_base + PMUA_PWR_BLK_TMR);
+		val = readl(apmu_base + PMUA_PWR_CTRL_REG);
+		writel(val | (0x1 << 10), apmu_base + PMUA_PWR_CTRL_REG);
+
+		timeout = 2000;
+		val = readl(apmu_base + PMUA_PWR_STATUS_REG);
+		while (!((val >> 10) & 0x1) && timeout) {
+			udelay(1);
+			val = readl(apmu_base + PMUA_PWR_STATUS_REG);
+			timeout--;
+		}
+		if (!timeout)
+			pr_err("HW audio power on failed.\n");
+	} else {
+		val = readl(apmu_base + APMU_AUD_CLK);
+		val |= (0x1 << 4) | (0x1 << 5) | (0x1 << 11)
+			| (0x1 << 12) | (0x1 << 14);
+		writel(val, apmu_base + APMU_AUD_CLK);
+		while (((val >> 13) & 0x1) && timeout) {
+			udelay(1);
+			val = readl(apmu_base + APMU_AUD_CLK);
+			timeout--;
+		}
+		if (!timeout) {
+			pr_err("Soc get audio power control authority failed.\n");
+			return;
+		}
+		writel(0x000f0f0f, apmu_base + PMUA_PWR_BLK_TMR);
+		val = readl(apmu_base + PMUA_PWR_CTRL_REG);
+		val &= ~(0x1 << 10);
+		writel(val, apmu_base + PMUA_PWR_CTRL_REG);
+
+		timeout = 2000;
+		val = readl(apmu_base + PMUA_PWR_STATUS_REG);
+		while (((val >> 10) & 0x1) && timeout) {
+			udelay(1);
+			val = readl(apmu_base + PMUA_PWR_STATUS_REG);
+			timeout--;
+		}
+		if (!timeout)
+			pr_err("HW audio power off failed.\n");
+	}
+}
+#endif
+
+static void helan4_sw_power_on(void __iomem *apmu_base, struct clk *puclk, int pwr_on)
+{
+	u32 val, timeout = 2000;
+
+	if (pwr_on) {
+		val = readl(apmu_base + APMU_AUD_CLK);
+		val |= (0x1 << 12) | (0x1 << 14);
+		writel(val, apmu_base + APMU_AUD_CLK);
+		/* wait bit13 = 0 */
+		val = readl(apmu_base + APMU_AUD_CLK);
+		while (((val >> 13) & 0x1) && timeout) {
+			udelay(1);
+			val = readl(apmu_base + APMU_AUD_CLK);
+			timeout--;
+		}
+		if (!timeout) {
+			pr_err("Soc get audio power control authority failed.\n");
+			return;
+		}
+
+		val = readl(apmu_base + APMU_AUD_CLK);
+		writel(val | (0x1 << 7), apmu_base + APMU_AUD_CLK);
+		udelay(10);
+		val = readl(apmu_base + APMU_AUD_CLK);
+		writel(val | (0x1 << 8), apmu_base + APMU_AUD_CLK);
+
+		val = readl(apmu_base + APMU_AUD_CLK);
+		val |= (0x1 << 2) | (0x1 << 3) | (0x1 << 4) | (0x1 << 5);
+		writel(val, apmu_base + APMU_AUD_CLK);
+
+		val = readl(apmu_base + APMU_AUD_CLK);
+		writel(val | (0x1 << 6), apmu_base + APMU_AUD_CLK);
+		/* wait some dummy clocks */
+		udelay(1);
+
+		val = readl(apmu_base + APMU_AUD_CLK);
+		val |= (0x1 << 0) | (0x1 << 1);
+		writel(val, apmu_base + APMU_AUD_CLK);
+		/* only for first time */
+		if (!audio_power_times) {
+			audio_power_times++;
+			val = readl(apmu_base + APMU_AUD_CLK);
+			writel(val | (0x1 << 9), apmu_base + APMU_AUD_CLK);
+			timeout = 2000;
+			val = readl(apmu_base + APMU_AUD_CLK);
+			while (((val >> 9) & 0x1) && timeout) {
+				udelay(1);
+				val = readl(apmu_base + APMU_AUD_CLK);
+				timeout--;
+			}
+			if (!timeout)
+				pr_err("audio power: wait for fuse loading ends error.\n");
+		}
+	} else {
+		val = readl(apmu_base + APMU_AUD_CLK);
+		writel(val | (0x1 << 12), apmu_base + APMU_AUD_CLK);
+		/* wait bit13 = 0 */
+		val = readl(apmu_base + APMU_AUD_CLK);
+		while (((val >> 13) & 0x1) && timeout) {
+			udelay(1);
+			val = readl(apmu_base + APMU_AUD_CLK);
+			timeout--;
+		}
+		if (!timeout) {
+			pr_err("Soc get audio power control authority failed.\n");
+			return;
+		}
+
+		val = readl(apmu_base + APMU_AUD_CLK);
+		val &= ~(0x1 << 6);
+		writel(val, apmu_base + APMU_AUD_CLK);
+
+		/* only resets are required(AON disable) */
+		val = readl(apmu_base + APMU_AUD_CLK);
+		val &= ~((0x1 << 0) | (0x1 << 1));
+		writel(val, apmu_base + APMU_AUD_CLK);
+#if 0
+		/* only for resets not required(AON enable) */
+		val = readl(apmu_base + APMU_AUD_CLK);
+		val |= (0x1 << 0) | (0x1 << 1);
+		writel(val, apmu_base + APMU_AUD_CLK);
+#endif
+		val = readl(apmu_base + APMU_AUD_CLK);
+		val &= ~((0x1 << 2) | (0x1 << 3) | (0x1 << 4) | (0x1 << 5));
+		writel(val, apmu_base + APMU_AUD_CLK);
+
+		val = readl(apmu_base + APMU_AUD_CLK);
+		val &= ~(0x1 << 7);
+		writel(val, apmu_base + APMU_AUD_CLK);
+		udelay(10);
+		val = readl(apmu_base + APMU_AUD_CLK);
+		val &= ~(0x1 << 8);
+		writel(val, apmu_base + APMU_AUD_CLK);
+#if 0
+		/* only for resets not required(AON enable) */
+		val = readl(apmu_base + APMU_AUD_CLK);
+		val &= ~(0x1 << 12);
+		writel(val, apmu_base + APMU_AUD_CLK);
+#endif
+		/* only for resets are required(AON disable) */
+		val = readl(apmu_base + APMU_AUD_CLK);
+		val &= ~(0x1 << 14);
+		writel(val, apmu_base + APMU_AUD_CLK);
 	}
 }
 
@@ -1061,6 +1246,8 @@ static int clk_parse_map_dt(struct device_node *np, struct map_clk_unit *map_uni
 		map_unit->poweron_cb = edenx_power_on;
 	else if (power_ctrl == ULCX_POWER_CTRL)
 		map_unit->poweron_cb = ulcx_power_on;
+	else if (power_ctrl == HELAN4_POWER_CTRL)
+		map_unit->poweron_cb = helan4_sw_power_on;
 	else {
 		pr_err("wrong power ctrl for audio map\n");
 		return -EINVAL;

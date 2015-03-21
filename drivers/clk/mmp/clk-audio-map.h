@@ -7,6 +7,7 @@ enum map_power_control {
 	HELANX_POWER_CTRL = 0,
 	EDENX_POWER_CTRL,
 	ULCX_POWER_CTRL,
+	HELAN4_POWER_CTRL,
 };
 
 struct map_clk_unit {
