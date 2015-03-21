@@ -352,6 +352,15 @@ config MFD_MMP_MAP
 	  like fe dai (i2s1/2/3/4), be dai (TDM, DEI2S, AUX-I2S)
 	  under the corresponding menus.
 
+config MFD_MMP_MAP_V2
+	bool "Support Marvell Audio MAP 2"
+	select MFD_CORE
+	 ---help---
+	  This supports for Marvell Audio MAP (Marvell Audio Processor) 2.
+	  This includes MAP init, you have to select individual components,
+	  like fe dai (i2s1/2/3/4/5), be dai (TDM, DEI2S, AUX-I2S, PDM, DMIC)
+	  under the corresponding menus.
+
 config MFD_88PM88X
 	bool "Marvell 88PM88X"
 	depends on I2C=y

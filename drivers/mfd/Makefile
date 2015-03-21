@@ -14,6 +14,7 @@ obj-$(CONFIG_MFD_CROS_EC)	+= cros_ec.o
 obj-$(CONFIG_MFD_CROS_EC_I2C)	+= cros_ec_i2c.o
 obj-$(CONFIG_MFD_CROS_EC_SPI)	+= cros_ec_spi.o
 obj-$(CONFIG_MFD_MMP_MAP)	+= mmp-map.o
+obj-$(CONFIG_MFD_MMP_MAP_V2)	+= mmp-map-v2.o
 obj-$(CONFIG_MFD_88PM860)	+= 88pm860-audio.o
 
 88pm88x-objs			:= 88pm88x-core.o 88pm88x-i2c.o 88pm88x-irq.o 88pm88x-dvc.o 88pm88x-debugfs.o 88pm886-table.o 88pm880-table.o
