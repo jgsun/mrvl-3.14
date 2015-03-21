@@ -255,6 +255,23 @@ config SND_MMP_MAP
 	  mmp-sspa, mmp-tdma. It will use the FE, BE and audio
 	  processing.
 
+config SND_MMP_MAP_V2
+	tristate "SoC Audio support for Marvell MAP 2"
+	depends on SND_MMP_SOC
+	depends on MFD_MMP_MAP_V2 && DMA_ENGINE && MMP_TDMA
+	select SND_MMP_SOC_SSPA_DUMMY
+	select SND_MMP_TDM
+	select SND_MMP_MAP_BE_DAI_V2
+	select SND_MMP_MAP_FE_DAI_V2
+	select SND_MMP_PCM_HOSTLESS
+	select SND_SOC_88PM860
+	select SND_MMP_MAP_DUMP
+	help
+	  Say Y if you want to add support for SoC audio on the
+	  Marvell MAP2.0 reference platform. It depend on mmp-pcm,
+	  mmp-sspa, mmp-tdma. It will use the FE, BE and audio
+	  processing.
+
 config SND_MMP_MAP_DUMP
 	bool "MMP MAP DMA dump"
 	help
