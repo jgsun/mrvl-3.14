@@ -129,12 +129,14 @@ snd-soc-wm9712-objs := wm9712.o
 snd-soc-wm9713-objs := wm9713.o
 snd-soc-wm-hubs-objs := wm_hubs.o
 snd-soc-mmp-map-fe-dai-objs := mmp-map-fe-dai.o
+snd-soc-mmp-map-fe-dai-v2-objs := mmp-map-fe-dai-v2.o
 
 # Amp
 snd-soc-max9877-objs := max9877.o
 snd-soc-tpa6130a2-objs := tpa6130a2.o
 
 obj-$(CONFIG_SND_MMP_MAP_FE_DAI) += snd-soc-mmp-map-fe-dai.o
+obj-$(CONFIG_SND_MMP_MAP_FE_DAI_V2) += snd-soc-mmp-map-fe-dai-v2.o
 obj-$(CONFIG_SND_SOC_88PM860X)	+= snd-soc-88pm860x.o
 obj-$(CONFIG_SND_SOC_88PM860)     += snd-soc-88pm860.o
 obj-$(CONFIG_SND_SOC_88PM800_HS)	+= snd-soc-88pm800.o
