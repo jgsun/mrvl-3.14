@@ -524,7 +524,11 @@ static int map_32k_apll_enable(void *dspaux_base, u32 srate)
 	ICP = 2;
 	FD_SEL = 1;
 	CTUNE = 1;
-	ICP_DLL = 1;
+	/*
+	 * FIXME: 32k apll lib changed on Z1, need change
+	 * ICP_DLL from 0x1 to 0x3. Will revert this on A0.
+	 */
+	ICP_DLL = 3;
 	VDDL = 1;
 	TEST_MON = 0;
 	/* 32K crysto input */
