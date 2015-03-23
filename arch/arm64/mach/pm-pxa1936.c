@@ -574,10 +574,18 @@ static u32 wakeup_source_check(void)
 	if (real_wus & PMUM_WAKEUP5)
 		len += snprintf(buf + len, size - len, "USB or CM3,");
 	if (real_wus & PMUM_WAKEUP6) {
-		if (real_wus & PMUM_SQU_SDH1)
-			len += snprintf(buf + len, size - len, "SQU_SDH1,");
-		if (real_wus & PMUM_SDH_23)
-			len += snprintf(buf + len, size - len, "SDH_23,");
+		if (real_wus & PMUM_SQU_SDH1) {
+			if (cpu_is_pxa1956())
+				len += snprintf(buf + len, size - len, "SDH1/AUDIO,");
+			else
+				len += snprintf(buf + len, size - len, "SQU_SDH1,");
+		}
+		if (real_wus & PMUM_SDH_23) {
+			if (cpu_is_pxa1956())
+				len += snprintf(buf + len, size - len, "SDH2,");
+			else
+				len += snprintf(buf + len, size - len, "SDH_23,");
+		}
 	}
 	if (real_wus & PMUM_WAKEUP7)
 		len += snprintf(buf + len, size - len, "PMIC,");
