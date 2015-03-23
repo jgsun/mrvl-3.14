@@ -523,8 +523,12 @@ static u32 wakeup_source_check(void)
 	len_s = len = snprintf(buf, size, "AP Sub system is woken up by:");
 	if (real_wus & (PMUM_WAKEUP0))
 		len += snprintf(buf + len, size - len, "GSM,");
-	if (real_wus & (PMUM_WAKEUP1))
-		len += snprintf(buf + len, size - len, "3G Base band,");
+	if (real_wus & (PMUM_WAKEUP1)) {
+		if (cpu_is_pxa1956())
+			len += snprintf(buf + len, size - len, "FB,");
+		else
+			len += snprintf(buf + len, size - len, "3G Base band,");
+	}
 	if (real_wus & PMUM_WAKEUP2) {
 		int ret = check_mfp_wakeup_stat(buf, len, size);
 		if (ret < 0)
