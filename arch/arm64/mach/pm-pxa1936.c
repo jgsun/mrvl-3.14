@@ -43,6 +43,15 @@
 #define IRQ_PXA1936_AP2_TIMER2		(IRQ_PXA1936_START + 65)
 #define IRQ_PXA1936_AP2_TIMER3		(IRQ_PXA1936_START + 88)
 
+#define IRQ_PXA1956_AP0_TIMER1		(IRQ_PXA1936_START + 13)
+#define IRQ_PXA1956_AP0_TIMER2_3	(IRQ_PXA1936_START + 14)
+
+#define IRQ_PXA1956_AP1_TIMER1		(IRQ_PXA1936_START + 29)
+#define IRQ_PXA1956_AP1_TIMER2_3	(IRQ_PXA1936_START + 30)
+
+#define IRQ_PXA1956_AP2_TIMER1		(IRQ_PXA1936_START + 21)
+#define IRQ_PXA1956_AP2_TIMER2_3	(IRQ_PXA1936_START + 22)
+
 #define IRQ_PXA1936_MMC			(IRQ_PXA1936_START + 39)
 #define IRQ_PXA1936_USB1		(IRQ_PXA1936_START + 44)
 #define IRQ_PXA1936_GPIO_AP		(IRQ_PXA1936_START + 49)
@@ -67,39 +76,6 @@ static void pxa1936_set_wake(int irq, unsigned int on)
 		    PMUM_NEWROTARY;
 		break;
 		/* wakeup line 4 */
-	case IRQ_PXA1936_AP0_TIMER1:
-		apbc_timer0 = __raw_readl(apbc + TIMER0);
-		__raw_writel(0x1 << 7 | apbc_timer0, apbc + TIMER0);
-		awucrm = PMUM_WAKEUP4 | PMUM_AP0_2_TIMER_1;
-		break;
-	case IRQ_PXA1936_AP0_TIMER2:
-		apbc_timer0 = __raw_readl(apbc + TIMER0);
-		__raw_writel(0x1 << 7 | apbc_timer0, apbc + TIMER0);
-		awucrm = PMUM_WAKEUP4 | PMUM_AP0_2_TIMER_2;
-		break;
-	case IRQ_PXA1936_AP0_TIMER3:
-		apbc_timer0 = __raw_readl(apbc + TIMER0);
-		__raw_writel(0x1 << 7 | apbc_timer0, apbc + TIMER0);
-		awucrm = PMUM_WAKEUP4 | PMUM_AP0_2_TIMER_3;
-		break;
-	case IRQ_PXA1936_AP1_TIMER1:
-		awucrm = PMUM_WAKEUP4 | PMUM_AP1_TIMER_1;
-		break;
-	case IRQ_PXA1936_AP1_TIMER2:
-		awucrm = PMUM_WAKEUP4 | PMUM_AP1_TIMER_2;
-		break;
-	case IRQ_PXA1936_AP1_TIMER3:
-		awucrm = PMUM_WAKEUP4 | PMUM_AP1_TIMER_3;
-		break;
-	case IRQ_PXA1936_AP2_TIMER1:
-		awucrm = PMUM_WAKEUP4 | PMUM_AP0_2_TIMER_1;
-		break;
-	case IRQ_PXA1936_AP2_TIMER2:
-		awucrm = PMUM_WAKEUP4 | PMUM_AP0_2_TIMER_2;
-		break;
-	case IRQ_PXA1936_AP2_TIMER3:
-		awucrm = PMUM_WAKEUP4 | PMUM_AP0_2_TIMER_3;
-		break;
 	case IRQ_PXA1936_RTC_ALARM:
 		awucrm = PMUM_WAKEUP4 | PMUM_RTC_ALARM;
 		break;
@@ -120,6 +96,78 @@ static void pxa1936_set_wake(int irq, unsigned int on)
 		/* do nothing */
 		break;
 	}
+	/* setting wakeup sources */
+	if (cpu_is_pxa1956()) {
+		switch (irq) {
+			/* wakeup line 4, AP timer */
+		case IRQ_PXA1956_AP0_TIMER1:
+			apbc_timer0 = __raw_readl(apbc + TIMER0);
+			__raw_writel(0x1 << 7 | apbc_timer0, apbc + TIMER0);
+			awucrm = PMUM_WAKEUP4 | PMUM_AP0_2_TIMER_1;
+			break;
+		case IRQ_PXA1956_AP0_TIMER2_3:
+			apbc_timer0 = __raw_readl(apbc + TIMER0);
+			__raw_writel(0x1 << 7 | apbc_timer0, apbc + TIMER0);
+			awucrm = PMUM_WAKEUP4 | PMUM_AP0_2_TIMER_2 | PMUM_AP0_2_TIMER_3;
+			break;
+		case IRQ_PXA1956_AP1_TIMER1:
+			awucrm = PMUM_WAKEUP4 | PMUM_AP1_TIMER_1;
+			break;
+		case IRQ_PXA1956_AP1_TIMER2_3:
+			awucrm = PMUM_WAKEUP4 | PMUM_AP1_TIMER_2 | PMUM_AP1_TIMER_3;
+			break;
+		case IRQ_PXA1956_AP2_TIMER1:
+			awucrm = PMUM_WAKEUP4 | PMUM_AP0_2_TIMER_1;
+			break;
+		case IRQ_PXA1956_AP2_TIMER2_3:
+			awucrm = PMUM_WAKEUP4 | PMUM_AP0_2_TIMER_2 | PMUM_AP0_2_TIMER_3;
+			break;
+		default:
+			/* do nothing */
+			break;
+		}
+	} else {
+		switch (irq) {
+			/* wakeup line 4, AP timer */
+		case IRQ_PXA1936_AP0_TIMER1:
+			apbc_timer0 = __raw_readl(apbc + TIMER0);
+			__raw_writel(0x1 << 7 | apbc_timer0, apbc + TIMER0);
+			awucrm = PMUM_WAKEUP4 | PMUM_AP0_2_TIMER_1;
+			break;
+		case IRQ_PXA1936_AP0_TIMER2:
+			apbc_timer0 = __raw_readl(apbc + TIMER0);
+			__raw_writel(0x1 << 7 | apbc_timer0, apbc + TIMER0);
+			awucrm = PMUM_WAKEUP4 | PMUM_AP0_2_TIMER_2;
+			break;
+		case IRQ_PXA1936_AP0_TIMER3:
+			apbc_timer0 = __raw_readl(apbc + TIMER0);
+			__raw_writel(0x1 << 7 | apbc_timer0, apbc + TIMER0);
+			awucrm = PMUM_WAKEUP4 | PMUM_AP0_2_TIMER_3;
+			break;
+		case IRQ_PXA1936_AP1_TIMER1:
+			awucrm = PMUM_WAKEUP4 | PMUM_AP1_TIMER_1;
+			break;
+		case IRQ_PXA1936_AP1_TIMER2:
+			awucrm = PMUM_WAKEUP4 | PMUM_AP1_TIMER_2;
+			break;
+		case IRQ_PXA1936_AP1_TIMER3:
+			awucrm = PMUM_WAKEUP4 | PMUM_AP1_TIMER_3;
+			break;
+		case IRQ_PXA1936_AP2_TIMER1:
+			awucrm = PMUM_WAKEUP4 | PMUM_AP0_2_TIMER_1;
+			break;
+		case IRQ_PXA1936_AP2_TIMER2:
+			awucrm = PMUM_WAKEUP4 | PMUM_AP0_2_TIMER_2;
+			break;
+		case IRQ_PXA1936_AP2_TIMER3:
+			awucrm = PMUM_WAKEUP4 | PMUM_AP0_2_TIMER_3;
+			break;
+		default:
+			/* do nothing */
+			break;
+		}
+	}
+
 	if (on) {
 		if (awucrm) {
 			awucrm |= __raw_readl(mpmu + AWUCRM);
