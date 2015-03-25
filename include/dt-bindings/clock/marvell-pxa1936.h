@@ -72,6 +72,7 @@
 #define PXA1936_CLK_AICER		79
 #define PXA1936_CLK_SSP0		80
 #define PXA1936_CLK_SSP2		81
+#define PXA1936_CLK_RIPC_APB		82
 
 /* axi periphrals */
 #define PXA1936_CLK_USB			100

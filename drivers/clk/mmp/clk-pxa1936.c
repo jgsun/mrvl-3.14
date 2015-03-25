@@ -51,6 +51,7 @@
 /* IPC/RIPC clock */
 #define APBC_IPC_CLK_RST	0x24
 #define APBCP_AICER		0x38
+#define MPMU_RIPCCR		0x210
 
 #define APBCP_TWSI2		0x28
 #define APBCP_UART2		0x1c
@@ -549,6 +550,13 @@ static void pxa1936_apb_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 				10, 0, NULL);
 	mmp_clk_add(unit, PXA1936_CLK_SWJTAG, clk);
 
+	if (cpu_is_pxa1956()) {
+		clk = mmp_clk_register_gate(NULL, "ripc_apbclk", NULL, 0,
+				pxa_unit->mpmu_base + MPMU_RIPCCR,
+				0x5, 0x1, 0x0, 0, NULL);
+		mmp_clk_add(unit, PXA1936_CLK_RIPC_APB, clk);
+		clk_prepare_enable(clk);
+	}
 	clk = mmp_clk_register_gate(NULL, "ipc_clk", NULL, 0,
 			pxa_unit->apbc_base + APBC_IPC_CLK_RST,
 			0x7, 0x3, 0x0, 0, NULL);
