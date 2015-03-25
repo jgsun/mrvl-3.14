@@ -219,13 +219,6 @@ union pmua_dm_cc {
 	unsigned int v;
 };
 
-/* hwdfc related */
-enum dfc_cause {
-	CP_LPM_DFC = 0,
-	AP_ACTIVE_DFC,
-	CP_ACTIVE_DFC,
-};
-
 union dfc_ap {
 	struct {
 		unsigned int dfc_req:1;
@@ -252,8 +245,13 @@ union dfc_status {
 		unsigned int dfc_status:1;
 		unsigned int cfl:3;
 		unsigned int tfl:3;
-		unsigned int dfc_cause:2;
-		unsigned int reserved:23;
+/*
+ * We use bit[7:8] on pxa1936 and bit[7:10] on pxa1956.
+ * As this register is read-only, just expand the bit field for
+ * dfc_cause to 4 bits. On pxa1936, we know the reserved bits return 0.
+ */
+		unsigned int dfc_cause:4;
+		unsigned int reserved:21;
 	} b;
 	unsigned int v;
 };
