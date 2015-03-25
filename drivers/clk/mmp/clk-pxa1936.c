@@ -1792,10 +1792,16 @@ static void __init pxa1936_misc_init(struct pxa1936_clk_unit *pxa_unit)
 		(1 << 29) | (1 << 30);	/* CA7 2x1 fabric */
 	writel(val, pxa_unit->ciu_base + CIU_MC_CONF);
 
-	/* enable HW-DVC and HW-DFC when CP is fast wakeup */
-	val = readl(pxa_unit->apmu_base + APMU_DVC_DFC_DEBUG);
-	val |= (1 << 5);
-	writel(val, pxa_unit->apmu_base + APMU_DVC_DFC_DEBUG);
+	/*
+	 * On pxa1956, bit-5 is changed to GLB_INT_MASK_USE_OLD_LOGIC.
+	 * We use default value 0 which enables new logic.
+	 */
+	if (!cpu_is_pxa1956()) {
+		/* enable HW-DVC and HW-DFC when CP is fast wakeup */
+		val = readl(pxa_unit->apmu_base + APMU_DVC_DFC_DEBUG);
+		val |= (1 << 5);
+		writel(val, pxa_unit->apmu_base + APMU_DVC_DFC_DEBUG);
+	}
 
 	/* NOTE: not init GPU/VPU xtc here as we will set rate after register those clocks. */
 }
