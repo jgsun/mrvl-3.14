@@ -134,6 +134,15 @@ static struct mmp_param_fixed_rate_clk fixed_rate_clks[] = {
 	{PXA1936_CLK_PLL1_1248, "pll1_1248", NULL, CLK_IS_ROOT, 1248000000},
 };
 
+static struct mmp_param_fixed_rate_clk fixed_rate_clks_pxa1956[] = {
+	{PXA1936_CLK_CLK32, "clk32", NULL, CLK_IS_ROOT, 32768},
+	{PXA1936_CLK_VCTCXO, "vctcxo", NULL, CLK_IS_ROOT, 26000000},
+	{PXA1936_CLK_PLL1_624, "pll1_624", NULL, CLK_IS_ROOT, 624000000},
+	{PXA1936_CLK_PLL1_416, "pll1_416", NULL, CLK_IS_ROOT, 416000000},
+	{PXA1936_CLK_PLL1_832, "pll1_832", NULL, CLK_IS_ROOT, 832000000},
+	{PXA1936_CLK_PLL1_1248, "pll1_1248", NULL, CLK_IS_ROOT, 1248000000},
+};
+
 static struct mmp_param_fixed_factor_clk fixed_factor_clks[] = {
 	{PXA1936_CLK_PLL1_2, "pll1_2", "pll1_624", 1, 2, 0},
 	{PXA1936_CLK_PLL1_4, "pll1_4", "pll1_2", 1, 2, 0},
@@ -176,6 +185,19 @@ static struct mmp_param_general_gate_clk pll1_gate_clks[] = {
 		APMU_CLK_GATE_CTRL, 29, 0, &pll1_lock},
 	{PXA1936_CLK_PLL1_499_GATE, "pll1_499_gate", "pll1_499_en", 0,
 		APMU_CLK_GATE_CTRL, 31, 0, &pll1_lock},
+};
+
+static struct mmp_param_general_gate_clk pll1_gate_clks_pxa1956[] = {
+	{PXA1936_CLK_PLL1_416_GATE, "pll1_416_gate", "pll1_416", 0,
+		APMU_CLK_GATE_CTRL, 27, 0, &pll1_lock},
+	{PXA1936_CLK_PLL1_624_GATE, "pll1_624_gate", "pll1_624", 0,
+		APMU_CLK_GATE_CTRL, 26, 0, &pll1_lock},
+	{PXA1936_CLK_PLL1_832_GATE, "pll1_832_gate", "pll1_832", 0,
+		APMU_CLK_GATE_CTRL, 30, 0, &pll1_lock},
+	{PXA1936_CLK_PLL1_1248_GATE, "pll1_1248_gate", "pll1_1248", 0,
+		APMU_CLK_GATE_CTRL, 28, 0, &pll1_lock},
+	{PXA1936_CLK_PLL1_312_GATE, "pll1_312_gate", "pll1_2", 0,
+		APMU_CLK_GATE_CTRL, 29, 0, &pll1_lock},
 };
 
 enum pll {
@@ -379,16 +401,23 @@ static void pxa1936_pll_init(struct pxa1936_clk_unit *pxa_unit)
 	struct clk *clk;
 	struct mmp_clk_unit *unit = &pxa_unit->unit;
 
-	mmp_register_fixed_rate_clks(unit, fixed_rate_clks,
-					ARRAY_SIZE(fixed_rate_clks));
+	if (cpu_is_pxa1956()) {
+		mmp_register_fixed_rate_clks(unit, fixed_rate_clks_pxa1956,
+						ARRAY_SIZE(fixed_rate_clks_pxa1956));
+	} else {
+		mmp_register_fixed_rate_clks(unit, fixed_rate_clks,
+						ARRAY_SIZE(fixed_rate_clks));
+	}
 
 	mmp_register_fixed_factor_clks(unit, fixed_factor_clks,
 					ARRAY_SIZE(fixed_factor_clks));
 
-	clk = clk_register_gate(NULL, "pll1_499_en", "pll1_499", 0,
-				pxa_unit->apbs_base + APBS_PLL1_CTRL,
-				31, 0, NULL);
-	mmp_clk_add(unit, PXA1936_CLK_PLL1_499_EN, clk);
+	if (!cpu_is_pxa1956()) {
+		clk = clk_register_gate(NULL, "pll1_499_en", "pll1_499", 0,
+					pxa_unit->apbs_base + APBS_PLL1_CTRL,
+					31, 0, NULL);
+		mmp_clk_add(unit, PXA1936_CLK_PLL1_499_EN, clk);
+	}
 
 	clk = mmp_clk_register_factor("uart_pll", "pll1_4",
 				CLK_SET_RATE_PARENT,
@@ -397,9 +426,15 @@ static void pxa1936_pll_init(struct pxa1936_clk_unit *pxa_unit)
 				ARRAY_SIZE(uart_factor_tbl), NULL);
 	mmp_clk_add(unit, PXA1936_CLK_UART_PLL, clk);
 
-	mmp_register_general_gate_clks(unit, pll1_gate_clks,
-				pxa_unit->apmu_base,
-				ARRAY_SIZE(pll1_gate_clks));
+	if (cpu_is_pxa1956()) {
+		mmp_register_general_gate_clks(unit, pll1_gate_clks_pxa1956,
+					pxa_unit->apmu_base,
+					ARRAY_SIZE(pll1_gate_clks_pxa1956));
+	} else {
+		mmp_register_general_gate_clks(unit, pll1_gate_clks,
+					pxa_unit->apmu_base,
+					ARRAY_SIZE(pll1_gate_clks));
+	}
 
 	if (!board_is_fpga())
 		pxa1936_dynpll_init(pxa_unit);
@@ -645,6 +680,10 @@ static const char * const vpufclk_parent_names[] = {
 	"pll1_416_gate", "pll1_624_gate", "pll1_499_en", "pll2p",
 };
 
+static const char * const vpufclk_parent_names_pxa1956[] = {
+	"pll1_416_gate", "pll1_624_gate", "pll2_div3", "pll2p",
+};
+
 static struct mmp_clk_mix_clk_table vpufclk_pptbl[] = {
 	{.rate = 156000000, .parent_index = 1, .xtc = 0x00380404, },
 	{.rate = 208000000, .parent_index = 0, .xtc = 0x00380404, },
@@ -654,10 +693,24 @@ static struct mmp_clk_mix_clk_table vpufclk_pptbl[] = {
 	{.rate = 528000000, .parent_index = 3, .xtc = 0x00B855A4, },
 };
 
+static struct mmp_clk_mix_clk_table vpufclk_pptbl_pxa1956[] = {
+	{.rate = 156000000, .parent_index = 1, .xtc = 0x00380404, },
+	{.rate = 208000000, .parent_index = 0, .xtc = 0x00380404, },
+	{.rate = 312000000, .parent_index = 1, .xtc = 0x00385404, },
+	{.rate = 416000000, .parent_index = 0, .xtc = 0x00B85454, },
+	{.rate = 528000000, .parent_index = 3, .xtc = 0x00B855A4, },
+};
+
 static struct mmp_clk_mix_config vpufclk_mix_config = {
 	.reg_info = DEFINE_MIX_REG_INFO(3, 8, 2, 6, 20),
 	.table = vpufclk_pptbl,
 	.table_size = ARRAY_SIZE(vpufclk_pptbl),
+};
+
+static struct mmp_clk_mix_config vpufclk_mix_config_pxa1956 = {
+	.reg_info = DEFINE_MIX_REG_INFO(3, 8, 2, 6, 20),
+	.table = vpufclk_pptbl_pxa1956,
+	.table_size = ARRAY_SIZE(vpufclk_pptbl_pxa1956),
 };
 
 /* vpu bus */
@@ -680,6 +733,7 @@ static struct mmp_clk_mix_config vpubus_mix_config = {
 
 static DEFINE_SPINLOCK(disp_lock);
 static const char * const disp1_parent_names[] = {"pll1_624", "pll1_832", "pll1_499_en"};
+static const char * const disp1_parent_names_pxa1956[] = {"pll1_624", "pll1_832"};
 static const char * const disp2_parent_names[] = {"pll2", "pll2p", "pll2_div3"};
 static const char * const disp3_parent_names[] = {"pll3p", "pll3_div3"};
 static const char *disp4_parent_names[] = {"pll4", "pll4_div3"};
@@ -721,6 +775,8 @@ static const char *sc2_phy_parent_names[] = {"pll1_6", "pll1_12"};
 
 static const char *isp_pipe_parent_names[] = {"pll1_416_gate", "pll1_624_gate",
 			"pll4_div3", "pll1_499_gate",};
+static const char *isp_pipe_parent_names_pxa1956[] = {"pll1_416_gate", "pll1_624_gate",
+			"pll4_div3", "pll3_div3",};
 static struct mmp_clk_mix_config isp_pipe_mix_config = {
 	.reg_info = DEFINE_MIX_REG_INFO(3, 4, 2, 2, 7),
 };
@@ -895,13 +951,27 @@ static void pxa1936_axi_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 	clk_set_rate(clk, 156000000);
 	mmp_clk_add(unit, PXA1936_CLK_GCBUS, clk);
 
-	vpufclk_mix_config.reg_info.reg_clk_ctrl =
-			pxa_unit->apmu_base + APMU_VPU;
-	vpufclk_mix_config.reg_info.reg_clk_xtc =
-			pxa_unit->ciu_base + VPU_XTC;
-	clk = mmp_clk_register_mix(NULL, "vpufunc_mix_clk",
-			(const char **)vpufclk_parent_names, ARRAY_SIZE(vpufclk_parent_names),
-			0, &vpufclk_mix_config, &vpu_lock);
+
+	if (cpu_is_pxa1956()) {
+		vpufclk_mix_config_pxa1956.reg_info.reg_clk_ctrl =
+				pxa_unit->apmu_base + APMU_VPU;
+		vpufclk_mix_config_pxa1956.reg_info.reg_clk_xtc =
+				pxa_unit->ciu_base + VPU_XTC;
+		clk = mmp_clk_register_mix(NULL, "vpufunc_mix_clk",
+				(const char **)vpufclk_parent_names_pxa1956,
+				ARRAY_SIZE(vpufclk_parent_names_pxa1956),
+				0, &vpufclk_mix_config_pxa1956, &vpu_lock);
+	} else {
+		vpufclk_mix_config.reg_info.reg_clk_ctrl =
+				pxa_unit->apmu_base + APMU_VPU;
+		vpufclk_mix_config.reg_info.reg_clk_xtc =
+				pxa_unit->ciu_base + VPU_XTC;
+		clk = mmp_clk_register_mix(NULL, "vpufunc_mix_clk",
+				(const char **)vpufclk_parent_names,
+				ARRAY_SIZE(vpufclk_parent_names),
+				0, &vpufclk_mix_config, &vpu_lock);
+	}
+
 #ifdef CONFIG_VPU_DEVFREQ
 	__init_comp_devfreq_table(clk, DEVFREQ_VPU_BASE);
 #endif
@@ -941,12 +1011,23 @@ static void pxa1936_axi_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 	disp1_clks.gate.flags = 0x0;
 	disp1_clks.gate_ops = &mmp_clk_gate_ops;
 
-	clk = clk_register_composite(NULL, "disp1_sel_clk", (const char **)disp1_parent_names,
-				ARRAY_SIZE(disp1_parent_names),
-				&disp1_clks.mux.hw, disp1_clks.mux_ops,
-				NULL, NULL,
-				&disp1_clks.gate.hw, disp1_clks.gate_ops,
-				CLK_SET_RATE_PARENT);
+	if (cpu_is_pxa1956()) {
+		clk = clk_register_composite(NULL, "disp1_sel_clk",
+					(const char **)disp1_parent_names_pxa1956,
+					ARRAY_SIZE(disp1_parent_names_pxa1956),
+					&disp1_clks.mux.hw, disp1_clks.mux_ops,
+					NULL, NULL,
+					&disp1_clks.gate.hw, disp1_clks.gate_ops,
+					CLK_SET_RATE_PARENT);
+	} else {
+		clk = clk_register_composite(NULL, "disp1_sel_clk",
+					(const char **)disp1_parent_names,
+					ARRAY_SIZE(disp1_parent_names),
+					&disp1_clks.mux.hw, disp1_clks.mux_ops,
+					NULL, NULL,
+					&disp1_clks.gate.hw, disp1_clks.gate_ops,
+					CLK_SET_RATE_PARENT);
+	}
 	mmp_clk_add(unit, PXA1936_CLK_DISP1, clk);
 	clk_register_clkdev(clk, "disp1_sel_clk", NULL);
 
@@ -1082,10 +1163,17 @@ static void pxa1936_axi_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 	mmp_clk_add(unit, PXA1936_CLK_SC2_PHY4LN_CLK_EN, clk);
 
 	isp_pipe_mix_config.reg_info.reg_clk_ctrl = pxa_unit->apmu_base + APMU_ISP;
-	mmp_clk_register_mix(NULL, "isp_pipe_mix_clk",
-			isp_pipe_parent_names,
-			ARRAY_SIZE(isp_pipe_parent_names), 0,
-			&isp_pipe_mix_config, &isp_lock);
+	if (cpu_is_pxa1956()) {
+		clk = mmp_clk_register_mix(NULL, "isp_pipe_mix_clk",
+				isp_pipe_parent_names_pxa1956,
+				ARRAY_SIZE(isp_pipe_parent_names_pxa1956), 0,
+				&isp_pipe_mix_config, &isp_lock);
+	} else {
+		clk = mmp_clk_register_mix(NULL, "isp_pipe_mix_clk",
+				isp_pipe_parent_names,
+				ARRAY_SIZE(isp_pipe_parent_names), 0,
+				&isp_pipe_mix_config, &isp_lock);
+	}
 
 	/* add isp ahb and isp axi reset to pipe clk enable */
 	clk = mmp_clk_register_gate(NULL, "isp_pipe_clk", "isp_pipe_mix_clk",
@@ -1788,8 +1876,11 @@ EXPORT_SYMBOL(getddrdfcinfo);
 
 static void __init pxa1936_clk_init(struct device_node *np)
 {
-	unsigned int max_freq_fused = CORE_1p5G, profile = 0;
+	unsigned int max_freq_fused = CORE_1p5G;
 	struct pxa1936_clk_unit *pxa_unit;
+#if defined(CONFIG_PXA_DVFS)
+	unsigned int profile = 0;
+#endif
 
 	pxa_unit = kzalloc(sizeof(*pxa_unit), GFP_KERNEL);
 	if (!pxa_unit) {
