@@ -70,6 +70,7 @@
 #define DCMD_BURST8	(1 << 16)	/* 8 byte burst */
 #define DCMD_BURST16	(2 << 16)	/* 16 byte burst */
 #define DCMD_BURST32	(3 << 16)	/* 32 byte burst */
+#define DCMD_BURST64	(4 << 16)	/* 64 byte burst */
 #define DCMD_WIDTH1	(1 << 14)	/* 1 byte width */
 #define DCMD_WIDTH2	(2 << 14)	/* 2 byte width (HalfWord) */
 #define DCMD_WIDTH4	(3 << 14)	/* 4 byte width (Word) */
@@ -766,6 +767,8 @@ static int mmp_pdma_control(struct dma_chan *dchan, enum dma_ctrl_cmd cmd,
 			chan->dcmd |= DCMD_BURST16;
 		else if (maxburst == 32)
 			chan->dcmd |= DCMD_BURST32;
+		else if (maxburst == 64)
+			chan->dcmd |= DCMD_BURST64;
 
 		chan->dir = cfg->direction;
 		chan->dev_addr = addr;
