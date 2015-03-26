@@ -3721,7 +3721,7 @@ void b52_ack_xlate_irq(__u32 *event, int max_mac_num, struct work_struct *work)
 
 	for (i = 0; i < max_mac_num; i++) {
 		__u16 mac_irq;
-		__u8 irq_src, irq0 = 0, irq1 = 0, irqr = 0, rdy;
+		__u8 irq_src_s, irq_src_d, irq0 = 0, irq1 = 0, irqr = 0, rdy;
 
 		event[i] = 0;
 
@@ -3729,18 +3729,24 @@ void b52_ack_xlate_irq(__u32 *event, int max_mac_num, struct work_struct *work)
 		if (!(mac_irq & 0xFFFF))
 			continue;
 
-		irq_src = b52_readb(mac_base[i] + REG_MAC_INT_SRC);
+		/*
+		 * it need to read HW src register when start.
+		 * read FW src register when done.
+		 * avoid src register refresh when start and done occur.
+		 * */
+		irq_src_s = b52_readb(mac_base[i] + REG_MAC_INT_SRC);
+		irq_src_d = b52_readb(REG_FW_MAC1_INT_SRC + i);
 		rdy = b52_readb(mac_base[i] + REG_MAC_RDY_ADDR0);
 
-		trace_printk("mac%d: irq %x,src %x,rdy %x\n", i, mac_irq, irq_src, rdy);
+		trace_printk("mac%d: irq %x,src_s %x,rdy %x\n", i, mac_irq, irq_src_s, rdy);
 
 		/* build up write ports virtual IRQs */
 		if (mac_irq & W_INT_START0) {
-			if (irq_src & INT_SRC_W1)
+			if (irq_src_s & INT_SRC_W1)
 				irq0 |= VIRT_IRQ_START;
 			else if ((rdy & W_RDY_0) == 0)
 				irq0 |= VIRT_IRQ_DROP;
-			if (irq_src & INT_SRC_W2)
+			if (irq_src_s & INT_SRC_W2)
 				irq1 |= VIRT_IRQ_START;
 			else if ((rdy & W_RDY_2) == 0)
 				irq1 |= VIRT_IRQ_DROP;
@@ -3754,9 +3760,9 @@ void b52_ack_xlate_irq(__u32 *event, int max_mac_num, struct work_struct *work)
 			drop_cnt[i]++;
 		}
 		if (mac_irq & W_INT_DONE0) {
-			if (irq_src & INT_SRC_W1)
+			if (irq_src_d & INT_SRC_W1)
 				irq0 |= VIRT_IRQ_DONE;
-			if (irq_src & INT_SRC_W2)
+			if (irq_src_d & INT_SRC_W2)
 				irq1 |= VIRT_IRQ_DONE;
 		}
 		if (mac_irq & W_INT_OVERFLOW0) {
