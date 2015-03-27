@@ -416,14 +416,150 @@ static char *hw_irq_name_1936[] = {
 	"Performance Monitor Unit for AP Cluster1 core3",
 };
 
+static char *hw_irq_name_1956[] = {
+	/* 0~9 */
+	"CP Timer_3",
+	"SSP2",
+	"TWSI2",
+	"SSP0",
+	"PMIC_INT",
+	"RTC_INT",
+	"RTC_ ALARM",
+	"TWSI (AP)",
+	"3D GPU",
+	"KeyPad",
+	/* 10~19 */
+	"DMA_int to Cluster0 APc1",
+	"OV ISP Engine",
+	"Battery Monitor (onewire)",
+	"AP_Timer0_1",
+	"AP_Timer0_2_3",
+	"ISP DESC TOP",
+	"CP_AP IPC(AP_0)",
+	"CP_AP IPC(AP_1)",
+	"CP_AP IPC(AP_2)",
+	"CP_AP IPC(AP_3)",
+	/* 20~29 */
+	"CP_AP IPC(AP_4)",
+	"AP_Timer2_1",
+	"AP_Timer2_2_3",
+	"TWSI3",
+	"UART2",
+	"Codec",
+	"ap_cp_l2 and ddr_int",
+	"UART1 (Fast)",
+	"DRO ",
+	"AP_Timer1_1",
+	/* 30~39 */
+	"AP_Timer1_2_3",
+	"NDR_Timer1",
+	"NDR_Timer2 or NDR_Timer3",
+	"temp sensor int",
+	"GSSP (PCM on MSA)",
+	"WDT",
+	"Main PMU Int",
+	" CA53MP Frequency change Int",
+	"Seagull Frequency change Int",
+	"MMC",
+	/* 40~49 */
+	"AEU",
+	"LCD Interface",
+	"CI Interface",
+	"DDRC Performance Counter",
+	"USB 1 (PHY)",
+	"NAND",
+	"VPU",
+	"DMA_int to CP",
+	"DMA_int to Cluster0 APc0",
+	"GPIO_AP",
+	/* 50~59 */
+	"pad_edge_detect",
+	"none(51)",
+	"none(52)",
+	"DSI",
+	"TWSI (CP-slow)",
+	"GPIO_CP",
+	"IPC_SRV0_AP",
+	"none(57)",
+	"coresight int for AP Cluster0 core0",
+	"UART0 (Slow), CP",
+	/* 60~69 */
+	"GPIO secure int for AP",
+	"coresight int for AP Cluster0 core1",
+	"Fabric timeout",
+	"SM_INT (from PinMux)",
+	"none(64)",
+	"none(65)",
+	"coresight int for AP Cluster0 core2",
+	"DMA_int to  Cluster0 APc2",
+	"coresight int for AP Cluster0 core3",
+	"DMA_int to Cluster0 APc3",
+	/* 70~79 */
+	"AP SSP1",
+	"AP SSP2",
+	"2D GPU",
+	"DMA_secure_int to Cluster0 APc0",
+	"DMA_secure_int to Cluster0 APc1",
+	"DMA_secure_int to Cluster0 APc2",
+	"DMA_secure_int to Cluster0 APc3",
+	"CI Interface",
+	"mmu_vpu_irq_ns",
+	"mmu_vpu_irq_s",
+	/* 80~89 */
+	"DMA_int to SP",
+	"VDMA IRQ",
+	"Audio ADMA0",
+	"Audio ADMA1",
+	"Performance Monitor Unit for AP Cluster0 core0",
+	"Performance Monitor Unit for AP Cluster0 core1",
+	"Performance Monitor Unit for AP Cluster0 core2",
+	"Performance Monitor Unit for AP Cluster0 core3",
+	"none(88)",
+	"Audio Island",
+	/* 90~99 */
+	"none(90)",
+	"WTM HST interrupt",
+	"WTM SP interrupt",
+	"none(93)",
+	"eMMC",
+	"GPS interrupt",
+	"DMA_secure_int to Cluster1 APc0",
+	"DMA_secure_int to Cluster1 APc1",
+	"DMA_secure_int to Cluster1 APc2",
+	"DMA_secure_int to Cluster1 APc3",
+	/* 100~109 */
+	"DMA_int to Cluster1 APc0",
+	"DMA_int to Cluster1 APc1",
+	"DMA_int to Cluster1 APc2",
+	"DMA_int to Cluster1 APc3",
+	"coresight int for AP Cluster1 core0",
+	"coresight int for AP Cluster1 core1",
+	"coresight int for AP Cluster1 core2",
+	"coresight int for AP Cluster1 core3",
+	"Performance Monitor Unit for AP Cluster1 core0",
+	"Performance Monitor Unit for AP Cluster1 core1",
+	/* 110~111 */
+	"Performance Monitor Unit for AP Cluster1 core2",
+	"Performance Monitor Unit for AP Cluster1 core3",
+};
+
 static int icu_async_further_check(void)
 {
 	int i, bit, len = 0;
+	int irq_size, irq_size_round;
 	void __iomem *irq_stat_base =
 	    regs_addr_get_va(REGS_ADDR_ICU) + ICU_INT_STATUS_BASE;
 	unsigned long irq_status;
 	char *buf;
 	size_t size = PAGE_SIZE - 1;
+
+	if (cpu_is_pxa1956()) {
+		irq_size_round = DIV_ROUND_UP(ARRAY_SIZE(hw_irq_name_1956), 32);
+		irq_size = ARRAY_SIZE(hw_irq_name_1956);
+	} else {
+		irq_size_round = DIV_ROUND_UP(ARRAY_SIZE(hw_irq_name_1936), 32);
+		irq_size = ARRAY_SIZE(hw_irq_name_1936);
+	}
 
 	buf = (char *)__get_free_pages(GFP_ATOMIC, 0);
 	if (!buf) {
@@ -431,7 +567,7 @@ static int icu_async_further_check(void)
 		goto err_exit;
 	}
 
-	for (i = 0; i < DIV_ROUND_UP(ARRAY_SIZE(hw_irq_name_1936), 32); i++) {
+	for (i = 0; i < irq_size_round; i++) {
 		irq_status = __raw_readl(irq_stat_base + i * 4);
 		pr_info("INTReg_%d: 0x%lx ", i, irq_status);
 
@@ -441,10 +577,14 @@ static int icu_async_further_check(void)
 				len = snprintf(buf + len, size - len,
 					       "Possible Wakeup by IRQ: ");
 
-			if ((bit + i * 32) < ARRAY_SIZE(hw_irq_name_1936))
-				len += snprintf(buf + len, size - len, "%s,",
+			if ((bit + i * 32) < irq_size) {
+				if (cpu_is_pxa1956())
+					len += snprintf(buf + len, size - len, "%s,",
+						hw_irq_name_1956[bit + i * 32]);
+				else
+					len += snprintf(buf + len, size - len, "%s,",
 						hw_irq_name_1936[bit + i * 32]);
-			else {
+			} else {
 				len += snprintf(buf + len, size - len,
 						"The IRQ_%d cannot be parased\n",
 						(bit + i * 32));
@@ -468,7 +608,7 @@ static int icu_async_further_check(void)
 	return 0;
 
 err_exit:
-	for (i = 0; i < DIV_ROUND_UP(ARRAY_SIZE(hw_irq_name_1936), 32); i++)
+	for (i = 0; i < irq_size_round; i++)
 		pr_info("INTReg_%d: 0x%x\n", i,
 			__raw_readl(irq_stat_base + i * 4));
 	return -EINVAL;
