@@ -356,16 +356,22 @@ static int vm_millivolts_1956_svc_tsmc[][VL_MAX] = {
 
 };
 
-#define cp_msa(cp0, cp1, cp2, msa) {.cpdvcinfo[0] = {416, cp0},\
-		.cpdvcinfo[1] = {624, cp1},\
-		.cpdvcinfo[2] = {832, cp2},\
-		.msadvcvl = msa,}
-
-#define cp_lv1 cp_msa(VL1, VL1, VL5, VL1)
-#define cp_lv2 cp_msa(VL1, VL2, VL5, VL2)
-
-static struct cpmsa_dvc_info cpmsa_dvc_info_1956tsmc[NUM_PROFILES] = {
-	[0] = cp_lv2,
+static struct cpmsa_dvc_info cpmsa_dvc_info_1956tsmc = {
+	.cpdvcinfo[0] = {208, VL1},
+	.cpdvcinfo[1] = {312, VL2},
+	.cpdvcinfo[2] = {416, VL3},
+	.cpdvcinfo[3] = {624, VL4},
+	.cpdvcinfo[4] = {832, VL5},
+	.cpaxidvcinfo[0] = {104, VL1},
+	.cpaxidvcinfo[1] = {156, VL2},
+	.cpaxidvcinfo[2] = {208, VL3},
+	.cpaxidvcinfo[3] = {312, VL4},
+	.lteaxidvcinfo[0] = {104, VL1},
+	.lteaxidvcinfo[1] = {156, VL2},
+	.lteaxidvcinfo[2] = {208, VL3},
+	.lteaxidvcinfo[3] = {312, VL4},
+	.msadvcvl[0] = {416, VL2},
+	.msadvcvl[1] = {624, VL3},
 };
 
 /*
@@ -454,7 +460,7 @@ int __init setup_pxa1956_dvfs_platinfo(void)
 	plat_set_vl_min(0);
 	plat_set_vl_max(dvc_pxa1956_info.num_volts);
 
-	fillcpdvcinfo(&cpmsa_dvc_info_1956tsmc[0]);
+	fillcpdvcinfo(&cpmsa_dvc_info_1956tsmc);
 
 	/* register the platform info into dvfs-dvc.c(hwdvc driver) */
 	hwdvc_base = ioremap(HWDVC_BASE, SZ_16K);
