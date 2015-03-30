@@ -246,7 +246,7 @@ static void __init alloc_init_pud(pgd_t *pgd, unsigned long addr,
  * Create the page directory entries and any necessary page tables for the
  * mapping specified by 'md'.
  */
-static void __init create_mapping(phys_addr_t phys, unsigned long virt,
+void __init create_mapping(phys_addr_t phys, unsigned long virt,
 				  phys_addr_t size, int coherent)
 {
 	unsigned long addr, length, end, next;

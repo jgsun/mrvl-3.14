@@ -36,6 +36,7 @@
 #include <asm/setup.h>
 #include <asm/sizes.h>
 #include <asm/tlb.h>
+#include <asm/mmu.h>
 
 #include <asm/mach/arch.h>
 
@@ -352,4 +353,38 @@ static int __init keepinitrd_setup(char *__unused)
 }
 
 __setup("keepinitrd", keepinitrd_setup);
+
+
+#ifdef CONFIG_MEMORY_HOTPLUG
+/*
+ * Memory is added always to NORMAL zone. This means you will never get
+ * additional DMA/DMA32 memory.
+ */
+int arch_add_memory(int nid, u64 start, u64 size)
+{
+	/*
+	 * This function is used to support memory hotplug on arm architecture.
+	 */
+	struct pglist_data *pgdata = NODE_DATA(nid);
+	struct zone *zone = pgdata->node_zones + ZONE_NORMAL;
+	unsigned long start_pfn = start >> PAGE_SHIFT;
+	unsigned long nr_pages = size >> PAGE_SHIFT;
+	int ret = -1;
+
+	create_mapping(start, __phys_to_virt(start), size, 0);
+	/*
+	 * Create the mapping for dma coherent memory.
+	 */
+	create_mapping(start, __phys_to_coherent_virt(start),
+			size, 1);
+
+
+	ret = __add_pages(0, zone, start_pfn, nr_pages);
+	WARN_ON_ONCE(ret);
+
+	ret = memblock_add(start, size);
+	return ret;
+}
+#endif /* CONFIG_MEMORY_HOTPLUG */
+
 #endif

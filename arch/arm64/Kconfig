@@ -476,6 +476,18 @@ config ARM64_FLUSH_CONSOLE_ON_RESTART
 	  released if it failed to be acquired, which will cause all the
 	  pending messages to be flushed.
 
+config ARCH_ENABLE_MEMORY_HOTPLUG
+	def_bool y
+	depends on SPARSEMEM && MMU && ARCH_MMP
+
+config ARCH_ENABLE_MEMORY_HOTREMOVE
+	def_bool y
+	depends on ARCH_ENABLE_MEMORY_HOTPLUG
+
+config ARCH_MEMORY_PROBE
+	def_bool y
+	depends on ARCH_ENABLE_MEMORY_HOTPLUG
+
 endmenu
 
 menu "Boot options"
