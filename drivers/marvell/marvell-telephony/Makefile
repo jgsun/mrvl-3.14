@@ -24,11 +24,11 @@ obj-$(CONFIG_MRVL_MMP_MODEM) += diag/
 
 obj-$(CONFIG_MRVL_MMP_MODEM) += hwmap/
 
-obj-$(CONFIG_MRVL_MMP_MODEM) += cidatastub/
+#obj-$(CONFIG_MRVL_MMP_MODEM) += cidatastub/
 
 obj-$(CONFIG_MRVL_MMP_MODEM) += ccinetdev/
 
-obj-$(CONFIG_MRVL_MMP_MODEM) += cidatatty/
+#obj-$(CONFIG_MRVL_MMP_MODEM) += cidatatty/
 
 obj-$(CONFIG_MRVL_MMP_MODEM) += cimodemtty/
 
