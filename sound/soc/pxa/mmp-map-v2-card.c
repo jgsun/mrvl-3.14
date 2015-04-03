@@ -285,7 +285,7 @@ static int map2_tdm_hs_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_dai *codec_dai = rtd->codec_dai;
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
 #ifdef CONFIG_SND_TDM_STATIC_ALLOC
-	int tx[2] = {3, 4};
+	int tx[2] = {1, 2};
 	int tx_num = 2;
 #else
 	int channel;
