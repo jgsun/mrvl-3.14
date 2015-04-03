@@ -39,6 +39,7 @@ enum b52_sensor_type {
 	SONY_SENSOR,
 	SAMSUNG_SENSOR,
 	HYNIX_SENSOR,
+	SAMSUNG_ASNY_SENSOR,
 };
 
 enum b52_sensor_gain_type {

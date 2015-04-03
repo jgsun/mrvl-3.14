@@ -353,7 +353,7 @@ struct b52_sensor_spec_ops s5k5e3_ops = {
 };
 struct b52_sensor_data b52_s5k5e3 = {
 	.name = "ssa.s5k5e3",
-	.type = SAMSUNG_SENSOR,
+	.type = SAMSUNG_ASNY_SENSOR,
 	.i2c_attr = s5k5e3_i2c_attr,
 	.num_i2c_attr = N_S5K5E3_I2C_ATTR,
 	.id = {
