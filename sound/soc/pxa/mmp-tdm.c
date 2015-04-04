@@ -1589,10 +1589,15 @@ static int mmp_map_out1_mute(struct snd_soc_dai *dai, int mute, int direction)
 	struct tdm_dai_private *tdm_dai_priv = snd_soc_dai_get_drvdata(dai);
 	struct map_private *map_priv = tdm_dai_priv->map_priv;
 	unsigned int reg, val;
+#ifdef CONFIG_SND_MMP_MAP
+	unsigned int shift = 19;
+#else
+	unsigned int shift = 16;
+#endif
 
 	reg = MAP_DATAPATH_FLOW_CTRL_REG_1;
 	val = map_raw_read(map_priv, reg);
-	val = (val >> 19) & 0x7;
+	val = (val >> shift) & 0x7;
 
 	/* check if dsp bypass mode */
 	if ((val == 0) || (val == 7))
@@ -1612,10 +1617,15 @@ static int mmp_map_out1_dup_mute(struct snd_soc_dai *dai, int mute, int directio
 	struct tdm_dai_private *tdm_dai_priv = snd_soc_dai_get_drvdata(dai);
 	struct map_private *map_priv = tdm_dai_priv->map_priv;
 	unsigned int reg, val;
+#ifdef CONFIG_SND_MMP_MAP
+	unsigned int shift = 19;
+#else
+	unsigned int shift = 16;
+#endif
 
 	reg = MAP_DATAPATH_FLOW_CTRL_REG_1;
 	val = map_raw_read(map_priv, reg);
-	val = (val >> 19) & 0x7;
+	val = (val >> shift) & 0x7;
 
 	/* check if dsp bypass mode */
 	if ((val == 0) || (val == 7))
@@ -1635,11 +1645,15 @@ static int mmp_map_out2_mute(struct snd_soc_dai *dai, int mute, int direction)
 	struct tdm_dai_private *tdm_dai_priv = snd_soc_dai_get_drvdata(dai);
 	struct map_private *map_priv = tdm_dai_priv->map_priv;
 	unsigned int reg, val;
-
+#ifdef CONFIG_SND_MMP_MAP
+	unsigned int shift = 16;
+#else
+	unsigned int shift = 20;
+#endif
 	reg = MAP_DATAPATH_FLOW_CTRL_REG_1;
 	val = map_raw_read(map_priv, reg);
 
-	val = (val >> 16) & 0x7;
+	val = (val >> shift) & 0x7;
 
 	/* check if dsp bypass mode */
 	if ((val == 0) || (val == 7))
