@@ -405,6 +405,9 @@ static long psdatastub_ioctl(struct file *filp,
 	pr_debug("%s: cmd=0x%x\n", __func__, cmd);
 	switch (cmd) {
 	case PSDATASTUB_GCFDATA:	/* For CGSEND and TGSINK */
+	{
+		struct psd_user psd_user;
+
 		if (copy_from_user(&gcfdata, (struct GCFDATA *) arg,
 				sizeof(struct GCFDATA)))
 			return -EFAULT;
@@ -417,8 +420,18 @@ static long psdatastub_ioctl(struct file *filp,
 			kfree_skb(gcfbuf);
 			return -EFAULT;
 		}
-		psd_data_tx(gcfdata.cid, gcfbuf);
-		break;
+		memset(&psd_user, 0, sizeof(psd_user));
+		if (psd_register(&psd_user, gcfdata.cid) == 0) {
+			psd_data_tx(gcfdata.cid, gcfbuf);
+			psd_unregister(&psd_user, gcfdata.cid);
+		} else {
+			pr_err("%s: register cid %d failed\n",
+				__func__, gcfdata.cid);
+			kfree_skb(gcfbuf);
+			return -EFAULT;
+		}
+	}
+	break;
 
 	case PSDATASTUB_TOGGLE_DATA_ENABLE_DISABLE:
 		if (data_enabled)
