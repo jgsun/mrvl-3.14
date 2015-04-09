@@ -753,6 +753,7 @@ struct b52_sensor_data b52_ov13850_13M = {
 	},
 	.expo_range = {0x00010, 0xb90},
 	.focus_range = {0x0010, 0x03ff},
+	.frationalexp_range = {0x00000, 0x00000},
 	.vts_reg = {
 		.tab = ov13850_vts,
 		.num = N_OV13850_VTS,

@@ -232,6 +232,7 @@ struct b52_sensor_data b52_imx219 = {
 	},
 	.expo_range = {0x0001, 0x0a99},
 	.focus_range = {0x0010, 0x03ff},
+	.frationalexp_range = {0x00000, 0x00000},
 	.vts_reg = {
 		.tab = imx219_vts,
 		.num = N_IMX219_VTS,
