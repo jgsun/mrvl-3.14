@@ -40,7 +40,7 @@
 #define ERRMSG(fmt, args ...)   pr_err("SSIPC MISC: " fmt, ## args)
 
 #define SHMEM_RECV_LIMIT 2048
-#define SHMEM_PAYLOAD_LIMIT (SHMEM_RECV_LIMIT - sizeof(struct sk_buff) \
+#define SHMEM_PAYLOAD_LIMIT (SHMEM_RECV_LIMIT - sizeof(ShmApiMsg) \
 		- sizeof(struct shm_skhdr))
 
 #define SSIPC_START_PROC_ID	0x06
@@ -54,6 +54,18 @@ static struct class *misc_class;
 static int misc_major;
 #define SSIPC_MISC_NAME "ssipc_misc"
 
+struct _long_packet_header {
+	u16 total_len;
+	u16 seq;
+};
+
+struct _long_packet {
+	int total_len;
+	int cur_len;
+	int cur_seq;
+	struct sk_buff *long_skb;
+};
+
 struct io_device {
 	char *name;
 	char *app;
@@ -62,6 +74,8 @@ struct io_device {
 	int misc_minor;
 	wait_queue_head_t wq;
 	struct sk_buff_head sk_rx_q;
+	int long_packet_enable;
+	struct _long_packet *long_packet;
 	int sock_fd;
 	struct task_struct *misc_init_task_ref;
 	int channel_inited;
@@ -86,7 +100,8 @@ static struct io_device umts_io_devices[] = {
 	[1] = {
 	       .name = "umts_ipc0",
 	       .app = "s-ril",
-	       .port = CISTUB_PORT},
+	       .port = CISTUB_PORT,
+	       .long_packet_enable = 1},
 	[2] = {
 	       .name = "umts_attest0",
 	       .app = "serial_client",
@@ -129,7 +144,8 @@ static struct io_device umts_io_devices[] = {
 	[PORTS_GOURP_ONE_NUM] = {
 	       .name = "umts_ipc1",
 	       .app = "s-ril 2",
-	       .port = CIDATASTUB_PORT},
+	       .port = CIDATASTUB_PORT,
+	       .long_packet_enable = 1},
 	[PORTS_GOURP_ONE_NUM + 1] = {
 	       .name = "umts_attest1",
 	       .app = "serial_client 2",
@@ -268,18 +284,115 @@ static inline int queue_skb_to_iod(struct sk_buff *skb, struct io_device *iod)
 	}
 }
 
+/* return 1 means complete packet,
+ * return 0 means incomplete or error packet*/
+int packet_complete(struct sk_buff **skb_out, struct io_device *iod)
+{
+	int ret = 0;
+	if (iod->long_packet_enable) {
+		struct sk_buff *skb = *skb_out;
+		struct _long_packet_header *header;
+		u8 header_len = sizeof(struct _long_packet_header);
+		u16 msg_len;
+		u16 cur_seq;
+		u16 total_len;
+		pr_debug("%s: long packet!!!(skb_len, %d)\n",
+				__func__, skb->len);
+		if (skb->len <= header_len) {
+			pr_err("%s: error long packet detected, too small.\n",
+					__func__);
+			goto error_out;
+		}
+		header = (struct _long_packet_header *)skb->data;
+		msg_len = skb->len - header_len;
+		total_len = header->total_len;
+		cur_seq = header->seq;
+		pr_debug("%s: msg_len: %d, total_len:%d, seq:%d\n", __func__,
+					msg_len, total_len, cur_seq);
+		if (!iod->long_packet) {
+			if (msg_len == total_len) {
+				ret = 1;
+				skb_pull(skb, header_len);
+				goto out;
+			}
+			iod->long_packet = kzalloc(sizeof(struct _long_packet),
+						GFP_KERNEL);
+			if (!iod->long_packet) {
+				pr_err("%s: alloc long_packet error\n",
+						__func__);
+				goto error_out;
+			}
+			iod->long_packet->long_skb =
+					alloc_skb(total_len, GFP_KERNEL);
+			if (!iod->long_packet->long_skb) {
+				pr_err("%s: alloc long_packet skb error.\n",
+						__func__);
+				goto error_out;
+			}
+			iod->long_packet->total_len = total_len;
+		} else {
+			pr_debug("%s: lp->cur: %d, lp->total:%d, lp->seq:%d\n",
+					__func__,
+					iod->long_packet->cur_len,
+					iod->long_packet->total_len,
+					iod->long_packet->cur_seq);
+			if (cur_seq != iod->long_packet->cur_seq + 1) {
+				pr_err("%s: error long packet detected, seq error.\n",
+					__func__);
+				goto error_out;
+			} else if (iod->long_packet->cur_len + msg_len >
+					iod->long_packet->total_len) {
+				pr_err("%s: error long packet detected, lens error.\n",
+					__func__);
+				goto error_out;
+			}
+		}
+		skb_pull(skb, header_len);
+		memcpy(skb_put(iod->long_packet->long_skb, msg_len),
+				skb->data, skb->len);
+		kfree_skb(skb);
+
+		iod->long_packet->cur_len += msg_len;
+		iod->long_packet->cur_seq = cur_seq;
+
+		if (iod->long_packet->cur_len ==
+				iod->long_packet->total_len) {
+			*skb_out = iod->long_packet->long_skb;
+			iod->long_packet->long_skb = NULL;
+			kfree(iod->long_packet);
+			iod->long_packet = NULL;
+			ret = 1;
+		}
+		goto out;
+
+error_out:
+		kfree_skb(skb);
+		skb = NULL;
+		if (iod->long_packet) {
+			if (iod->long_packet->long_skb) {
+				kfree_skb(iod->long_packet->long_skb);
+				iod->long_packet->long_skb = NULL;
+			}
+			kfree(iod->long_packet);
+			iod->long_packet = NULL;
+		}
+	} else
+		ret = 1;
+out:
+	return ret;
+}
+
 static int rx_raw_misc(struct sk_buff *skb, struct io_device *iod)
 {
 	/* Remove the msocket header */
 	skb_pull(skb, SHM_HEADER_SIZE);
 
-	queue_skb_to_iod(skb, iod);
-
-	wake_up_interruptible(&iod->wq);
-
+	if (packet_complete(&skb, iod)) {
+		queue_skb_to_iod(skb, iod);
+		wake_up_interruptible(&iod->wq);
+	}
 	return 0;
 }
-
 
 static int misc_open(struct inode *inode, struct file *filp)
 {
@@ -492,7 +605,7 @@ static int event_handler(struct sk_buff *skb, struct io_device *iod)
 	shm_msg_hdr = (ShmApiMsg *) rxmsg;
 	if (shm_msg_hdr->svcId != iod->port) {
 		ERRMSG("%s, svcId(%d) is incorrect, expect %d",
-			__func__, shm_msg_hdr->svcId, shm_msg_hdr->procId);
+			__func__, shm_msg_hdr->svcId, iod->port);
 		return handled;
 	}
 
