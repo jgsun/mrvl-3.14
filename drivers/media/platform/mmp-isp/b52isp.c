@@ -590,6 +590,8 @@ int b52isp_idi_change_clock(struct isp_block *block,
 	clk_set_rate(axi_clk, rate);
 	if (sz > 300000000)
 		rate = 499000000;
+	else if (sz > 250000000)
+		rate = 416000000;
 	else if (sz > 180000000)
 		rate = 312000000;
 	else if (sz > 100000000)

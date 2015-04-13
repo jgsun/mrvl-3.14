@@ -1171,7 +1171,14 @@ static inline int plat_change_isp_clk(struct isp_subdev *isd,
 	}
 
 	/* default use 30fps */
-	b52isp_idi_change_clock(blk, fmt.format.width, fmt.format.height, 30);
+
+	/*Here is the special case for S5K3L2 sensor.
+	* We will use 416Mhz as pipeline clock in video and capture mode.
+	*/
+	if (strncmp(sensor->drvdata->name, "samsung.s5k3l2", 14) == 0)
+		b52isp_idi_change_clock(blk, fmt.format.width, 2322, 30);
+	else
+		b52isp_idi_change_clock(blk, fmt.format.width, fmt.format.height, 30);
 	return 0;
 }
 
