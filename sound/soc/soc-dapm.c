@@ -69,6 +69,7 @@ static int dapm_up_seq[] = {
 	[snd_soc_dapm_aif_in] = 4,
 	[snd_soc_dapm_aif_out] = 4,
 	[snd_soc_dapm_mic] = 5,
+	[snd_soc_dapm_demux] = 6,
 	[snd_soc_dapm_mux] = 6,
 	[snd_soc_dapm_virt_mux] = 6,
 	[snd_soc_dapm_value_mux] = 6,
@@ -101,6 +102,7 @@ static int dapm_down_seq[] = {
 	[snd_soc_dapm_dac] = 6,
 	[snd_soc_dapm_mic] = 7,
 	[snd_soc_dapm_micbias] = 8,
+	[snd_soc_dapm_demux] = 9,
 	[snd_soc_dapm_mux] = 9,
 	[snd_soc_dapm_virt_mux] = 9,
 	[snd_soc_dapm_value_mux] = 9,
@@ -540,6 +542,7 @@ static void dapm_set_path_status(struct snd_soc_dapm_widget *w,
 		p->connect = !!val;
 	}
 	break;
+	case snd_soc_dapm_demux:
 	case snd_soc_dapm_mux: {
 		struct soc_enum *e = (struct soc_enum *)
 			w->kcontrol_news[i].private_value;
@@ -618,6 +621,29 @@ static void dapm_set_path_status(struct snd_soc_dapm_widget *w,
 		p->connect = 0;
 	break;
 	}
+}
+
+/* connect demux widget to its interconnecting audio paths */
+static int dapm_connect_demux(struct snd_soc_dapm_context *dapm,
+	struct snd_soc_dapm_widget *src, struct snd_soc_dapm_widget *dest,
+	struct snd_soc_dapm_path *path, const char *control_name,
+	const struct snd_kcontrol_new *kcontrol)
+{
+	struct soc_enum *e = (struct soc_enum *)kcontrol->private_value;
+	int i;
+
+	for (i = 0; i < e->max; i++) {
+		if (!(strcmp(control_name, e->texts[i]))) {
+			list_add(&path->list, &dapm->card->paths);
+			list_add(&path->list_sink, &dest->sources);
+			list_add(&path->list_source, &src->sinks);
+			path->name = (char *)e->texts[i];
+			dapm_set_path_status(src, path, 0);
+			return 0;
+		}
+	}
+
+	return -ENODEV;
 }
 
 /* connect mux widget to its interconnecting audio paths */
@@ -737,6 +763,7 @@ static int dapm_create_or_share_mixmux_kcontrol(struct snd_soc_dapm_widget *w,
 				kcname_in_long_name = true;
 				break;
 			case snd_soc_dapm_mux:
+			case snd_soc_dapm_demux:
 			case snd_soc_dapm_virt_mux:
 			case snd_soc_dapm_value_mux:
 				wname_in_long_name = true;
@@ -829,6 +856,35 @@ static int dapm_new_mixer(struct snd_soc_dapm_widget *w)
 			dapm_kcontrol_add_path(w->kcontrols[i], path);
 		}
 	}
+
+	return 0;
+}
+
+/* create new dapm demux control */
+static int dapm_new_demux(struct snd_soc_dapm_widget *w)
+{
+	struct snd_soc_dapm_context *dapm = w->dapm;
+	struct snd_soc_dapm_path *path;
+	int ret;
+
+	if (w->num_kcontrols != 1) {
+		dev_err(dapm->dev,
+			"ASoC: demux %s has incorrect number of controls\n",
+			w->name);
+		return -EINVAL;
+	}
+
+	if (list_empty(&w->sinks)) {
+		dev_err(dapm->dev, "ASoC: demux %s has no paths\n", w->name);
+		return -EINVAL;
+	}
+
+	ret = dapm_create_or_share_mixmux_kcontrol(w, 0);
+	if (ret < 0)
+		return ret;
+
+	list_for_each_entry(path, &w->sinks, list_source)
+		dapm_kcontrol_add_path(w->kcontrols[0], path);
 
 	return 0;
 }
@@ -2468,6 +2524,12 @@ static int snd_soc_dapm_add_path(struct snd_soc_dapm_context *dapm,
 		if (ret != 0)
 			goto err;
 		break;
+	case snd_soc_dapm_demux:
+		ret = dapm_connect_demux(dapm, wsource, wsink, path, control,
+			&wsink->kcontrol_news[0]);
+		if (ret != 0)
+			goto err;
+		break;
 	case snd_soc_dapm_switch:
 	case snd_soc_dapm_virt_switch:
 	case snd_soc_dapm_mixer:
@@ -2794,6 +2856,9 @@ int snd_soc_dapm_new_widgets(struct snd_soc_card *card)
 		case snd_soc_dapm_virt_mux:
 		case snd_soc_dapm_value_mux:
 			dapm_new_mux(w);
+			break;
+		case snd_soc_dapm_demux:
+			dapm_new_demux(w);
 			break;
 		case snd_soc_dapm_pga:
 		case snd_soc_dapm_out_drv:
@@ -3361,6 +3426,7 @@ snd_soc_dapm_new_control(struct snd_soc_dapm_context *dapm,
 	case snd_soc_dapm_mux:
 	case snd_soc_dapm_virt_mux:
 	case snd_soc_dapm_value_mux:
+	case snd_soc_dapm_demux:
 		w->power_check = dapm_generic_check_power;
 		break;
 	case snd_soc_dapm_dai_out:

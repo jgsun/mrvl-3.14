@@ -107,6 +107,10 @@ struct device;
 {	.id = snd_soc_dapm_virt_switch, .name = wname, \
 	SND_SOC_DAPM_INIT_REG_VAL(wreg, wshift, winvert), \
 	.kcontrol_news = wcontrols, .num_kcontrols = 1}
+#define SND_SOC_DAPM_DEMUX(wname, wreg, wshift, winvert, wcontrols) \
+{	.id = snd_soc_dapm_demux, .name = wname, \
+	SND_SOC_DAPM_INIT_REG_VAL(wreg, wshift, winvert), \
+	.kcontrol_news = wcontrols, .num_kcontrols = 1}
 #define SND_SOC_DAPM_MUX(wname, wreg, wshift, winvert, wcontrols) \
 {	.id = snd_soc_dapm_mux, .name = wname, \
 	SND_SOC_DAPM_INIT_REG_VAL(wreg, wshift, winvert), \
@@ -502,6 +506,7 @@ struct snd_soc_codec *snd_soc_dapm_kcontrol_codec(struct snd_kcontrol *kcontrol)
 enum snd_soc_dapm_type {
 	snd_soc_dapm_input = 0,		/* input pin */
 	snd_soc_dapm_output,		/* output pin */
+	snd_soc_dapm_demux,			/* selects 1 analog signal to many outputs */
 	snd_soc_dapm_mux,			/* selects 1 analog signal from many inputs */
 	snd_soc_dapm_virt_mux,			/* virtual version of snd_soc_dapm_mux */
 	snd_soc_dapm_value_mux,			/* selects 1 analog signal from many inputs */
