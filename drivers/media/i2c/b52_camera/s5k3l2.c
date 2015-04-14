@@ -145,12 +145,15 @@ static void S5K3L2_erase_page(struct v4l2_subdev *sd, char page)
 	tab.val = 0xee;
 	tab.mask = 0xff;
 	/* wait for last step over */
-	while (S5K3L2_vcm_read_reg(sd, 0x05) & 0x02)
+	do
 		usleep_range(100, 300);
+	while (S5K3L2_vcm_read_reg(sd, 0x05) & 0x02);
+
 	b52_cmd_write_i2c(&data);
 	/* wait for last step over */
-	while (S5K3L2_vcm_read_reg(sd, 0x05) & 0x02)
+	do
 		usleep_range(2500, 3000);
+	while (S5K3L2_vcm_read_reg(sd, 0x05) & 0x02);
 }
 static int S5K3L2_otp_write(struct v4l2_subdev *sd,
 		unsigned int offset, char *buffer, int len)
