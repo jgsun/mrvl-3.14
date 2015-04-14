@@ -3381,10 +3381,6 @@ static int mv_udc_psy_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_PRESENT:
 		val->intval = udc->vbus_active;
 		break;
-	case POWER_SUPPLY_PROP_ONLINE:
-		/* TODO: charger type detected - 1 */
-		val->intval = udc->vbus_active;
-		break;
 	case POWER_SUPPLY_PROP_TYPE:
 		val->intval = udc->charger_type;
 		break;
@@ -3452,7 +3448,6 @@ static char *mv_udc_psy_supplied_to[] = {
 
 static enum power_supply_property mv_udc_psy_props[] = {
 	POWER_SUPPLY_PROP_PRESENT,
-	POWER_SUPPLY_PROP_ONLINE,
 	POWER_SUPPLY_PROP_TYPE,
 };
 
