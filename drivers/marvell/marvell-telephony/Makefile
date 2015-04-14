@@ -20,6 +20,8 @@ obj-$(CONFIG_MRVL_MMP_MODEM) += imlsdlog/
 
 obj-$(CONFIG_MRVL_MMP_MODEM) += citty/
 
+obj-$(CONFIG_MRVL_MMP_MODEM) += diag/
+
 obj-$(CONFIG_MRVL_MMP_MODEM) += hwmap/
 
 obj-$(CONFIG_MRVL_MMP_MODEM) += cidatastub/

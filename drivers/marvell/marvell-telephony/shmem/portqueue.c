@@ -32,7 +32,6 @@
 #include "shm.h"
 #include "portqueue.h"
 #include "msocket.h"
-#include "diag.h"
 #include "audio_stub.h"
 #include "tel_trace.h"
 
@@ -49,7 +48,7 @@ static const int portq_cp_priority[PORTQ_CP_NUM_MAX] = {
 	10,			/* 1: CISTUB_PORT */
 	10,			/* 2: NVMSRV_PORT */
 	50,			/* 3: CIDATASTUB_PORT */
-	60,			/* 4: DIAG_PORT */
+	0,			/* 4: NOT USED */
 	30,			/* 5: AUDIOSTUB_PORT */
 	40,			/* 6: CICSDSTUB_PORT */
 #ifdef CONFIG_SSIPC_SUPPORT
@@ -104,10 +103,9 @@ struct portq_group portq_grp[portq_grp_cnt] = {
 
 /*
  * reflected variable of CP port flow control state.
- * can be accessed by flow control call-back, so it's a extern variable
  * since it is only CP write, AP read, no lock is needed
  */
-unsigned int portq_cp_port_fc;
+static unsigned int portq_cp_port_fc;
 
 /*
  * reflected variable of CP port flow control state.
@@ -599,15 +597,6 @@ struct portq *portq_open_with_cb(int port,
 			PORTQ_RX_MSG_HUGE_HI_WM);
 		break;
 
-	case DIAG_PORT:
-		portq->rx_q_low_wm =
-		    max((rbctl->rx_skbuf_num >> 1),
-			PORTQ_RX_MSG_HUGE_LO_WM);
-		portq->rx_q_high_wm =
-		    max((rbctl->rx_skbuf_num << 1),
-			PORTQ_RX_MSG_HUGE_HI_WM);
-		break;
-
 	default:
 		break;
 	}
@@ -867,16 +856,7 @@ void portq_broadcast_msg(enum portq_grp_type grp_type, int proc)
 		/* reserve port header space */
 		skb_reserve(skb, sizeof(*hdr));
 
-		/* so confused diag port */
-		if (portq->port == DIAG_PORT) {
-			struct diagmsgheader *msg;
-			size = sizeof(*msg);
-			msg = (struct diagmsgheader *) skb_put(skb, size);
-			msg->diagHeader.packetlen = sizeof(msg->procId);
-			msg->diagHeader.seqNo = 0;
-			msg->diagHeader.msgType = proc;
-			msg->procId = proc;
-		} else if (portq->port == AUDIOSTUB_PORT) {
+		if (portq->port == AUDIOSTUB_PORT) {
 			struct atc_header *msg;
 			size = sizeof(*msg);
 			msg = (struct atc_header *) skb_put(skb, size);

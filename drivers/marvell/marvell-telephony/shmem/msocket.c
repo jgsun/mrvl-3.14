@@ -42,7 +42,6 @@
 #include "portqueue.h"
 #include "msocket.h"
 #include "shm_share.h"
-#include "direct_rb.h"
 #include "common_regs.h"
 #include "pxa_m3_rm.h"
 #include "pxa_cp_load.h"
@@ -497,7 +496,6 @@ static void msocket_disconnect(enum portq_grp_type grp_type)
 enum seq_dump_item {
 	/* 0 ~ portq_grp_cnt - 1 */
 	seq_dump_dummy = portq_grp_cnt,
-	seq_dump_diag,
 	seq_dump_end,
 };
 
@@ -658,19 +656,6 @@ static int msocket_seq_show(struct seq_file *s, void *v)
 				portq->stat_fc_cp_unthrottle_ap);
 			spin_unlock(&portq->lock);
 		}
-	} else if (seq == seq_dump_diag) {
-		/* diag */
-		struct direct_rbctl *dir_ctl = &direct_rbctl;
-
-		seq_puts(s, "\ndirect_rb:\n");
-		seq_printf(s,
-			"tx_sent: %lu, tx_drop: %lu,"
-			" rx_fail: %lu, rx_got: %lu, rx_drop: %lu,"
-			" interrupt: %lu, broadcast_msg: %lu\n",
-			dir_ctl->stat_tx_sent, dir_ctl->stat_tx_drop,
-			dir_ctl->stat_rx_fail, dir_ctl->stat_rx_got,
-			dir_ctl->stat_rx_drop, dir_ctl->stat_interrupt,
-			dir_ctl->stat_broadcast_msg);
 	}
 
 	return 0;
@@ -777,27 +762,13 @@ static int msockdev_open(struct inode *inode, struct file *filp)
 	struct portq *portq;
 	int port;
 	struct cmsockdev_dev *dev;	/* device information */
-	struct direct_rbctl *drbctl = NULL;
 
 	dev = container_of(inode->i_cdev, struct cmsockdev_dev, cdev);
 	/* Extract Minor Number */
 	port = MINOR(dev->cdev.dev);
 
-	if (port == DIAG_PORT) {
-		drbctl = direct_rb_open(port);
-		if (drbctl) {
-			pr_info("diag is opened by process id:%d (\"%s\")\n",
-			       current->tgid, current->comm);
-		} else {
-			pr_info("diag open fail by process id:%d (\"%s\")\n",
-			       current->tgid, current->comm);
-			return -1;
-		}
-	}
 	portq = portq_open(port);
 	if (IS_ERR(portq)) {
-		if (port == DIAG_PORT)
-			direct_rb_close(drbctl);
 		pr_info("MSOCK: binding port %d error, %ld\n",
 		       port, PTR_ERR(portq));
 		return PTR_ERR(portq);
@@ -822,12 +793,6 @@ static int msocket_close(struct inode *inode, struct file *filp)
 	dev = container_of(inode->i_cdev, struct cmsockdev_dev, cdev);
 	/* Extract Minor Number */
 	port = MINOR(dev->cdev.dev);
-	if (port == DIAG_PORT) {
-		direct_rb_close(&direct_rbctl);
-		pr_info(
-		       "%s diag rb is closed by process id:%d (\"%s\")\n",
-		       __func__, current->tgid, current->comm);
-	}
 	if (portq) {		/* file already bind to portq */
 		pr_info(
 		       "MSOCK: port %d is closed by process id:%d (\"%s\")\n",
@@ -853,8 +818,6 @@ msocket_read(struct file *filp, char __user *buf, size_t len, loff_t *f_pos)
 		return rc;
 	}
 
-	if (portq->port == DIAG_PORT)
-		return direct_rb_recv(&direct_rbctl, buf, len);
 	skb = portq_recv(portq, true);
 
 	if (IS_ERR(skb)) {
@@ -911,9 +874,6 @@ msocket_write(struct file *filp, const char __user *buf, size_t len,
 		return rc;
 	}
 
-	if (portq->port == DIAG_PORT)
-		return direct_rb_xmit(&direct_rbctl, buf, len);
-
 	pgrp = portq_get_group(portq);
 
 	if (len > (pgrp->rbctl->tx_skbuf_size - sizeof(*hdr))) {
@@ -958,8 +918,6 @@ static long msocket_ioctl(struct file *filp,
 {
 	struct portq *portq;
 	int port, status, network_mode;
-
-	struct direct_rbctl *drbctl = NULL;
 	struct shm_rbctl *portq_rbctl = portq_grp[portq_grp_cp_main].rbctl;
 
 	/*
@@ -979,21 +937,8 @@ static long msocket_ioctl(struct file *filp,
 	case MSOCKET_IOC_BIND:
 		port = arg;
 
-		if (port == DIAG_PORT) {
-			drbctl = direct_rb_open(port);
-			if (drbctl) {
-				pr_info("diag path is opened by process id:%d (\"%s\")\n",
-				       current->tgid, current->comm);
-			} else {
-				pr_info("diag path open fail by process id:%d (\"%s\")\n",
-				       current->tgid, current->comm);
-				return -1;
-			}
-		}
 		portq = portq_open(port);
 		if (IS_ERR(portq)) {
-			if (port == DIAG_PORT)
-				direct_rb_close(drbctl);
 			pr_info("MSOCK: binding port %d error, %p\n",
 			       port, portq);
 			return (long)portq;
@@ -1031,7 +976,6 @@ static long msocket_ioctl(struct file *filp,
 	case MSOCKET_IOC_DOWN:
 		pr_info("MSOCK: MSOCKET_DOWN is received!\n");
 		msocket_dump_port(portq_grp_cp_main);
-		msocket_dump_direct_rb();
 		msocket_disconnect(portq_grp_cp_main);
 		/* ok! the world's silent then notify the upper layer */
 		notify_cp_link_status(MsocketLinkdownProcId, NULL);
@@ -1822,18 +1766,8 @@ static int __init msocket_init(void)
 		goto cmsock_err;
 	}
 
-	/* direct rb init */
-	rc = direct_rb_init();
-	if (rc < 0) {
-		pr_err("%s: direct rb init failed %d\n",
-			__func__, rc);
-		goto direct_rb_err;
-	}
-
 	return 0;
 
-direct_rb_err:
-	cmsockdev_cleanup_module(cmsockdev_nr_devs);
 cmsock_err:
 	misc_deregister(&msocketDump_dev);
 msocketDump_err:
@@ -1854,7 +1788,6 @@ unmap_apmu:
 /* module exit */
 static void __exit msocket_exit(void)
 {
-	direct_rb_exit();
 	portq_exit();
 	cmsockdev_cleanup_module(cmsockdev_nr_devs);
 	misc_deregister(&msocketDump_dev);

@@ -133,7 +133,6 @@ struct shm_skhdr {
 };
 
 extern struct portq_group portq_grp[];
-extern unsigned int portq_cp_port_fc;
 extern struct shm_rbctl portq_cp_rbctl;
 extern struct shm_rbctl portq_m3_rbctl;
 
