@@ -163,6 +163,7 @@ struct regval_tab s5k5e3_res_5M[] = {
 * special handling when we set 5M resolutiong setting twice.
 * So, we need special handling here.
 */
+#if 0
 	{0x0136, 0x1A},
 	{0x0137, 0x00},
 	{0x0305, 0x06},
@@ -199,6 +200,7 @@ struct regval_tab s5k5e3_res_5M[] = {
 	{0x0203, 0x00},
 	{0x0200, 0x04},
 	{0x0201, 0x98},
+#endif
 };
 
 
