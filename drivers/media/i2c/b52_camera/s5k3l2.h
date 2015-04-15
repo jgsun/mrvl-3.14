@@ -954,8 +954,8 @@ struct regval_tab  S5K3L2_ag[] = {
 	{0x0205, 0x20, 0xff},
 };
 struct regval_tab  S5K3L2_dg[] = {
-	{0x1080, 0x00, 0xff},
-	{0x1081, 0x01, 0xff},
+	{0x020E, 0x00, 0xff},
+	{0x020F, 0x01, 0xff},
 };
 struct regval_tab S5K3L2_vflip[] = {
 	{0x0100, 0x0000, 0x0002},
@@ -984,6 +984,7 @@ static int ev_bias_offset[] = {
 #define N_S5K3L2_EXPO ARRAY_SIZE(S5K3L2_expo)
 #define N_S5K3L2_FRATIONALEXPO ARRAY_SIZE(S5K3L2_frationalexp)
 #define N_S5K3L2_AG ARRAY_SIZE(S5K3L2_ag)
+#define N_S5K3L2_DG ARRAY_SIZE(S5K3L2_dg)
 #define N_S5K3L2_VFLIP ARRAY_SIZE(S5K3L2_vflip)
 #define N_S5K3L2_HFLIP ARRAY_SIZE(S5K3L2_hflip)
 #define N_S5K3L2_STREAM_ON ARRAY_SIZE(S5K3L2_stream_on)
@@ -1080,8 +1081,8 @@ struct b52_sensor_data b52_s5k3l2 = {
 			.num = N_S5K3L2_AG,
 		},
 		[B52_SENSOR_DG] = {
-			.tab = NULL,
-			.num = 0,
+			.tab = S5K3L2_dg,
+			.num = N_S5K3L2_DG,
 		},
 	},
 	.hflip = {
