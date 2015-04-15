@@ -80,4 +80,6 @@ static inline int cp_set_seagull_remap_reg(u64 val)
 
 DECLARE_BLOCKING_NOTIFIER(cp_mem_set);
 
+bool cp_is_aponly(void);
+
 #endif /* _PXA_CP_LOAD_H_ */

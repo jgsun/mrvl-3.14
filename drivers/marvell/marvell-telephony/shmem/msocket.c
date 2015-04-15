@@ -53,7 +53,6 @@
 
 static int cp_shm_ch_inited;
 static int m3_shm_ch_inited;
-static int aponly;
 
 struct cp_keysection *cpks;
 DEFINE_MUTEX(cpks_lock);
@@ -977,7 +976,8 @@ static long msocket_ioctl(struct file *filp,
 	if (_IOC_NR(cmd) > MSOCKET_IOC_MAXNR)
 		return -ENOTTY;
 
-	if (aponly && (MSOCKET_IOC_ERRTO != cmd) && (MSOCKET_IOC_RECOVERY != cmd))
+	if (cp_is_aponly() && (MSOCKET_IOC_ERRTO != cmd)
+		&& (MSOCKET_IOC_RECOVERY != cmd))
 		return -1;
 
 	switch (cmd) {
@@ -1522,13 +1522,6 @@ static int cp_shm_ch_init(const struct cpload_cp_addr *addr, u32 lpm_qos)
 	if (cp_shm_ch_inited) {
 		pr_info("%s: channel is already inited\n",
 			__func__);
-		return 0;
-	}
-
-	if (addr->aponly) {
-		pr_info("%s: aponly version\n",
-			__func__);
-		aponly = 1;
 		return 0;
 	}
 

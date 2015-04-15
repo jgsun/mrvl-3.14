@@ -249,6 +249,14 @@ int cp_mmap(struct file *file, struct vm_area_struct *vma)
 	return 0;
 }
 
+static bool aponly;
+
+bool cp_is_aponly(void)
+{
+	return aponly;
+}
+EXPORT_SYMBOL(cp_is_aponly);
+
 DEFINE_BLOCKING_NOTIFIER(cp_mem_set);
 
 /*
@@ -256,7 +264,14 @@ DEFINE_BLOCKING_NOTIFIER(cp_mem_set);
  */
 static void post_mem_set(struct cpload_cp_addr *addr)
 {
-	notify_cp_mem_set(global_cp->lpm_qos, addr);
+	if (addr->aponly) {
+		pr_info("%s: aponly version\n",
+			__func__);
+		aponly = true;
+	} else {
+		aponly = false;
+		notify_cp_mem_set(global_cp->lpm_qos, addr);
+	}
 }
 
 static long cp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
