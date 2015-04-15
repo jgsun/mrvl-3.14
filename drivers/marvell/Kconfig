@@ -143,4 +143,9 @@ config MRVL_RSV_PAGE
 	With the help of bootloader, Driver or module can use
 	the data before eMMC is ready. It is something like DTB.
 
+config MRVL_TDM
+       tristate "Marvell Trusted Diagnostic Module driver"
+       default y
+       help
+               Marvell TDM driver to kick tdm watchdog timer periodically
 endif
