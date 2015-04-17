@@ -190,8 +190,8 @@ struct regval_tab S5K4H5_id[] = {
 	{0x0003, 0x00, 0xff},
 };
 struct regval_tab  S5K4H5_vts[] = {
-	{0x0202, 0x04, 0xff},
-	{0x0203, 0xe2, 0xff},
+	{0x0340, 0x04, 0xff},
+	{0x0341, 0xe2, 0xff},
 };
 struct regval_tab  S5K4H5_stream_on[] = {
 	{0x0100, 0x01, 0xff},
@@ -350,7 +350,7 @@ struct b52_sensor_data b52_s5k4h5 = {
 	/* A gain format is 8.5 */
 	.gain_shift = 0x00,
 	/* A expo format is 2 byte */
-	.expo_shift = 0x00,
+	.expo_shift = 0x08,
 	.calc_dphy = 1,
 	.nr_lane = 4,
 	.mipi_clk_bps = 719942000,
