@@ -27,10 +27,6 @@
 #include <linux/notifier.h>
 #include <linux/pm.h>
 
-#ifdef CONFIG_USB_MV_UDC
-#include <linux/platform_data/mv_usb.h>
-#endif
-
 #define MY_PSY_NAME			"88pm88x-fuelgauge"
 
 #define PM88X_VBAT_MEAS_EN		(1 << 1)
@@ -881,14 +877,12 @@ static int pm88x_get_batt_health(struct pm88x_battery_info *info)
 	return health;
 }
 
-static int pm88x_cycles_notifier_call(struct notifier_block *nb,
-				       unsigned long val, void *v)
+static void pm88x_battery_handle_cycle(struct pm88x_battery_info *info,
+				       int charger_is_online)
 {
-	struct pm88x_battery_info *info =
-		container_of(nb, struct pm88x_battery_info, nb);
 	int chg_status;
 
-	dev_dbg(info->dev, "notifier call is called.\n");
+	dev_dbg(info->dev, "%s is called.\n", __func__);
 	chg_status = pm88x_battery_get_charger_status(info);
 	/* ignore whether charger is plug in or out if battery is FULL */
 	if (chg_status == POWER_SUPPLY_STATUS_FULL) {
@@ -898,13 +892,12 @@ static int pm88x_cycles_notifier_call(struct notifier_block *nb,
 			dev_info(info->dev, "update: battery cycle = %d\n",
 				 info->bat_params.cycle_nums);
 		}
-		return NOTIFY_DONE;
+		return;
 	}
 
 	mutex_lock(&info->cycle_lock);
-	switch (val) {
-		/* charger cable removal */
-	case NULL_CHARGER:
+	/* charger cable removal */
+	if (!charger_is_online) {
 		if (info->bat_params.soc > info->soc_high_th_cycle) {
 			if (info->valid_cycle) {
 				info->bat_params.cycle_nums++;
@@ -919,8 +912,7 @@ static int pm88x_cycles_notifier_call(struct notifier_block *nb,
 				info->bat_params.cycle_nums);
 			info->valid_cycle = false;
 		}
-		break;
-	default:
+	} else {
 		if (info->bat_params.soc < info->soc_low_th_cycle) {
 			info->valid_cycle = true;
 			dev_info(info->dev,
@@ -932,11 +924,8 @@ static int pm88x_cycles_notifier_call(struct notifier_block *nb,
 				 "no need to monitor: battery cycle = %d\n",
 				 info->bat_params.cycle_nums);
 		}
-		break;
 	}
 	mutex_unlock(&info->cycle_lock);
-
-	return NOTIFY_OK;
 }
 
 static int pm88x_battery_get_slp_cnt(struct pm88x_battery_info *info)
@@ -1504,9 +1493,26 @@ static void pm88x_battery_monitor_work(struct work_struct *work)
 
 static void pm88x_charged_work(struct work_struct *work)
 {
-	struct pm88x_battery_info *info =
-		container_of(work, struct pm88x_battery_info,
-			     charged_work.work);
+	union power_supply_propval val;
+	static struct power_supply *psy;
+	int ret;
+	struct pm88x_battery_info *info = container_of(work,
+						       struct pm88x_battery_info,
+						       charged_work.work);
+	if (!psy)
+		psy = power_supply_get_by_name("88pm88x-charger");
+
+	if (!psy && !psy->get_property)
+		val.intval = 0;
+	else {
+		ret = psy->get_property(psy, POWER_SUPPLY_PROP_ONLINE, &val);
+		if (ret) {
+			dev_err(info->dev, "get charger online property fails.\n");
+			val.intval = 1;
+		}
+	}
+
+	pm88x_battery_handle_cycle(info, val.intval);
 
 	pm88x_bat_update_status(info);
 	power_supply_changed(&info->battery);
@@ -2331,15 +2337,6 @@ static int pm88x_battery_probe(struct platform_device *pdev)
 	/* update the status timely */
 	queue_delayed_work(info->bat_wqueue, &info->monitor_work, 0);
 
-	info->nb.notifier_call = pm88x_cycles_notifier_call;
-#ifdef CONFIG_USB_MV_UDC
-	ret = mv_udc_register_client(&info->nb);
-	if (ret < 0) {
-		dev_err(info->dev,
-			"%s: failed to register client!\n", __func__);
-		goto out_irq;
-	}
-#endif
 	device_init_wakeup(&pdev->dev, 1);
 	dev_info(info->dev, "%s is successful to be probed.\n", __func__);
 
@@ -2374,9 +2371,6 @@ static int pm88x_battery_remove(struct platform_device *pdev)
 	kfree(info->temp_ohm_table);
 	pm88x_battery_release_adc(info);
 
-#ifdef CONFIG_USB_MV_UDC
-	mv_udc_unregister_client(&info->nb);
-#endif
 	platform_set_drvdata(pdev, NULL);
 	return 0;
 }
