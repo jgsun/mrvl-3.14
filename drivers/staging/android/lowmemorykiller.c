@@ -74,6 +74,37 @@ static unsigned long lowmem_count(struct shrinker *s,
 		global_page_state(NR_INACTIVE_FILE);
 }
 
+static int tune_lmk_param(void)
+{
+	int other_free;
+#ifndef CONFIG_CMA
+	other_free = global_page_state(NR_FREE_PAGES) - totalreserve_pages;
+#else
+	int total_free_pages, free_cma_pages, free_normal_pages;
+
+	total_free_pages = global_page_state(NR_FREE_PAGES);
+	free_cma_pages = global_page_state(NR_FREE_CMA_PAGES);
+
+	free_normal_pages = total_free_pages - free_cma_pages;
+	/*
+	 * currently only anonymous pages can be allocated from cma,
+	 * we assume that total anonymous pages a process allocate is
+	 * half of all the memory it used.
+	 * so non-cma memory : cma memory = 1 : 1, we treat the
+	 * min(free_normal_pages, free_cma_pages) size of CMA pages can
+	 * be used for the anaonymous page allocation.
+	 */
+	if (free_normal_pages < 0) {
+		other_free = free_normal_pages - totalreserve_pages;
+		lowmem_print(3, "total free pages %d, reserved pages %lu, cma pages %d",
+			total_free_pages, totalreserve_pages, free_cma_pages);
+	} else
+		other_free = free_normal_pages + min(free_normal_pages, free_cma_pages)
+				 - totalreserve_pages;
+#endif
+	return other_free;
+}
+
 static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 {
 	struct task_struct *tsk;
@@ -86,12 +117,7 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 	int selected_tasksize = 0;
 	short selected_oom_score_adj;
 	int array_size = ARRAY_SIZE(lowmem_adj);
-#ifndef CONFIG_CMA
-	int other_free = global_page_state(NR_FREE_PAGES) - totalreserve_pages;
-#else
-	int other_free = global_page_state(NR_FREE_PAGES)
-		- totalreserve_pages - global_page_state(NR_FREE_CMA_PAGES);
-#endif
+	int other_free = tune_lmk_param();
 	int other_file = global_page_state(NR_FILE_PAGES) -
 		global_page_state(NR_SHMEM) - total_swapcache_pages();
 
