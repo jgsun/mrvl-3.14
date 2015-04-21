@@ -227,6 +227,10 @@ struct b52_sensor_i2c_attr S5K4H5_i2c_attr[] = {
 		.addr = 0x10,
 	},
 };
+static int ev_bias_offset[] = {
+	-0x3C, -0x33, -0x30, -0x29, -0x21, -0x11, 0,
+	0x1c, 0x39, 0x7b, 0xbd, 0x4B, 0x5A
+};
 #define N_S5K4H5_I2C_ATTR ARRAY_SIZE(S5K4H5_i2c_attr)
 #define N_S5K4H5_INIT ARRAY_SIZE(S5K4H5_res_init)
 #define N_S5K4H5_ID ARRAY_SIZE(S5K4H5_id)
@@ -346,6 +350,7 @@ struct b52_sensor_data b52_s5k4h5 = {
 		.tab = S5K4H5_vflip,
 		.num = N_S5K4H5_VFLIP,
 	},
+	.ev_bias_offset = ev_bias_offset,
 	.flip_change_phase =  0,
 	/* A gain format is 8.5 */
 	.gain_shift = 0x00,
