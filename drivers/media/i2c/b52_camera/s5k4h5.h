@@ -190,8 +190,8 @@ struct regval_tab S5K4H5_id[] = {
 	{0x0003, 0x00, 0xff},
 };
 struct regval_tab  S5K4H5_vts[] = {
-	{0x0340, 0x04, 0xff},
-	{0x0341, 0xe2, 0xff},
+	{0x0340, 0x09, 0xff},
+	{0x0341, 0xb6, 0xff},
 };
 struct regval_tab  S5K4H5_stream_on[] = {
 	{0x0100, 0x01, 0xff},
@@ -204,8 +204,8 @@ struct regval_tab  S5K4H5_expo[] = {
 	{0x0203, 0xe2, 0xff},
 };
 struct regval_tab S5K4H5_frationalexp[] = {
-	{0x0200, 0x0c, 0xff},
-	{0x0201, 0x98, 0xff},
+	{0x0200, 0x0e, 0xff},
+	{0x0201, 0xaa, 0xff},
 };
 struct regval_tab  S5K4H5_ag[] = {
 	{0x0204, 0x00, 0xff},
@@ -258,7 +258,7 @@ struct b52_sensor_resolution S5K4H5_res[] = {
 		 .width = 3264,
 		 .height = 2448,
 		 .hts = 0x0eaa,
-		 .min_vts = 0x0c98,
+		 .min_vts = 0x09b6,
 		 .prop = SENSOR_RES_BINING1,
 		 .regs = {
 			.tab = S5K4H5_res_8M,
@@ -285,7 +285,7 @@ struct b52_sensor_spec_ops S5K4H5_ops = {
 };
 struct b52_sensor_data b52_s5k4h5 = {
 	.name = "samsung.s5k4h5",
-	.type = SAMSUNG_SENSOR,
+	.type = SAMSUNG_ASNY_SENSOR,
 	.i2c_attr = S5K4H5_i2c_attr,
 	.num_i2c_attr = N_S5K4H5_I2C_ATTR,
 	.id = {
@@ -312,12 +312,12 @@ struct b52_sensor_data b52_s5k4h5 = {
 		.numerator = 100,
 		.denominator = 0x10,
 	},
-	.vts_range = {0x0c98, 0x7fff},
+	.vts_range = {0x09b6, 0x7fff},
 	.gain_range = {
 		[B52_SENSOR_AG] = {0x0010, 0x00ff},
 		[B52_SENSOR_DG] = {0x0010, 0x0010},
 	},
-	.expo_range = {0x0004, 0x0c98},
+	.expo_range = {0x0004, 0x09b6},
 	.frationalexp_range = {0x00000, 0x11a0},
 	.focus_range = {0x0010, 0x03ff},
 	.vts_reg = {
