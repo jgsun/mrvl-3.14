@@ -224,7 +224,7 @@ struct b52_sensor_i2c_attr S5K4H5_i2c_attr[] = {
 	[0] = {
 		.reg_len = I2C_16BIT,
 		.val_len = I2C_8BIT,
-		.addr = 0x10,
+		.addr = 0x37,
 	},
 };
 static int ev_bias_offset[] = {
