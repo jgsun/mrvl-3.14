@@ -286,7 +286,7 @@
 			         status = "okay";
 			         clocks = <&soc_clocks PXA1U88_CLK_SC2_MCLK>;
 			         clock-names =  "SC2MCLK";
-			         reg = <0x10>;
+			         reg = <0x37>;
 			         sc2-i2c-dyn-ctrl;
 			         adapter = <0x1>;
 			         sensor-pos = <1>;
