@@ -560,7 +560,6 @@ static void data_path_tx_func(unsigned long arg)
 	}
 
 	if (consumed_slot > 0) {
-		trace_psd_xmit_irq(consumed_slot);
 		acipc_notify_psd_packet_sent();
 		dp->stat.tx_interrupts++;
 		dp->stat.tx_sched_q_len += start_q_len;

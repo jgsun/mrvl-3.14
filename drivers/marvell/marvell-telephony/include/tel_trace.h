@@ -56,40 +56,6 @@ TRACE_EVENT(psd_xmit,
 		__entry->len, __entry->slot)
 );
 
-TRACE_EVENT(psd_xmit_irq,
-
-	TP_PROTO(int cnt),
-
-	TP_ARGS(cnt),
-
-	TP_STRUCT__entry(
-		__field(int, cnt)
-	),
-
-	TP_fast_assign(
-		__entry->cnt = cnt;
-	),
-
-	TP_printk("cnt=%d", __entry->cnt)
-);
-
-TRACE_EVENT(psd_recv_irq,
-
-	TP_PROTO(int cp_wptr),
-
-	TP_ARGS(cp_wptr),
-
-	TP_STRUCT__entry(
-		__field(int, cp_wptr)
-	),
-
-	TP_fast_assign(
-		__entry->cp_wptr = cp_wptr;
-	),
-
-	TP_printk("cp_wptr=%d", __entry->cp_wptr)
-);
-
 TRACE_EVENT(psd_recv,
 
 	TP_PROTO(int slot),
