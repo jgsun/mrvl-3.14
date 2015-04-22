@@ -201,7 +201,7 @@ static int S5K4H5_otp_write(struct v4l2_subdev *sd,
 #define FULL_LEN 0x2000
 
 
-#define MODULE_OFFSET	0x08b0
+#define MODULE_OFFSET	0x0030
 #define AF_OFFSET	0x0100
 #define GWB_OFFSET	0x0140
 #define WB_OFFSET	0x0900
