@@ -123,8 +123,6 @@ struct pcm_stream_data {
 #define ATC_PCMPLAYBACKCTL 0x7
 #define ATC_PCMRECSTREAM 0x8
 #define ATC_PCMPLAYSTREAM 0x9
-#define ATC_MSOCKET_LINKDOWN 0xfd
-#define ATC_MSOCKET_LINKUP 0xfe
 #define ATC_INVALIDMSG 0xff
 
 #define AUDIODRV_MAGIC 'e'

@@ -559,18 +559,6 @@ static void audio_data_handler(struct sk_buff *skb)
 	}
 
 	switch (header->sub_cmd) {
-	case ATC_MSOCKET_LINKDOWN:
-		pr_info("received MsocketLinkdown!\n");
-		audiostub_inited = false;
-		wake_up_interruptible(&pcm_rxwq);
-		wake_up_interruptible(&pcm_txwq);
-		wake_up_interruptible(&pcm_drainwq);
-		stop_handshake();
-		break;
-	case ATC_MSOCKET_LINKUP:
-		pr_info("received MsocketLinkup!\n");
-		start_handshake();
-		break;
 	case ATC_HANDSHAKE:
 		{
 			struct handshake_msg *msg =
@@ -808,6 +796,28 @@ static void audiodev_cleanup_module(int device_added)
 	unregister_chrdev_region(devno, AUDIO_DEVICE_CNT);
 }
 
+static int cp_link_status_notifier_func(struct notifier_block *this,
+	unsigned long code, void *cmd)
+{
+	if (code == MsocketLinkdownProcId) {
+		pr_info("audiostub received MsocketLinkdown!\n");
+		audiostub_inited = false;
+		wake_up_interruptible(&pcm_rxwq);
+		wake_up_interruptible(&pcm_txwq);
+		wake_up_interruptible(&pcm_drainwq);
+		stop_handshake();
+	} else if (code == MsocketLinkupProcId) {
+		pr_info("audiostub received MsocketLinkup!\n");
+		start_handshake();
+	}
+
+	return 0;
+}
+
+static struct notifier_block cp_link_status_notifier = {
+	.notifier_call = cp_link_status_notifier_func,
+};
+
 static int __init audiostub_init(void)
 {
 	dev_t dev = 0;
@@ -863,6 +873,7 @@ static int __init audiostub_init(void)
 	if (result < 0)
 		goto fail;
 
+	register_cp_link_status_notifier(&cp_link_status_notifier);
 	init_rcv_task();
 	return 0;
 
@@ -873,6 +884,7 @@ fail:
 
 static void __exit audiostub_exit(void)
 {
+	unregister_cp_link_status_notifier(&cp_link_status_notifier);
 	audiodev_cleanup_module(AUDIO_DEVICE_CNT);
 }
 

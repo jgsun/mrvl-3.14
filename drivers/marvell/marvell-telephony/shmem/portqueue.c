@@ -32,7 +32,6 @@
 #include "shm.h"
 #include "portqueue.h"
 #include "msocket.h"
-#include "audio_stub.h"
 #include "tel_trace.h"
 
 static struct wakeup_source port_tx_wakeup;
@@ -828,8 +827,9 @@ void portq_broadcast_msg(enum portq_grp_type grp_type, int proc)
 	struct portq_group *pgrp = &portq_grp[grp_type];
 	struct portq *portq;
 	struct shm_skhdr *hdr;
-	int i, size;
+	int i;
 	unsigned long flags;
+	ShmApiMsg *msg;
 
 	spin_lock_irqsave(&pgrp->list_lock, flags);
 
@@ -840,6 +840,8 @@ void portq_broadcast_msg(enum portq_grp_type grp_type, int proc)
 		if (!portq)
 			continue;
 
+		if (portq->port == AUDIOSTUB_PORT)
+			continue; /* audiostub monitors link status itself */
 		/*
 		 * allocate sk_buff first, the size = 32 is enough
 		 * to hold all kind of broadcasting messages
@@ -855,28 +857,10 @@ void portq_broadcast_msg(enum portq_grp_type grp_type, int proc)
 
 		/* reserve port header space */
 		skb_reserve(skb, sizeof(*hdr));
-
-		if (portq->port == AUDIOSTUB_PORT) {
-			struct atc_header *msg;
-			size = sizeof(*msg);
-			msg = (struct atc_header *) skb_put(skb, size);
-			msg->cmd_code = AUDIO_CMD_CODE;
-			msg->cmd_type = CMD_TYPE_INDICATION;
-			msg->data_len = 0;
-			if (proc == MsocketLinkdownProcId)
-				msg->sub_cmd = ATC_MSOCKET_LINKDOWN;
-			else if (proc == MsocketLinkupProcId)
-				msg->sub_cmd = ATC_MSOCKET_LINKUP;
-			else
-				msg->sub_cmd = ATC_INVALIDMSG;
-		} else {
-			ShmApiMsg *msg;
-			size = sizeof(*msg);
-			msg = (ShmApiMsg *) skb_put(skb, size);
-			msg->svcId = portq->port;	/* svcId == port */
-			msg->procId = proc;
-			msg->msglen = 0;
-		}
+		msg = (ShmApiMsg *) skb_put(skb, sizeof(*msg));
+		msg->svcId = portq->port;	/* svcId == port */
+		msg->procId = proc;
+		msg->msglen = 0;
 
 		/* reuse the port header */
 		hdr = (struct shm_skhdr *)skb_push(skb, sizeof(*hdr));
@@ -885,7 +869,7 @@ void portq_broadcast_msg(enum portq_grp_type grp_type, int proc)
 		hdr->address = 0;
 		hdr->port = portq->port;
 		hdr->checksum = 0;
-		hdr->length = size;
+		hdr->length = sizeof(*msg);
 
 		spin_lock(&portq->lock);
 
