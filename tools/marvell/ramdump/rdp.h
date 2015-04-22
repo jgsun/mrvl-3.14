@@ -108,6 +108,19 @@ char* changeNameExt(const char* inName, const char* nameext);
 char* changeExt(const char* inName, const char* ext);
 const char* getExt(const char* inName);
 
+#ifdef WIN32
+static inline const char *basename(const char *pathname)
+{
+	const char *p;
+	const char *pp = pathname;
+
+	/* Find path last '\' */
+	for (p = pp; p = strchr(p, PATH_SLASH); pp = ++p)
+		;
+	return pp;
+}
+#endif
+
 // Public stream for diagnostic and progress indications
 extern FILE* rdplog;
 extern const char *rdpPath; // path-name of the RDP executable from command line (use to locate config-files or like).

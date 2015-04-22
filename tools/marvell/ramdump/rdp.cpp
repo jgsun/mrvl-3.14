@@ -111,9 +111,11 @@ All Rights Reserved
 	5.11 (antone@marvell.com): Fix file offset calculation in RDI(pbuffer)
 		extract with ELF input.
 		Fix crash in logcat parser when localtime returns NULL due to invalid input.
+	5.12 (antone@marvell.com): Add command line option to force aarch32/64.
+		Add command line option to supply a custom RDC address.
 */
 
-#define VERSION_STRING "5.11"
+#define VERSION_STRING "5.12"
 
 #include <stdio.h>
 #include "rdp.h"
@@ -227,7 +229,7 @@ static int checkRdc_alt(FILE* in, unsigned addr)
 	return 0;
 }
 
-static int findRdc(FILE* in)
+static int findRdc(FILE* in, unsigned rdca)
 {
 	static const unsigned bankSizeOptions[] = {0x08000000, 0x10000000, 0x20000000, CP_AREA_SIZE /*Nevo - bottom of the bank*/};
 	int i;
@@ -237,7 +239,8 @@ static int findRdc(FILE* in)
 		return 0;
 	if (!checkRdc_alt(in, 0x04A00400))
 		return 0;
-
+	if (rdca && !checkRdc_alt(in, rdca))
+		return 0;
 	memset(&rdc,0,sizeof(rdc));
 	return -1;
 }
@@ -1488,6 +1491,12 @@ bail:
 	return ret;
 }
 
+/* Command line options */
+static const char * const o_aarch32 = "-32";
+static const char * const o_aarch64 = "-64";
+static const char * const o_rdca = "-rdc=";
+
+
 int main(int argc, char* argv[])
 {
 	FILE* fin;
@@ -1496,15 +1505,38 @@ int main(int argc, char* argv[])
 	int ret = -1;
 	struct stat fst;
 	int	i;
+	int force_aarch = 0;
+	unsigned custom_rdc_addr = 0;
 
 	fprintf(stderr,"Marvell RAMDUMP parser, version %s\n", VERSION_STRING);
 	if(argc<2)
 	{
-		fprintf(stderr,"USAGE: %s input-file-name\n", argv[0]);
+		fprintf(stderr, "USAGE: %s [-32|-64] [-rdc=hexaddr] input-file-name\n", basename(argv[0]));
+		fprintf(stderr, "       [-32|-64]: use aarch32/64 (default is 32 for BIN or based on ELF header)\n");
+		fprintf(stderr, "       [-rdc=hexaddr]: adds checking of a custom RDC address\n");
 		exit(1);
 	}
 
-	inName = argv[1];
+	for (i = 1; i < (argc - 1); i++) {
+		const char *arg = argv[i];
+		if (!strcmp(arg, o_aarch32)) {
+			force_aarch = 1;
+			aarch_type = aarch32;
+		} else if (!strcmp(arg, o_aarch64)) {
+			force_aarch = 1;
+			aarch_type = aarch64;
+		} else if (!strncmp(arg, o_rdca, strlen(o_rdca))) {
+			arg += strlen(o_rdca);
+			if (!strncmp(arg, "0x", 2))
+				arg+=2;
+			if (sscanf(arg, "%x", &custom_rdc_addr) != 1) {
+				custom_rdc_addr = 0;
+				fprintf(stderr, "Ignoring bad option format\"%s\"\n", argv[i]);
+			}
+		} else
+			fprintf(stderr, "Ignoring bad option \"%s\"\n", argv[i]);
+	}
+	inName = argv[argc - 1];
 
 	if (stat(inName, &fst))
 	{
@@ -1512,7 +1544,7 @@ int main(int argc, char* argv[])
 		exit(1);
 	}
 
-	if(!(fin=fopen(argv[1],"rb")))
+	if(!(fin=fopen(inName,"rb")))
 	{
 		fprintf(stderr,"Cannot open input file \"%s\"\n", inName);
 		exit(1);
@@ -1539,7 +1571,8 @@ int main(int argc, char* argv[])
 		break;
 	case 2:
 		fprintf(rdplog, "Input file is in ELF64 format\n");
-		aarch_type = aarch64;
+		if (!force_aarch)
+			aarch_type = aarch64;
 		break;
 	case -1:
 		fprintf(rdplog, "Error: Input file is in ELF format but is not valid\n");
@@ -1550,8 +1583,10 @@ int main(int argc, char* argv[])
 		segments[0].size = (unsigned)fst.st_size;
 		break;
 	}
+	if (force_aarch)
+		fprintf(rdplog, "Forcing aarch%d\n", aarch_type == aarch64 ? 64 : 32);
 
-	if(findRdc(fin)) {
+	if(findRdc(fin, custom_rdc_addr)) {
 		fprintf(rdplog, "RDC not found. Try parsing COMM-ONLY...\n");
 		ret = extractPostmortemfiles(inName, fin, 1);
 		if (!DUMP_IS_ELF) /* Without RDC and ELF header we do not have memory map info needed to proceed */
@@ -1631,7 +1666,7 @@ int main(int argc, char* argv[])
 
 bail:
 	fclose(fin);
-//	if(outName!=argv[2]) free(outName);
+
 	if(!ret)
 		fprintf(rdplog,"Done\n");
 	else
