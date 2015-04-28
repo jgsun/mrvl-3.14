@@ -287,6 +287,9 @@ struct skb_shared_info {
 	struct skb_shared_hwtstamps hwtstamps;
 	__be32          ip6_frag_id;
 
+	/* Used to free skb which allloced using skb_p */
+	void		(*priv_free_func)(void *);
+	void		*priv_data;
 	/*
 	 * Warning : all fields before dataref are cleared in __alloc_skb()
 	 */
@@ -529,6 +532,9 @@ struct sk_buff {
 		__u32		dropcount;
 		__u32		reserved_tailroom;
 	};
+
+	/* NULL pointer or points to shared info instead of skb->end */
+	struct skb_shared_info	*shared_info_ptr;
 
 	__be16			inner_protocol;
 	__u16			inner_transport_header;
@@ -817,7 +823,9 @@ static inline unsigned int skb_end_offset(const struct sk_buff *skb)
 #endif
 
 /* Internal */
-#define skb_shinfo(SKB)	((struct skb_shared_info *)(skb_end_pointer(SKB)))
+#define skb_shinfo(SKB)(SKB->shared_info_ptr ? (SKB->shared_info_ptr) : \
+			((struct skb_shared_info *)(skb_end_pointer(SKB))))
+#define skb_shinfo_is_ptr(SKB) (SKB->shared_info_ptr)
 
 static inline struct skb_shared_hwtstamps *skb_hwtstamps(struct sk_buff *skb)
 {
@@ -2937,5 +2945,24 @@ static inline unsigned int skb_gso_network_seglen(const struct sk_buff *skb)
 			       skb_network_header(skb);
 	return hdr_len + skb_gso_transport_seglen(skb);
 }
+
+static inline struct sk_buff *alloc_skb_p(void *data, unsigned int size,
+					   void (*free_func)(void *),
+					   void *private_data, gfp_t priority)
+{
+	struct sk_buff *skb = alloc_skb(0, priority);
+	if (skb) {
+		skb->shared_info_ptr = (struct skb_shared_info *)
+			skb_end_pointer(skb);
+		skb->head = skb->data = data;
+		skb_reset_tail_pointer(skb);
+		skb->end = skb->tail + size;
+		skb->truesize += size;
+		skb_shinfo(skb)->priv_free_func = free_func;
+		skb_shinfo(skb)->priv_data = private_data;
+	}
+	return skb;
+}
+
 #endif	/* __KERNEL__ */
 #endif	/* _LINUX_SKBUFF_H */

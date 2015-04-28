@@ -78,6 +78,7 @@
 struct kmem_cache *skbuff_head_cache __read_mostly;
 static struct kmem_cache *skbuff_fclone_cache __read_mostly;
 
+static void skb_p_revert(struct sk_buff *skb);
 /**
  *	skb_panic - private function for out-of-line support
  *	@skb:	buffer
@@ -483,6 +484,8 @@ static void skb_clone_fraglist(struct sk_buff *skb)
 
 static void skb_free_head(struct sk_buff *skb)
 {
+	if (skb_shinfo_is_ptr(skb))
+		skb_p_revert(skb);
 	if (skb->head_frag)
 		put_page(virt_to_head_page(skb->head));
 	else
@@ -716,6 +719,7 @@ static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
 #endif
 	new->vlan_proto		= old->vlan_proto;
 	new->vlan_tci		= old->vlan_tci;
+	new->shared_info_ptr	= NULL;
 
 	skb_copy_secmark(new, old);
 
@@ -749,6 +753,7 @@ static struct sk_buff *__skb_clone(struct sk_buff *n, struct sk_buff *skb)
 	C(head_frag);
 	C(data);
 	C(truesize);
+	C(shared_info_ptr);
 	atomic_set(&n->users, 1);
 
 	atomic_inc(&(skb_shinfo(skb)->dataref));
@@ -893,6 +898,35 @@ static void skb_headers_offset_update(struct sk_buff *skb, int off)
 	skb->inner_transport_header += off;
 	skb->inner_network_header += off;
 	skb->inner_mac_header += off;
+}
+
+static void skb_p_revert(struct sk_buff *skb)
+{
+	unsigned char *end_ptr;
+	long off;
+	size_t size;
+
+	if (skb_shinfo(skb)->priv_free_func) {
+		skb_shinfo(skb)->priv_free_func(
+				     skb_shinfo(skb)->priv_data);
+		skb_shinfo(skb)->priv_free_func = NULL;
+		skb_shinfo(skb)->priv_data = NULL;
+	}
+	skb->truesize -= skb_end_offset(skb);
+	size = skb->truesize -
+		SKB_DATA_ALIGN(sizeof(struct sk_buff)) -
+		SKB_DATA_ALIGN(sizeof(struct skb_shared_info));
+
+	end_ptr = (unsigned char *)skb->shared_info_ptr;
+
+	off = end_ptr - size - skb->head;
+	skb->head += off;
+	skb->data += off;
+#ifndef NET_SKBUFF_DATA_USES_OFFSET
+	skb->end += off;
+	skb->tail += off;
+#endif
+	skb->shared_info_ptr = NULL;
 }
 
 static void copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
@@ -1094,6 +1128,7 @@ int pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
 	skb->cloned   = 0;
 	skb->hdr_len  = 0;
 	skb->nohdr    = 0;
+	skb->shared_info_ptr = NULL;
 	atomic_set(&skb_shinfo(skb)->dataref, 1);
 	return 0;
 
