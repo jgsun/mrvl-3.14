@@ -213,7 +213,7 @@ struct regval_tab ov8858r2a_res_init[] = {
 	{0x380b, 0xc8},
 	{0x380c, 0x07},
 	{0x380d, 0x88},
-	{0x380e, 0x04},
+	{0x380e, 0x09},
 	{0x380f, 0xdc},
 	{0x3810, 0x00},
 	{0x3811, 0x04},
@@ -221,7 +221,7 @@ struct regval_tab ov8858r2a_res_init[] = {
 	{0x3814, 0x03},
 	{0x3815, 0x01},
 	{0x3820, 0x00},
-	{0x3821, 0x67},
+	{0x3821, 0x46},
 	{0x382a, 0x03},
 	{0x382b, 0x01},
 	{0x3830, 0x08},
@@ -422,9 +422,9 @@ struct regval_tab ov8858r2a_res_init[] = {
 	{0x380b, 0x90},
 	{0x380d, 0x94},
 	{0x380e, 0x09},
-	{0x380f, 0xaa},
+	{0x380f, 0xdc},
 	{0x3814, 0x01},
-	{0x3821, 0x46},
+
 	{0x382a, 0x01},
 	{0x3830, 0x06},
 	{0x3836, 0x01},
@@ -460,7 +460,7 @@ struct regval_tab ov8858r2a_id[] = {
 };
 struct regval_tab ov8858r2a_vts[] = {
 	{0x380e, 0x09, 0x7f},
-	{0x380f, 0xaa, 0xff},
+	{0x380f, 0xdc, 0xff},
 };
 struct regval_tab ov8858r2a_stream_on[] = {
 	{0x0100, 0x01, 0xff},
@@ -482,10 +482,10 @@ struct regval_tab ov8858r2a_af[] = {
 	{0x3619, 0x00, 0xff},
 };
 struct regval_tab ov8858r2a_vflip[] = {
-	{0x3620, 0x00, 0x4},
+	{0x3820, 0x00, 0x06},
 };
 struct regval_tab ov8858r2a_hflip[] = {
-	{0x3621, 0x00, 0x4},
+	{0x3821, 0x06, 0x06},
 };
 
 struct b52_sensor_i2c_attr ov8858r2a_i2c_attr[] = {
@@ -521,7 +521,7 @@ struct b52_sensor_resolution ov8858r2a_res[] = {
 	[0] = {
 		 .width = 3264,
 		 .height = 2448,
-		 .hts = 0x0794*2,
+		 .hts = 0x1580,
 		 .min_vts = 0x09dc,
 		 .prop = SENSOR_RES_BINING1,
 		 .regs = {
@@ -532,7 +532,7 @@ struct b52_sensor_resolution ov8858r2a_res[] = {
 	[1] = {
 		 .width = 1632,
 		 .height = 1224,
-		 .hts = 0x0794*2,
+		 .hts = 0x2580,
 		 .min_vts = 0x09dc,
 		 .prop = SENSOR_RES_BINING2,
 		 .regs = {
@@ -584,12 +584,12 @@ struct b52_sensor_data b52_ov8858 = {
 		.numerator = 100,
 		.denominator = 0x10,
 	},
-	.vts_range = {0X0ba0, 0x7fff},
+	.vts_range = {0X09dc, 0x7fff},
 	.gain_range = {
 		[B52_SENSOR_AG] = {0x0010, 0x00f8},
 		[B52_SENSOR_DG] = {0x0010, 0x0010},
 	},
-	.expo_range = {0x00010, 0xb90},
+	.expo_range = {0x0010, 0x9cc},
 	.focus_range = {0x0010, 0x03ff},
 	.vts_reg = {
 		.tab = ov8858r2a_vts,
