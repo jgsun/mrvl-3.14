@@ -99,10 +99,22 @@ static inline int cpu_is_pxa1L88_a0c(void)
 #define cpu_is_pxa1L88_a0c()	(0)
 #endif
 
+/*
+ * Because pxa1908 and pxa1918 are basically same, so pxa1908 chip
+ * version include pxa1908 and pxa1918 to avoid drivers duplicate
+ * code
+ */
 static inline int cpu_is_pxa1908(void)
 {
 	return (((read_cpuid_id() >> 4) & 0xfff) == 0xd03) &&
-	    (((mmp_chip_id & 0xffff) == 0x1908));
+	    (((mmp_chip_id & 0xffff) == 0x1908) ||
+	     ((mmp_chip_id & 0xffff) == 0x1918));
+}
+
+static inline int cpu_is_pxa1918(void)
+{
+	return (((read_cpuid_id() >> 4) & 0xfff) == 0xd03) &&
+	    (((mmp_chip_id & 0xffff) == 0x1918));
 }
 
 static inline int cpu_is_pxa1936(void)
