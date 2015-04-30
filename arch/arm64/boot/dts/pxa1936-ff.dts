@@ -177,14 +177,6 @@
 					interrupts = <0 4 IRQ_TYPE_LEVEL_HIGH>;
 					interrupt-parent = <&gic>;
 
-					onkey {
-						onkey-gpio-number = <1>;
-						/* hardware reset: just reset */
-						hw-rst-type = <1>;
-						/* long onkey: power down */
-						long-onkey-type = <1>;
-					};
-
 					vbus {
 						vbus-gpio = <0xff>;
 						id-gpadc = <3>;
