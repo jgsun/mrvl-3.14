@@ -106,16 +106,17 @@ const unsigned char ram_table_data[] = {
 };
 
 struct drv2604_vibrator_info {
-	void (*power)(int on);
+	int (*trigger)(struct drv2604_vibrator_info *info, int on);
 	struct timed_output_dev vibrator_timed_dev;
 	struct timer_list vibrate_timer;
 	struct work_struct vibrator_off_work;
 	struct mutex vib_mutex;
 	struct regulator *vib_regulator;
 	int enable;
+	int trig_gpio;
 };
 
-struct i2c_client *drv2604_i2c;
+static struct i2c_client *drv2604_i2c;
 
 
 /* I2C LOCAL UTILITIES */
@@ -206,19 +207,11 @@ static inline int drv2604_i2c_clr_reg_bits(struct i2c_client *i2c, int reg,
 	return 0;
 }
 
-static int drv2604_control_vibrator(struct drv2604_vibrator_info *info,
-				unsigned char value)
+static int drv2604_i2c_trigger(struct drv2604_vibrator_info *info, int on)
 {
-
 	int ret;
 
-	mutex_lock(&info->vib_mutex);
-	if (info->enable == value) {
-		mutex_unlock(&info->vib_mutex);
-		return 0;
-	}
-
-	if (value == VIBRA_OFF_VALUE) {
+	if (on == VIBRA_OFF_VALUE) {
 		/* turn off actuator */
 		ret = drv2604_i2c_write_single_byte(drv2604_i2c,
 						DRV2604_GO, STOP_CMD);
@@ -227,7 +220,7 @@ static int drv2604_control_vibrator(struct drv2604_vibrator_info *info,
 			mutex_unlock(&info->vib_mutex);
 			return -1;
 		}
-	} else if (value == VIBRA_ON_VALUE) {
+	} else if (on == VIBRA_ON_VALUE) {
 		/* turn on actuator */
 		ret = drv2604_i2c_write_single_byte(drv2604_i2c,
 						DRV2604_GO, GO_CMD);
@@ -236,9 +229,42 @@ static int drv2604_control_vibrator(struct drv2604_vibrator_info *info,
 			mutex_unlock(&info->vib_mutex);
 			return -1;
 		}
+	} else {
+		VIB_ERR_MSG("Illegal vibrator trigger command\n");
+		return -1;
 	}
-	info->enable = value;
+
+	return 0;
+}
+
+static int drv2604_gpio_trigger(struct drv2604_vibrator_info *info, int on)
+{
+	if (on == VIBRA_OFF_VALUE) {
+		gpio_direction_output(info->trig_gpio, 0);
+	} else if (on == VIBRA_ON_VALUE) {
+		gpio_direction_output(info->trig_gpio, 1);
+	} else {
+		VIB_ERR_MSG("Illegal vibrator trigger command\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+static int drv2604_control_vibrator(struct drv2604_vibrator_info *info,
+				unsigned char value)
+{
+	mutex_lock(&info->vib_mutex);
+	if (info->enable == value) {
+		mutex_unlock(&info->vib_mutex);
+		return 0;
+	}
+
+	if (info->trigger(info, value))
+		return -1;
+
 	mutex_unlock(&info->vib_mutex);
+	info->enable = value;
 
 	return 0;
 }
@@ -427,7 +453,8 @@ end:
 	return ret;
 }
 
-static int drv2604_init_procedure(struct i2c_client *i2c)
+static int drv2604_init_procedure(struct i2c_client *i2c,
+				struct drv2604_vibrator_info *info)
 {
 	int ret;
 
@@ -503,15 +530,52 @@ static int drv2604_init_procedure(struct i2c_client *i2c)
 	}
 
 	/* slect internal trigger */
-	ret = drv2604_i2c_write_single_byte(i2c, DRV2604_MODE,
+	if (info->trig_gpio < 0) {
+		ret = drv2604_i2c_write_single_byte(i2c, DRV2604_MODE,
 					MODE_SET(MODE_TYPE_INT_TRIG));
-	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
-		goto end;
+		if (ret) {
+			VIB_ERR_MSG("I2C write failed\n");
+			goto end;
+		}
+	} else {
+		ret = drv2604_i2c_write_single_byte(i2c, DRV2604_MODE,
+					MODE_SET(MODE_TYPE_EXT_LEVEL_TRIG));
+		if (ret) {
+			VIB_ERR_MSG("I2C write failed\n");
+			goto end;
+		}
 	}
 end:
 	return ret;
 }
+
+#ifdef CONFIG_OF
+static void of_vibrator_probe(struct i2c_client *client,
+				struct drv2604_vibrator_info *info)
+{
+	info->trig_gpio =
+		of_get_named_gpio(client->dev.of_node, "trig_gpio", 0);
+	if (info->trig_gpio < 0) {
+		dev_info(&client->dev,
+			"No GPIO trigger defined, work with I2C writes\n");
+		return;
+	}
+
+	if (gpio_request(info->trig_gpio, "vibrator trigger")) {
+		VIB_ERR_MSG("gpio %d request failed\n", info->trig_gpio);
+		info->trig_gpio = -1;
+		return;
+	}
+
+	info->trigger = drv2604_gpio_trigger;
+	return;
+}
+#else
+static void of_vibrator_probe(struct i2c_client *client,
+				struct drv2604_vibrator_info *info)
+{
+}
+#endif
 
 static int vibrator_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
@@ -532,6 +596,12 @@ static int vibrator_probe(struct i2c_client *client,
 		ret = -ENOTSUPP;
 		goto free_info;
 	}
+
+	/* default trigger method is I2C */
+	info->trigger = drv2604_i2c_trigger;
+
+	/* get of parameters */
+	of_vibrator_probe(client, info);
 
 	/* Setup timed_output obj */
 	info->vibrator_timed_dev.name = "vibrator";
@@ -574,7 +644,7 @@ static int vibrator_probe(struct i2c_client *client,
 
 	/* perform initialization sequence for the DRV2604 */
 	drv2604_i2c = client;
-	ret = drv2604_init_procedure(client);
+	ret = drv2604_init_procedure(client, info);
 	if (ret)
 		goto err_unregister;
 
