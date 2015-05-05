@@ -6,10 +6,16 @@ Required properties:
  - reg:                 I2C client number (0x5a as defined in drv2604 datasheet).
  - vibrator-supply:     Regulator that supplies the vibrator driver.
 
+Optional properties:
+ - trig_gpio:		used to trigger the vibrator using GPIO instead of I2C writes.
+			Note that if this property is not defined the driver
+			will configure with I2C writes by default.
+
 Example:
 
 	vibrator: vibrator@5a {
 		compatible = "ti,drv2604-vibrator";
 		reg = <0x5a>;
 		vibrator-supply = <&ldo10>;
+		rst_gpio = <&gpio 78 0>;
 	};
