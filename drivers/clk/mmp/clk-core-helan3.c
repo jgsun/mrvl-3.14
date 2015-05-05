@@ -362,40 +362,35 @@ static inline void pre_fc(void __iomem *apmu_base)
 }
 
 /* to keep compatible with previous version, just leave *has_hwdfcwr* here. */
-int get_fc_lock(void __iomem *apmu_base, int has_hwdfcwr)
+int get_fc_lock(void __iomem *apmu_base)
 {
-	int timeout;
-	unsigned int reg_val = 0;
+	int timeout = 100000;
+	union pmua_dm_cc dm_cc_ap;
 
 	if (atomic_inc_return(&fc_lock_ref_cnt) == 1) {
-		while (1) {
-			timeout = 100000;
-
-			do {
-				/* Read dm_cc_ap to compete the FC lock */
-				readl(APMU_CCSR(apmu_base));
-				/* Read FC lock status register to query the lock status */
-				reg_val = readl(APMU_FCLSR(apmu_base));
-				/* AP got FC lock */
-				if ((reg_val & 0x3) == 1)
-					break;
-			} while (timeout--);
-
-			if (unlikely(timeout <= 0)) {
-				pr_err("%s can't get AP lock: CCSR:%x CCR:%x, FCLSR:%x\n",
-				       __func__,
-				       readl(APMU_CCSR(apmu_base)),
-				       readl(APMU_CCR(apmu_base)),
-				       readl(APMU_FCLSR(apmu_base)));
-				WARN_ON(1);
-				return -EAGAIN;
-			}
-
-			return 0;
+		dm_cc_ap.v = __raw_readl(APMU_CCSR(apmu_base));
+		while (timeout) {
+			if (!dm_cc_ap.b.cp_rd_status &&
+					dm_cc_ap.b.ap_rd_status)
+				break;
+			dm_cc_ap.v = __raw_readl(APMU_CCSR(apmu_base));
+			timeout--;
 		}
+
+		if (unlikely(timeout <= 0)) {
+			pr_err("%s can't get AP lock:CCSR:%x CCR:%x,FCLSR:%x\n",
+			       __func__,
+			       readl(APMU_CCSR(apmu_base)),
+			       readl(APMU_CCR(apmu_base)),
+			       readl(APMU_FCLSR(apmu_base)));
+			WARN_ON(1);
+			return -EAGAIN;
+		}
+		return 0;
 	}
 
 	pr_err("%s: unmatched fc_lock_ref_cnt\n", __func__);
+
 	return -EINVAL;
 }
 
@@ -773,7 +768,7 @@ static int set_core_freq(struct clk_hw *hw, struct cpu_opt *old,
 
 	/* Get lock in irq disable status to short AP hold lock time */
 	local_irq_save(flags);
-	ret = get_fc_lock(apmu_base, 0);
+	ret = get_fc_lock(apmu_base);
 	if (ret) {
 		put_fc_lock(apmu_base);
 		local_irq_restore(flags);
@@ -1933,7 +1928,7 @@ static int set_axi_freq(struct clk_hw *hw, struct axi_opt *old,
 
 	/* Get lock in irq disable status to short AP hold lock time */
 	local_irq_save(flags);
-	ret = get_fc_lock(apmu_base, 0);
+	ret = get_fc_lock(apmu_base);
 	if (ret) {
 		put_fc_lock(apmu_base);
 		local_irq_restore(flags);
