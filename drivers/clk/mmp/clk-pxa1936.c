@@ -471,7 +471,7 @@ static void pxa1936_apb_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 				0x7, 0x3, 0x0, 0, NULL);
 	mmp_clk_add(unit, PXA1936_CLK_TWSI2, clk);
 
-	clk = clk_register_mux(NULL, "uart0_mux", (const char **)uart_parent_names,
+	clk_register_mux(NULL, "uart0_mux", (const char **)uart_parent_names,
 				ARRAY_SIZE(uart_parent_names),
 				CLK_SET_RATE_PARENT,
 				pxa_unit->apbc_base + APBC_UART0,
@@ -487,7 +487,7 @@ static void pxa1936_apb_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 					0x7, 0x3, 0x0, 0, &uart0_lock);
 	mmp_clk_add(unit, PXA1936_CLK_UART0, clk);
 
-	clk = clk_register_mux(NULL, "uart1_mux", (const char **)uart_parent_names,
+	clk_register_mux(NULL, "uart1_mux", (const char **)uart_parent_names,
 				ARRAY_SIZE(uart_parent_names),
 				CLK_SET_RATE_PARENT,
 				pxa_unit->apbc_base + APBC_UART1,
@@ -498,7 +498,7 @@ static void pxa1936_apb_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 				0x7, 0x3, 0x0, 0, &uart1_lock);
 	mmp_clk_add(unit, PXA1936_CLK_UART1, clk);
 
-	clk = clk_register_mux(NULL, "uart2_mux", (const char **)uart_parent_names,
+	clk_register_mux(NULL, "uart2_mux", (const char **)uart_parent_names,
 				ARRAY_SIZE(uart_parent_names),
 				CLK_SET_RATE_PARENT,
 				pxa_unit->apbcp_base + APBCP_UART2,
@@ -526,7 +526,7 @@ static void pxa1936_apb_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 	mmp_clk_add(unit, PXA1936_CLK_AICER, clk);
 	clk_prepare_enable(clk);
 
-	clk = clk_register_mux(NULL, "ssp0_mux", ssp_parent_names,
+	clk_register_mux(NULL, "ssp0_mux", ssp_parent_names,
 			ARRAY_SIZE(ssp_parent_names), 0,
 			pxa_unit->apbc_base + APBC_SSP0, 4, 3, 0, NULL);
 	clk = mmp_clk_register_gate(NULL, "ssp0_clk", "ssp0_mux",
@@ -535,7 +535,7 @@ static void pxa1936_apb_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 			0x7, 0x3, 0x0, 0, NULL);
 	mmp_clk_add(unit, PXA1936_CLK_SSP0, clk);
 
-	clk = clk_register_mux(NULL, "ssp2_mux", ssp_parent_names,
+	clk_register_mux(NULL, "ssp2_mux", ssp_parent_names,
 			ARRAY_SIZE(ssp_parent_names), 0,
 			pxa_unit->apbc_base + APBC_SSP2, 4, 3, 0, NULL);
 	clk = mmp_clk_register_gate(NULL, "ssp2_clk", "ssp2_mux",
@@ -770,7 +770,7 @@ static void pxa1936_axi_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 	mmp_clk_add(unit, PXA1936_CLK_USB, clk);
 
 	/* nand flash clock, no one use it, expect to be disabled */
-	clk = mmp_clk_register_gate(NULL, "nf_clk", NULL, 0,
+	mmp_clk_register_gate(NULL, "nf_clk", NULL, 0,
 				pxa_unit->apmu_base + APMU_NF,
 				0x1db, 0x1db, 0x0, 0, NULL);
 
@@ -780,7 +780,7 @@ static void pxa1936_axi_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 	mmp_clk_add(unit, PXA1936_CLK_SDH_AXI, clk);
 
 	sdh_mix_config.reg_info.reg_clk_ctrl = pxa_unit->apmu_base + APMU_SDH0;
-	clk = mmp_clk_register_mix(NULL, "sdh0_mix_clk",
+	mmp_clk_register_mix(NULL, "sdh0_mix_clk",
 				(const char **)sdh_parent_names, ARRAY_SIZE(sdh_parent_names),
 				CLK_SET_RATE_PARENT,
 				&sdh_mix_config, &sdh0_lock);
@@ -795,7 +795,7 @@ static void pxa1936_axi_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 	mmp_clk_add(unit, PXA1936_CLK_SDH0_DUMMY, clk);
 
 	sdh_mix_config.reg_info.reg_clk_ctrl = pxa_unit->apmu_base + APMU_SDH1;
-	clk = mmp_clk_register_mix(NULL, "sdh1_mix_clk",
+	mmp_clk_register_mix(NULL, "sdh1_mix_clk",
 				(const char **)sdh_parent_names, ARRAY_SIZE(sdh_parent_names),
 				CLK_SET_RATE_PARENT,
 				&sdh_mix_config, &sdh1_lock);
@@ -810,7 +810,7 @@ static void pxa1936_axi_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 	mmp_clk_add(unit, PXA1936_CLK_SDH1_DUMMY, clk);
 
 	sdh_mix_config.reg_info.reg_clk_ctrl = pxa_unit->apmu_base + APMU_SDH2;
-	clk = mmp_clk_register_mix(NULL, "sdh2_mix_clk",
+	mmp_clk_register_mix(NULL, "sdh2_mix_clk",
 				(const char **)sdh_parent_names, ARRAY_SIZE(sdh_parent_names),
 				CLK_SET_RATE_PARENT,
 				&sdh_mix_config, &sdh2_lock);
@@ -885,7 +885,7 @@ static void pxa1936_axi_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 
 	gcbus_mix_config.reg_info.reg_clk_ctrl =
 				pxa_unit->apmu_base + APMU_GC2D;
-	clk = mmp_clk_register_mix(NULL, "gcbus_mix_clk",
+	mmp_clk_register_mix(NULL, "gcbus_mix_clk",
 				(const char **)gcbus_parent_names, ARRAY_SIZE(gcbus_parent_names),
 				0, &gcbus_mix_config, &gc2d_lock);
 	clk = mmp_clk_register_gate(NULL, "gcbus_clk", "gcbus_mix_clk",
@@ -915,7 +915,7 @@ static void pxa1936_axi_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 
 	vpubus_mix_config.reg_info.reg_clk_ctrl =
 			pxa_unit->apmu_base + APMU_VPU;
-	clk = mmp_clk_register_mix(NULL, "vpubus_mix_clk",
+	mmp_clk_register_mix(NULL, "vpubus_mix_clk",
 			(const char **)vpubus_parent_names, ARRAY_SIZE(vpubus_parent_names),
 			0, &vpubus_mix_config, &vpu_lock);
 	clk = mmp_clk_register_gate(NULL, "vpubus_clk", "vpubus_mix_clk",
@@ -1016,7 +1016,7 @@ static void pxa1936_axi_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 	mmp_clk_add(unit, PXA1936_CLK_DISP_HCLK, clk);
 
 	/* SC2 VCLK */
-	clk = clk_register_divider(NULL, "isim_vclk_div", "pll1_312_gate",
+	clk_register_divider(NULL, "isim_vclk_div", "pll1_312_gate",
 			0, pxa_unit->apmu_base + APMU_CCIC1,
 			22, 4, 0, &ccic1_lock);
 
@@ -1027,7 +1027,7 @@ static void pxa1936_axi_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 	mmp_clk_add(unit, PXA1936_CLK_SC2_MCLK, clk);
 
 	sc2_4x_mix_config.reg_info.reg_clk_ctrl = pxa_unit->apmu_base + APMU_CCIC0;
-	clk = mmp_clk_register_mix(NULL, "sc2_4x_mix_clk", sc2_4x_parent_names,
+	mmp_clk_register_mix(NULL, "sc2_4x_mix_clk", sc2_4x_parent_names,
 			ARRAY_SIZE(sc2_4x_parent_names), 0,
 			&sc2_4x_mix_config, &ccic0_lock);
 
@@ -1038,7 +1038,7 @@ static void pxa1936_axi_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 	mmp_clk_add(unit, PXA1936_CLK_SC2_4X_CLK, clk);
 
 	sc2_csi_mix_config.reg_info.reg_clk_ctrl = pxa_unit->apmu_base + APMU_CCIC1;
-	clk = mmp_clk_register_mix(NULL, "sc2_csi_mix_clk",
+	mmp_clk_register_mix(NULL, "sc2_csi_mix_clk",
 			sc2_csi_parent_names,
 			ARRAY_SIZE(sc2_csi_parent_names), 0,
 			&sc2_csi_mix_config, &ccic1_lock);
@@ -1050,7 +1050,7 @@ static void pxa1936_axi_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 	mmp_clk_add(unit, PXA1936_CLK_SC2_CSI_CLK, clk);
 
 	sc2_axi_mix_config.reg_info.reg_clk_ctrl = pxa_unit->apmu_base + APMU_ISP;
-	clk = mmp_clk_register_mix(NULL, "sc2_axi_mix_clk",
+	mmp_clk_register_mix(NULL, "sc2_axi_mix_clk",
 			sc2_axi_parent_names,
 			ARRAY_SIZE(sc2_axi_parent_names), 0,
 			&sc2_axi_mix_config, &isp_lock);
@@ -1061,7 +1061,7 @@ static void pxa1936_axi_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 			0x30000, 0x30000, 0x0, 0, &isp_lock);
 	mmp_clk_add(unit, PXA1936_CLK_SC2_AXI_CLK, clk);
 
-	clk = clk_register_mux(NULL, "sc2_phy2ln_mux", sc2_phy_parent_names,
+	clk_register_mux(NULL, "sc2_phy2ln_mux", sc2_phy_parent_names,
 			ARRAY_SIZE(sc2_phy_parent_names), 0, pxa_unit->apmu_base + APMU_CCIC1,
 			7, 1, 0, &ccic1_lock);
 
@@ -1071,7 +1071,7 @@ static void pxa1936_axi_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 			0x24, 0x24, 0x0, 0, &ccic1_lock);
 	mmp_clk_add(unit, PXA1936_CLK_SC2_PHY2LN_CLK_EN, clk);
 
-	clk = clk_register_mux(NULL, "sc2_phy4ln_mux", sc2_phy_parent_names,
+	clk_register_mux(NULL, "sc2_phy4ln_mux", sc2_phy_parent_names,
 			ARRAY_SIZE(sc2_phy_parent_names), 0, pxa_unit->apmu_base + APMU_CCIC0,
 			7, 1, 0, &ccic0_lock);
 
@@ -1082,7 +1082,7 @@ static void pxa1936_axi_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 	mmp_clk_add(unit, PXA1936_CLK_SC2_PHY4LN_CLK_EN, clk);
 
 	isp_pipe_mix_config.reg_info.reg_clk_ctrl = pxa_unit->apmu_base + APMU_ISP;
-	clk = mmp_clk_register_mix(NULL, "isp_pipe_mix_clk",
+	mmp_clk_register_mix(NULL, "isp_pipe_mix_clk",
 			isp_pipe_parent_names,
 			ARRAY_SIZE(isp_pipe_parent_names), 0,
 			&isp_pipe_mix_config, &isp_lock);
@@ -1094,7 +1094,7 @@ static void pxa1936_axi_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 			0x503, 0x503, 0x0, 0, &isp_lock);
 	mmp_clk_add(unit, PXA1936_CLK_ISP_PIPE_CLK, clk);
 
-	clk = clk_register_divider(NULL, "isp_core_div", "pll1_624_gate",
+	clk_register_divider(NULL, "isp_core_div", "pll1_624_gate",
 			0, pxa_unit->apmu_base + APMU_ISP,
 			24, 3, 0, &isp_lock);
 
@@ -1791,49 +1791,49 @@ static void __init pxa1936_clk_init(struct device_node *np)
 	pxa_unit = kzalloc(sizeof(*pxa_unit), GFP_KERNEL);
 	if (!pxa_unit) {
 		pr_err("failed to allocate memory for pxa1936 clock unit\n");
-		return;
+		goto err;
 	}
 
 	pxa_unit->mpmu_base = of_iomap(np, 0);
 	if (!pxa_unit->mpmu_base) {
 		pr_err("failed to map mpmu registers\n");
-		return;
+		goto err;
 	}
 
 	pxa_unit->apmu_base = of_iomap(np, 1);
 	if (!pxa_unit->apmu_base) {
 		pr_err("failed to map apmu registers\n");
-		return;
+		goto err;
 	}
 
 	pxa_unit->apbc_base = of_iomap(np, 2);
 	if (!pxa_unit->apbc_base) {
 		pr_err("failed to map apbc registers\n");
-		return;
+		goto err;
 	}
 
 	pxa_unit->apbcp_base = of_iomap(np, 3);
 	if (!pxa_unit->apbcp_base) {
 		pr_err("failed to map apbcp registers\n");
-		return;
+		goto err;
 	}
 
 	pxa_unit->apbs_base = of_iomap(np, 4);
 	if (!pxa_unit->apbs_base) {
 		pr_err("failed to map apbs registers\n");
-		return;
+		goto err;
 	}
 
 	pxa_unit->ciu_base = of_iomap(np, 5);
 	if (!pxa_unit->ciu_base) {
 		pr_err("failed to map ciu registers\n");
-		return;
+		goto err;
 	}
 
 	pxa_unit->dciu_base = of_iomap(np, 6);
 	if (!pxa_unit->dciu_base) {
 		pr_err("failed to map dragon ciu registers\n");
-		return;
+		goto err;
 	}
 
 /* init clock and ddr will use the dvfs_platinfo.
@@ -1896,7 +1896,10 @@ static void __init pxa1936_clk_init(struct device_node *np)
 #ifdef CONFIG_DEBUG_FS
 	globla_pxa_unit = pxa_unit;
 #endif
+	return;
 
+err:
+	kfree(pxa_unit);
 }
 CLK_OF_DECLARE(pxa1936_clk, "marvell,pxa1936-clock", pxa1936_clk_init);
 
