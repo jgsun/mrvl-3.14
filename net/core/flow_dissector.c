@@ -403,3 +403,4 @@ struct netdev_queue *netdev_pick_tx(struct net_device *dev,
 	skb_set_queue_mapping(skb, queue_index);
 	return netdev_get_tx_queue(dev, queue_index);
 }
+EXPORT_SYMBOL(netdev_pick_tx);

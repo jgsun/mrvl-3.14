@@ -2511,6 +2511,10 @@ static inline void dev_consume_skb_any(struct sk_buff *skb)
 	__dev_kfree_skb_any(skb, SKB_REASON_CONSUMED);
 }
 
+#ifdef CONFIG_NETIF_RX_FASTPATH_HOOK
+void netif_rx_fastpath_register(int (*hook)(struct sk_buff *));
+void netif_rx_fastpath_unregister(void);
+#endif
 int netif_rx(struct sk_buff *skb);
 int netif_rx_ni(struct sk_buff *skb);
 int netif_receive_skb(struct sk_buff *skb);

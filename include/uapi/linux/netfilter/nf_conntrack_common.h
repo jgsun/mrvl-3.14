@@ -91,6 +91,10 @@ enum ip_conntrack_status {
 	/* Conntrack got a helper explicitly attached via CT target. */
 	IPS_HELPER_BIT = 13,
 	IPS_HELPER = (1 << IPS_HELPER_BIT),
+
+	/* Conntrack is part of a fastpath connection */
+	IPS_FASTPATH_BIT = 14,
+	IPS_FASTPATH = (1 << IPS_FASTPATH_BIT),
 };
 
 /* Connection tracking event types */

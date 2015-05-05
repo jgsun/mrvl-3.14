@@ -199,6 +199,16 @@ config BRIDGE_NETFILTER
 
 	  If unsure, say N.
 
+config NETIF_RX_FASTPATH_HOOK
+	bool "netif_rx fastpath hook"
+	default n
+	---help---
+	  Enabling this will allow registering a hook function to netif_rx that
+	  can "steal" all incoming skbs by returning 1 or continue processing
+	  as usual by returning 0.
+
+	  If unsure, say N.
+
 source "net/netfilter/Kconfig"
 source "net/ipv4/netfilter/Kconfig"
 source "net/ipv6/netfilter/Kconfig"

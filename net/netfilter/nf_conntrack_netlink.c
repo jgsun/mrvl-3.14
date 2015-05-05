@@ -433,6 +433,17 @@ ctnetlink_dump_ct_seq_adj(struct sk_buff *skb, const struct nf_conn *ct)
 }
 
 static inline int
+ctnetlink_dump_events(struct sk_buff *skb, const unsigned int events)
+{
+	if (nla_put_be32(skb, CTA_EVENTS, htonl((unsigned long)events)))
+		goto nla_put_failure;
+	return 0;
+
+nla_put_failure:
+	return -1;
+}
+
+static inline int
 ctnetlink_dump_id(struct sk_buff *skb, const struct nf_conn *ct)
 {
 	if (nla_put_be32(skb, CTA_ID, htonl((unsigned long)ct)))
@@ -582,6 +593,7 @@ ctnetlink_nlmsg_size(const struct nf_conn *ct)
 	       + 3 * nla_total_size(0) /* CTA_TUPLE_PROTO */
 	       + 3 * nla_total_size(sizeof(u_int8_t)) /* CTA_PROTO_NUM */
 	       + nla_total_size(sizeof(u_int32_t)) /* CTA_ID */
+	       + nla_total_size(sizeof(u_int32_t)) /* CTA_EVENTS */
 	       + nla_total_size(sizeof(u_int32_t)) /* CTA_STATUS */
 	       + ctnetlink_acct_size(ct)
 	       + ctnetlink_timestamp_size(ct)
@@ -668,6 +680,9 @@ ctnetlink_conntrack_event(unsigned int events, struct nf_ct_event *item)
 
 	if (nf_ct_zone(ct) &&
 	    nla_put_be16(skb, CTA_ZONE, htons(nf_ct_zone(ct))))
+		goto nla_put_failure;
+
+	if (ctnetlink_dump_events(skb, events) < 0)
 		goto nla_put_failure;
 
 	if (ctnetlink_dump_id(skb, ct) < 0)
@@ -987,6 +1002,7 @@ static const struct nla_policy ct_nla_policy[CTA_MAX+1] = {
 				    .len = __CTA_LABELS_MAX_LENGTH },
 	[CTA_LABELS_MASK]	= { .type = NLA_BINARY,
 				    .len = __CTA_LABELS_MAX_LENGTH },
+	[CTA_EVENTS]		= { .type = NLA_U32 },
 };
 
 static int

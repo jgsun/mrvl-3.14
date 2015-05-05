@@ -3243,6 +3243,40 @@ enqueue:
 	return NET_RX_DROP;
 }
 
+#ifdef CONFIG_NETIF_RX_FASTPATH_HOOK
+static int netif_rx_fastpath_default(struct sk_buff *skb)
+{
+	return 0; /* always slow */
+}
+
+static int (*netif_rx_fastpath_hook)(struct sk_buff *skb) = &netif_rx_fastpath_default;
+
+void netif_rx_fastpath_register(int (*hook)(struct sk_buff *))
+{
+	pr_info("netif_rx_fastpath_register hook=%p\n", hook);
+	netif_rx_fastpath_hook = hook;
+}
+EXPORT_SYMBOL(netif_rx_fastpath_register);
+
+void netif_rx_fastpath_unregister(void)
+{
+	pr_info("netif_rx_fastpath_unregister\n");
+	netif_rx_fastpath_hook = &netif_rx_fastpath_default;
+}
+EXPORT_SYMBOL(netif_rx_fastpath_unregister);
+
+static inline int netif_rx_fastpath(struct sk_buff *skb)
+{
+	return netif_rx_fastpath_hook(skb);
+}
+
+#else /* !CONFIG_NETIF_RX_FASTPATH_HOOK */
+static inline int netif_rx_fastpath(struct sk_buff *skb)
+{
+	return 0;
+}
+#endif
+
 static int netif_rx_internal(struct sk_buff *skb)
 {
 	int ret;
@@ -3250,6 +3284,10 @@ static int netif_rx_internal(struct sk_buff *skb)
 	/* if netpoll wants it, pretend we never saw it */
 	if (netpoll_rx(skb))
 		return NET_RX_DROP;
+
+	/* if fastpath forwarded it, return... */
+	if (netif_rx_fastpath(skb))
+		return NET_RX_SUCCESS;
 
 	net_timestamp_check(netdev_tstamp_prequeue, skb);
 

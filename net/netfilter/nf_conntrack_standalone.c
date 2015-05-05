@@ -224,6 +224,12 @@ static int ct_seq_show(struct seq_file *s, void *v)
 		if (seq_printf(s, "[ASSURED] "))
 			goto release;
 
+#if defined(CONFIG_NF_CONNTRACK_FASTPATH)
+	if (test_bit(IPS_FASTPATH_BIT, &ct->status))
+		if (seq_printf(s, "[FP] "))
+			goto release;
+#endif
+
 #if defined(CONFIG_NF_CONNTRACK_MARK)
 	if (seq_printf(s, "mark=%u ", ct->mark))
 		goto release;
