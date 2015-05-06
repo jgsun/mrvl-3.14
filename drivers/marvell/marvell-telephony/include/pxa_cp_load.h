@@ -19,6 +19,7 @@ enum cp_type {
 	cp_type_pxa1L88 = 0x314C3838,
 	cp_type_pxa1928 = 0x31393238,
 	cp_type_pxa1908 = 0x31393038,
+	cp_type_pxa1956 = 0x31393536,
 };
 
 struct cp_buffer {
@@ -44,6 +45,9 @@ void __cp988_releasecp(void);
 void cp1908_releasecp(void);
 void cp1908_holdcp(void);
 bool cp1908_get_status(void);
+void cp1956_releasecp(void);
+void cp1956_holdcp(void);
+bool cp1956_get_status(void);
 
 extern struct bus_type cpu_subsys;
 extern void cp_releasecp(void);
