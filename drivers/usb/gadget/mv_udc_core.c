@@ -573,6 +573,10 @@ static int mv_ep_enable(struct usb_ep *_ep,
 	if (!udc->driver || udc->gadget.speed == USB_SPEED_UNKNOWN)
 		return -ESHUTDOWN;
 
+#ifdef CONFIG_USB_GADGET_DEBUG_FILES
+	ep->stats.enable++;
+#endif
+
 	direction = ep_dir(ep);
 	max = usb_endpoint_maxp(desc);
 
@@ -700,6 +704,10 @@ static int  mv_ep_disable(struct usb_ep *_ep)
 		return -EINVAL;
 	}
 
+#ifdef CONFIG_USB_GADGET_DEBUG_FILES
+	ep->stats.disable++;
+#endif
+
 	/* Get the endpoint queue head address */
 	dqh = ep->dqh;
 
@@ -779,6 +787,10 @@ static void mv_ep_fifo_flush(struct usb_ep *_ep)
 	if (!udc->active)
 		return;
 
+#ifdef CONFIG_USB_GADGET_DEBUG_FILES
+	ep->stats.flush++;
+#endif
+
 	direction = ep_dir(ep);
 
 	if (ep->ep_num == 0)
@@ -847,6 +859,10 @@ mv_ep_queue(struct usb_ep *_ep, struct usb_request *_req, gfp_t gfp_flags)
 		return -EINVAL;
 	}
 
+#ifdef CONFIG_USB_GADGET_DEBUG_FILES
+	ep->stats.queue++;
+#endif
+
 	udc = ep->udc;
 	if (!udc->driver || udc->gadget.speed == USB_SPEED_UNKNOWN)
 		return -ESHUTDOWN;
@@ -912,6 +928,10 @@ static void mv_prime_ep(struct mv_ep *ep, struct mv_req *req)
 	struct mv_dqh *dqh = ep->dqh;
 	u32 bit_pos;
 
+#ifdef CONFIG_USB_GADGET_DEBUG_FILES
+	ep->stats.prime++;
+#endif
+
 	/* Write dQH next pointer and terminate bit to 0 */
 	dqh->next_dtd_ptr = req->head->td_dma
 		& EP_QUEUE_HEAD_NEXT_POINTER_MASK;
@@ -940,6 +960,10 @@ static int mv_ep_dequeue(struct usb_ep *_ep, struct usb_request *_req)
 
 	if (!_ep || !_req)
 		return -EINVAL;
+
+#ifdef CONFIG_USB_GADGET_DEBUG_FILES
+	ep->stats.dequeue++;
+#endif
 
 	spin_lock_irqsave(&udc->lock, flags);
 	if (!udc->active) {
@@ -2107,6 +2131,9 @@ static void irq_process_tr_complete(struct mv_udc *udc)
 	struct mv_req *curr_req, *temp_req;
 	int status;
 
+#ifdef CONFIG_USB_GADGET_DEBUG_FILES
+	udc->stats.interrupts.tr_complete++;
+#endif
 	/*
 	 * We use separate loops for ENDPTSETUPSTAT and ENDPTCOMPLETE
 	 * because the setup packets are to be read ASAP
@@ -2118,6 +2145,9 @@ static void irq_process_tr_complete(struct mv_udc *udc)
 	if (tmp) {
 		for (i = 0; i < udc->max_eps; i++) {
 			if (tmp & (1 << i)) {
+#ifdef CONFIG_USB_GADGET_DEBUG_FILES
+				udc->eps[i].stats.interrupts.setup++;
+#endif
 				get_setup_data(udc, i,
 					(u8 *)(&udc->local_setup_buff));
 				handle_setup_packet(udc, i,
@@ -2154,6 +2184,10 @@ static void irq_process_tr_complete(struct mv_udc *udc)
 			curr_ep = &udc->eps[0];
 		else
 			curr_ep = &udc->eps[i];
+
+#ifdef CONFIG_USB_GADGET_DEBUG_FILES
+		curr_ep->stats.interrupts.complete++;
+#endif
 		/* process the req queue until an uncomplete request */
 		list_for_each_entry_safe(curr_req, temp_req,
 			&curr_ep->queue, queue) {
@@ -2182,6 +2216,9 @@ static void irq_process_reset(struct mv_udc *udc)
 	u32 tmp;
 	unsigned int loops;
 
+#ifdef CONFIG_USB_GADGET_DEBUG_FILES
+	udc->stats.interrupts.reset++;
+#endif
 	udc->ep0_dir = EP_DIR_OUT;
 	udc->ep0_state = WAIT_FOR_SETUP;
 	udc->remote_wakeup = 0;		/* default to 0 on reset */
@@ -2260,6 +2297,9 @@ static void handle_bus_resume(struct mv_udc *udc)
 
 static void irq_process_suspend(struct mv_udc *udc)
 {
+#ifdef CONFIG_USB_GADGET_DEBUG_FILES
+	udc->stats.interrupts.suspend++;
+#endif
 	udc->resume_state = udc->usb_state;
 	udc->usb_state = USB_STATE_SUSPENDED;
 
@@ -2273,6 +2313,10 @@ static void irq_process_suspend(struct mv_udc *udc)
 static void irq_process_port_change(struct mv_udc *udc)
 {
 	u32 portsc;
+
+#ifdef CONFIG_USB_GADGET_DEBUG_FILES
+	udc->stats.interrupts.port_change++;
+#endif
 
 	portsc = readl(&udc->op_regs->portsc[0]);
 	if (!(portsc & PORTSCX_PORT_RESET)) {
@@ -2317,6 +2361,9 @@ static void irq_process_error(struct mv_udc *udc)
 {
 	/* Increment the error count */
 	udc->errors++;
+#ifdef CONFIG_USB_GADGET_DEBUG_FILES
+	udc->stats.interrupts.err++;
+#endif
 }
 
 static irqreturn_t mv_udc_irq(int irq, void *dev)
@@ -2324,6 +2371,9 @@ static irqreturn_t mv_udc_irq(int irq, void *dev)
 	struct mv_udc *udc = (struct mv_udc *)dev;
 	u32 status, intr;
 
+#ifdef CONFIG_USB_GADGET_DEBUG_FILES
+	udc->stats.interrupts.total++;
+#endif
 	spin_lock(&udc->lock);
 
 	/* Disable ISR when stopped bit is set */
@@ -2463,6 +2513,263 @@ static void mv_udc_vbus_work(struct work_struct *work)
 	mv_udc_vbus_session(&udc->gadget, vbus);
 }
 
+
+/*-------------------------------------------------------------------------
+		PROC File System Support
+-------------------------------------------------------------------------*/
+#ifdef CONFIG_USB_GADGET_DEBUG_FILES
+
+#include <linux/proc_fs.h>
+#include <linux/seq_file.h>
+
+static const char proc_filename[] = "driver/mv_udc";
+
+static int mv_proc_read(struct seq_file *m, void *v)
+{
+	unsigned long flags;
+	int i;
+	u32 tmp_reg;
+	struct mv_ep *ep = NULL;
+	struct mv_req *req;
+
+	struct mv_udc *udc = the_controller;
+
+	spin_lock_irqsave(&udc->lock, flags);
+
+	/* ------basic driver information ---- */
+	seq_printf(m,
+			DRIVER_DESC "\n"
+			"%s version: %s\n"
+			"Gadget driver: %s\n\n",
+			driver_name, DRIVER_VERSION,
+			udc->driver ? udc->driver->driver.name : "(none)");
+
+	/* ------ DR Registers ----- */
+	tmp_reg = readl(&udc->op_regs->usbcmd);
+	seq_printf(m,
+			"USBCMD reg:\n"
+			"SetupTW: %d\n"
+			"Run/Stop: %s\n\n",
+			(tmp_reg & USBCMD_SETUP_TRIPWIRE_SET) ? 1 : 0,
+			(tmp_reg & USBCMD_RUN_STOP) ? "Run" : "Stop");
+
+	tmp_reg = readl(&udc->op_regs->usbsts);
+	seq_printf(m,
+			"USB Status Reg:\n"
+			"USB Suspend: %d Reset Received: %d System Error: %s "
+			"USB Error Interrupt: %s USB Interrupt: %d\n\n",
+			(tmp_reg & USBSTS_SUSPEND) ? 1 : 0,
+			(tmp_reg & USBSTS_RESET) ? 1 : 0,
+			(tmp_reg & USBSTS_SYS_ERR) ? "Err" : "Normal",
+			(tmp_reg & USBSTS_ERR) ? "Err detected" : "No err",
+			(tmp_reg & USBSTS_INT) ? 1 : 0);
+
+	tmp_reg = readl(&udc->op_regs->usbintr);
+	seq_printf(m,
+			"USB Interrupt Enable Reg:\n"
+			"Sleep Enable: %d SOF Received Enable: %d "
+			"Reset Enable: %d\n"
+			"System Error Enable: %d "
+			"Port Change Detected Enable: %d\n"
+			"USB Error Intr Enable: %d USB Intr Enable: %d\n\n",
+			(tmp_reg & USBINTR_DEVICE_SUSPEND) ? 1 : 0,
+			(tmp_reg & USBINTR_SOF_UFRAME_EN) ? 1 : 0,
+			(tmp_reg & USBINTR_RESET_EN) ? 1 : 0,
+			(tmp_reg & USBINTR_SYS_ERR_EN) ? 1 : 0,
+			(tmp_reg & USBINTR_PORT_CHANGE_DETECT_EN) ? 1 : 0,
+			(tmp_reg & USBINTR_ERR_INT_EN) ? 1 : 0,
+			(tmp_reg & USBINTR_INT_EN) ? 1 : 0);
+
+	tmp_reg = readl(&udc->op_regs->frindex);
+	seq_printf(m,
+			"USB Frame Index Reg: Frame Number is 0x%x\n\n",
+			(tmp_reg & USB_FRINDEX_MASKS));
+
+	tmp_reg = readl(&udc->op_regs->deviceaddr);
+	seq_printf(m,
+			"USB Device Address Reg: Device Addr is 0x%x\n\n",
+			(tmp_reg & USB_DEVICE_ADDRESS_MASK));
+
+	tmp_reg = readl(&udc->op_regs->eplistaddr);
+	seq_printf(m,
+			"USB Endpoint List Address Reg: "
+			"Device Addr is 0x%x\n\n",
+			(tmp_reg & USB_EP_LIST_ADDRESS_MASK));
+
+	tmp_reg = readl(&udc->op_regs->portsc[0]);
+	seq_printf(m,
+		"USB Port Status&Control Reg:\n"
+		"Port Transceiver Type : %s Port Speed: %s\n"
+		"PHY Low Power Suspend: %s Port Reset: %s "
+		"Port Suspend Mode: %s\n"
+		"Over-current Change: %s "
+		"Port Enable/Disable Change: %s\n"
+		"Port Enabled/Disabled: %s "
+		"Current Connect Status: %s\n\n", ({
+			const char *s;
+			switch (tmp_reg & PORTSCX_PAR_XCVR_SELECT) {
+			case PORTSCX_PTS_UTMI:
+				s = "UTMI"; break;
+			case PORTSCX_PTS_ULPI:
+				s = "ULPI "; break;
+			case PORTSCX_PTS_FSLS:
+				s = "FS/LS Serial"; break;
+			default:
+				s = "None"; break;
+			}
+			s; }),
+		usb_speed_string(udc->gadget.speed),
+		(tmp_reg & PORTSCX_PHY_LOW_POWER_SPD) ?
+		"Normal PHY mode" : "Low power mode",
+		(tmp_reg & PORTSCX_PORT_RESET) ? "In Reset" :
+		"Not in Reset",
+		(tmp_reg & PORTSCX_PORT_SUSPEND) ? "In " : "Not in",
+		(tmp_reg & PORTSCX_OVER_CURRENT_CHG) ? "Detected" :
+		"No",
+		(tmp_reg & PORTSCX_PORT_EN_DIS_CHANGE) ? "Disable" :
+		"Not change",
+		(tmp_reg & PORTSCX_PORT_ENABLE) ? "Enable" :
+		"Not correct",
+		(tmp_reg & PORTSCX_CURRENT_CONNECT_STATUS) ?
+		"Attached" : "Not-Att");
+
+	tmp_reg = readl(&udc->op_regs->usbmode);
+	seq_printf(m,
+			"USB Mode Reg: Controller Mode is: %s\n\n", ({
+				const char *s;
+				switch (tmp_reg & USBMODE_CTRL_MODE_HOST) {
+				case USBMODE_CTRL_MODE_IDLE:
+					s = "Idle"; break;
+				case USBMODE_CTRL_MODE_DEVICE:
+					s = "Device Controller"; break;
+				case USBMODE_CTRL_MODE_HOST:
+					s = "Host Controller"; break;
+				default:
+					s = "None"; break;
+				}
+				s;
+			}));
+
+	tmp_reg = readl(&udc->op_regs->epsetupstat);
+	seq_printf(m,
+			"Endpoint Setup Status Reg: SETUP on ep 0x%x\n\n",
+			(tmp_reg & EP_SETUP_STATUS_MASK));
+
+	for (i = 0; i < udc->max_eps ; i++) {
+		tmp_reg = readl(&udc->op_regs->epctrlx[i]);
+		seq_printf(m, "EP Ctrl Reg [0x%x]: = [0x%x]\n", i, tmp_reg);
+	}
+	tmp_reg = readl(&udc->op_regs->epprime);
+	seq_printf(m, "EP Prime Reg = [0x%x]\n\n", tmp_reg);
+
+	seq_printf(m, "USB Interrupts Statistics\n"
+		      "total:%d, tr_complete:%d, err:%d, reset:%d, suspend:%d, "
+		      "port_change:%d\n\n",
+		      udc->stats.interrupts.total,
+		      udc->stats.interrupts.tr_complete,
+		      udc->stats.interrupts.err,
+		      udc->stats.interrupts.reset,
+		      udc->stats.interrupts.suspend,
+		      udc->stats.interrupts.port_change);
+
+	/* ------mv_udc, mv_ep, mv_request structure information ----- */
+	seq_puts(m, "USB endpoints statistics\n");
+	ep = &udc->eps[0];
+	seq_printf(m, "For %s Maxpkt is 0x%x index is 0x%x\n",
+			ep->ep.name, ep_maxpacket(ep), ep_index(ep));
+	seq_printf(m, "Interrupts: setup:%d, complete:%d\n",
+				       ep->stats.interrupts.setup,
+				       ep->stats.interrupts.complete);
+	seq_printf(m, "queue:%d, dequeue:%d, enable:%d, disable:%d, flush:%d\n",
+		   ep->stats.queue, ep->stats.dequeue, ep->stats.enable,
+		   ep->stats.disable, ep->stats.flush);
+	if (list_empty(&ep->queue)) {
+		seq_puts(m, "its req queue is empty\n\n");
+	} else {
+		list_for_each_entry(req, &ep->queue, queue) {
+			seq_printf(m,
+				"req %p actual 0x%x length 0x%x buf %p\n",
+				&req->req, req->req.actual,
+				req->req.length, req->req.buf);
+		}
+	}
+
+	/* other gadget->eplist ep */
+	list_for_each_entry(ep, &udc->gadget.ep_list, ep.ep_list) {
+		if (ep->ep.desc) {
+			seq_printf(m,
+					"\nFor %s Maxpkt is 0x%x "
+					"index is 0x%x\n",
+					ep->ep.name, ep_maxpacket(ep),
+					ep_index(ep));
+			seq_printf(m, "Interrupts: setup:%d, complete:%d\n",
+				       ep->stats.interrupts.setup,
+				       ep->stats.interrupts.complete);
+			seq_printf(m, "queue:%d, dequeue:%d, enable:%d, "
+				      "disable:%d, flush:%d\n",
+				       ep->stats.queue, ep->stats.dequeue,
+				       ep->stats.enable, ep->stats.disable,
+				       ep->stats.flush);
+			if (list_empty(&ep->queue)) {
+				seq_puts(m, "its req queue is empty\n\n");
+			} else {
+				list_for_each_entry(req, &ep->queue, queue) {
+					seq_printf(m,
+						"req %p actual 0x%x length "
+						"0x%x  buf %p\n",
+						&req->req, req->req.actual,
+						req->req.length, req->req.buf);
+				}	/* end for each_entry of ep req */
+			}	/* end for else */
+		}	/* end for if(ep->queue) */
+	}	/* end (ep->desc) */
+
+	spin_unlock_irqrestore(&udc->lock, flags);
+	return 0;
+}
+
+static ssize_t mv_proc_write(struct file *f, const char __user *buf,
+			      size_t count, loff_t *off)
+{
+	struct mv_udc *udc = the_controller;
+	struct mv_ep *ep = NULL;
+	unsigned long flags;
+
+	spin_lock_irqsave(&udc->lock, flags);
+	memset(&udc->stats, 0, sizeof(udc->stats));
+	memset(&udc->eps[0].stats, 0, sizeof(udc->eps[0].stats));
+	list_for_each_entry(ep, &udc->gadget.ep_list, ep.ep_list)
+		memset(&ep->stats, 0, sizeof(ep->stats));
+	spin_unlock_irqrestore(&udc->lock, flags);
+	return count;
+}
+
+/*
+ * seq_file wrappers for procfile show routines.
+ */
+static int mv_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, mv_proc_read, NULL);
+}
+
+static const struct file_operations mv_proc_fops = {
+	.open		= mv_proc_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+	.write		= mv_proc_write,
+};
+
+#define create_proc_file() proc_create(proc_filename, 0, NULL, &mv_proc_fops)
+#define remove_proc_file() remove_proc_entry(proc_filename, NULL)
+
+#else				/* !CONFIG_USB_GADGET_DEBUG_FILES */
+
+#define create_proc_file() do {} while (0)
+#define remove_proc_file() do {} while (0)
+
+#endif				/* CONFIG_USB_GADGET_DEBUG_FILES */
+
 /* release device structure */
 static void gadget_release(struct device *_dev)
 {
@@ -2492,6 +2799,8 @@ static int mv_udc_remove(struct platform_device *pdev)
 		flush_workqueue(udc->qwork);
 		destroy_workqueue(udc->qwork);
 	}
+
+	remove_proc_file();
 
 	/* free memory allocated in probe */
 	if (udc->dtd_pool)
@@ -2884,6 +3193,7 @@ static int mv_udc_probe(struct platform_device *pdev)
 	dev_info(&pdev->dev, "successful probe UDC device %s clock gating.\n",
 		udc->clock_gating ? "with" : "without");
 
+	create_proc_file();
 	return 0;
 
 err_create_workqueue:

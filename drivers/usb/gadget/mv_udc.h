@@ -82,19 +82,33 @@
 /* endpoint list address bit masks */
 #define USB_EP_LIST_ADDRESS_MASK              0xfffff800
 
+/* PORTSCX Register Bit Masks */
 #define PORTSCX_W1C_BITS			0x2a
-#define PORTSCX_PORT_DM				(1 << 10)
-#define PORTSCX_PORT_DP				(1 << 11)
+#define PORTSCX_PORT_DM			(1 << 10)
+#define PORTSCX_PORT_DP			(1 << 11)
+#define PORTSCX_CURRENT_CONNECT_STATUS		0x00000001
+#define PORTSCX_PORT_ENABLE			0x00000004
+#define PORTSCX_PORT_EN_DIS_CHANGE		0x00000008
 #define PORTSCX_PORT_RESET			0x00000100
 #define PORTSCX_PORT_POWER			0x00001000
 #define PORTSCX_FORCE_FULL_SPEED_CONNECT	0x01000000
-#define PORTSCX_PAR_XCVR_SELECT			0xC0000000
+#define PORTSCX_PAR_XCVR_SELECT		0xC0000000
+#define PORTSCX_OVER_CURRENT_CHG		0x00000020
 #define PORTSCX_PORT_FORCE_RESUME		0x00000040
 #define PORTSCX_PORT_SUSPEND			0x00000080
-#define PORTSCX_PORT_SPEED_FULL			0x00000000
+#define PORTSCX_PHY_LOW_POWER_SPD		0x00800000
+#define PORTSCX_PORT_SPEED_FULL		0x00000000
 #define PORTSCX_PORT_SPEED_LOW			0x04000000
-#define PORTSCX_PORT_SPEED_HIGH			0x08000000
-#define PORTSCX_PORT_SPEED_MASK			0x0C000000
+#define PORTSCX_PORT_SPEED_HIGH		0x08000000
+#define PORTSCX_PORT_SPEED_MASK		0x0C000000
+
+/* bit 31-30 are port transceiver select */
+#define PORTSCX_PTS_UTMI			0x00000000
+#define PORTSCX_PTS_ULPI			0x80000000
+#define PORTSCX_PTS_FSLS			0xC0000000
+
+/* Endpoint Setup Status bit masks */
+#define EP_SETUP_STATUS_MASK			0x0000FFFF
 
 /* USB MODE Register Bit Masks */
 #define USBMODE_CTRL_MODE_IDLE			0x00000000
@@ -124,6 +138,7 @@
 #define USBINTR_INT_EN                          (0x00000001)
 #define USBINTR_ERR_INT_EN                      (0x00000002)
 #define USBINTR_PORT_CHANGE_DETECT_EN           (0x00000004)
+#define USBINTR_SYS_ERR_EN                      (0x00000010)
 
 #define USBINTR_ASYNC_ADV_AAE                   (0x00000020)
 #define USBINTR_ASYNC_ADV_AAE_ENABLE            (0x00000020)
@@ -173,6 +188,36 @@ struct mv_op_regs {
 	u32	isr;		/* Interrupt Status */
 	u32	ier;		/* Interrupt Enable */
 };
+
+#ifdef CONFIG_USB_GADGET_DEBUG_FILES
+struct mv_udc_int_stats {
+	u32 total;
+	u32 err;
+	u32 reset;
+	u32 port_change;
+	u32 suspend;
+	u32 tr_complete;
+};
+
+struct mv_udc_stats {
+	struct mv_udc_int_stats interrupts;
+};
+
+struct mv_ep_int_stats {
+	u32 setup;
+	u32 complete;
+};
+
+struct mv_ep_stats {
+	struct mv_ep_int_stats interrupts;
+	u32 enable;
+	u32 disable;
+	u32 flush;
+	u32 queue;
+	u32 dequeue;
+	u32 prime;
+};
+#endif
 
 struct mv_udc {
 	struct usb_gadget		gadget;
@@ -243,6 +288,10 @@ struct mv_udc {
 
 	/* power supply used to detect charger type */
 	struct power_supply udc_psy;
+
+#ifdef CONFIG_USB_GADGET_DEBUG_FILES
+	struct mv_udc_stats stats;
+#endif
 };
 
 /* endpoint data structure */
@@ -257,6 +306,9 @@ struct mv_ep {
 				wedge:1,
 				ep_type:2,
 				ep_num:8;
+#ifdef CONFIG_USB_GADGET_DEBUG_FILES
+	struct mv_ep_stats	stats;
+#endif
 };
 
 /* request data structure */
@@ -329,5 +381,8 @@ struct mv_dtd {
 	dma_addr_t td_dma;		/* dma address for this td */
 	struct mv_dtd *next_dtd_virt;
 };
+
+#define ep_index(EP)		((EP)->ep.desc->bEndpointAddress & 0xF)
+#define ep_maxpacket(EP)	((EP)->ep.maxpacket)
 
 #endif
