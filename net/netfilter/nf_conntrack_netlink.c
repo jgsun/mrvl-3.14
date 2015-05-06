@@ -1146,6 +1146,71 @@ out:
 	return err == -EAGAIN ? -ENOBUFS : err;
 }
 
+struct nf_conn *
+__get_conntrack_from_nlmsg(struct sk_buff *skb,
+	struct nlmsghdr *nlh)
+{
+	struct net *net = sock_net(skb->sk);
+	int min_len;
+	struct nlattr *cda[CTA_MAX + 1];
+	struct nlattr *attr;
+	int attrlen;
+	struct nf_conntrack_tuple_hash *h;
+	struct nf_conntrack_tuple tuple;
+	struct nf_conn *ct;
+	struct nfgenmsg *nfmsg = nlmsg_data(nlh);
+	u_int8_t u3 = nfmsg->nfgen_family;
+	u16 zone;
+	int err;
+
+	/* All the messages must at least contain nfgenmsg */
+	if (nlmsg_len(nlh) < sizeof(struct nfgenmsg))
+		return NULL;
+
+	min_len = nlmsg_total_size(sizeof(struct nfgenmsg));
+	attr = (void *)nlh + min_len;
+	attrlen = nlh->nlmsg_len - min_len;
+
+	err = nla_parse(cda, CTA_MAX,
+		attr, attrlen, ct_nla_policy);
+	if (err < 0)
+		return NULL;
+
+	err = ctnetlink_parse_zone(cda[CTA_ZONE], &zone);
+	if (err < 0)
+		return NULL;
+
+	if (cda[CTA_TUPLE_ORIG])
+		err = ctnetlink_parse_tuple((const struct nlattr * const *)cda,
+			&tuple, CTA_TUPLE_ORIG, u3);
+	else if (cda[CTA_TUPLE_REPLY])
+		err = ctnetlink_parse_tuple((const struct nlattr * const *)cda,
+			&tuple, CTA_TUPLE_REPLY, u3);
+	else
+		return NULL;
+
+	if (err < 0)
+		return NULL;
+
+	h = nf_conntrack_find_get(net, zone, &tuple);
+	if (!h)
+		return NULL;
+
+	ct = nf_ct_tuplehash_to_ctrack(h);
+
+	if (cda[CTA_ID]) {
+		u_int32_t id = ntohl(nla_get_be32(cda[CTA_ID]));
+		if (id != (u32)(unsigned long)ct) {
+			nf_ct_put(ct);
+			return NULL;
+		}
+	}
+	nf_ct_put(ct);
+
+	return ct;
+}
+EXPORT_SYMBOL(__get_conntrack_from_nlmsg);
+
 static int ctnetlink_done_list(struct netlink_callback *cb)
 {
 	if (cb->args[1])
@@ -2668,6 +2733,65 @@ out:
 	/* this avoids a loop in nfnetlink. */
 	return err == -EAGAIN ? -ENOBUFS : err;
 }
+
+struct nf_conntrack_expect *
+__get_expect_from_nlmsg(struct sk_buff *skb,
+	struct nlmsghdr *nlh)
+{
+	struct net *net = sock_net(skb->sk);
+	int min_len;
+	struct nlattr *cda[CTA_EXPECT_MAX + 1];
+	struct nlattr *attr;
+	int attrlen;
+	struct nf_conntrack_tuple tuple;
+	struct nf_conntrack_expect *exp;
+	struct nfgenmsg *nfmsg = nlmsg_data(nlh);
+	u_int8_t u3 = nfmsg->nfgen_family;
+	u16 zone;
+	int err;
+
+	/* All the messages must at least contain nfgenmsg */
+	if (nlmsg_len(nlh) < sizeof(struct nfgenmsg))
+		return NULL;
+
+	min_len = nlmsg_total_size(sizeof(struct nfgenmsg));
+	attr = (void *)nlh + min_len;
+	attrlen = nlh->nlmsg_len - min_len;
+
+	err = nla_parse(cda, CTA_EXPECT_MAX,
+		attr, attrlen, exp_nla_policy);
+	if (err < 0)
+		return NULL;
+
+	err = ctnetlink_parse_zone(cda[CTA_EXPECT_ZONE], &zone);
+	if (err < 0)
+		return NULL;
+
+	if (cda[CTA_EXPECT_TUPLE])
+		err = ctnetlink_parse_tuple((const struct nlattr * const *)cda,
+			&tuple, CTA_EXPECT_TUPLE, u3);
+	else if (cda[CTA_EXPECT_MASTER])
+		err = ctnetlink_parse_tuple((const struct nlattr * const *)cda,
+			&tuple, CTA_EXPECT_MASTER, u3);
+	else
+		return NULL;
+
+	if (err < 0)
+		return NULL;
+
+	exp = __nf_ct_expect_find(net, zone, &tuple);
+	if (!exp)
+		return NULL;
+
+	if (cda[CTA_EXPECT_ID]) {
+		__be32 id = nla_get_be32(cda[CTA_EXPECT_ID]);
+		if (ntohl(id) != (u32)(unsigned long)exp)
+			return NULL;
+	}
+
+	return exp;
+}
+EXPORT_SYMBOL(__get_expect_from_nlmsg);
 
 static int
 ctnetlink_del_expect(struct sock *ctnl, struct sk_buff *skb,
