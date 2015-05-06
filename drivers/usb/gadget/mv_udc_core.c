@@ -77,6 +77,15 @@ static void mv_udc_disable(struct mv_udc *udc);
 static void nuke(struct mv_ep *ep, int status);
 static void stop_activity(struct mv_udc *udc, struct usb_gadget_driver *driver);
 static void call_charger_notifier(struct mv_udc *udc);
+static void irq_process_tr_complete(struct mv_udc *udc, u32 type);
+static void ep_dtd_set_ioc(struct mv_udc *udc, u32 ep_num);
+
+#define set_ioc_safe(dtd) \
+do { \
+	volatile u8 *tmp = (volatile u8 *)(&dtd->size_ioc_sts); \
+	tmp += 1; \
+	*tmp |= (DTD_IOC >> 8); \
+} while (0)
 
 static enum power_supply_type map_charger_type(unsigned int type)
 {
@@ -103,6 +112,479 @@ static const struct usb_endpoint_descriptor mv_ep0_desc = {
 	.bmAttributes =		USB_ENDPOINT_XFER_CONTROL,
 	.wMaxPacketSize =	EP0_MAX_PKT_SIZE,
 };
+
+/* Rx interrupt optimization */
+static int rx_opt_timer_init(struct mv_udc *udc, u8 timer, u32 msec, int repeat)
+{
+	u32 val, ctrl;
+
+	if (timer > 1)
+		return -EINVAL;
+
+	val = ((1000 * msec) - 1) & VUSBHS_GPTIMER_CTRL_GPTLD_MASK;
+	ctrl = (repeat ? VUSBHS_GPTIMER_CTRL_GPTMODE : 0);
+
+	if (timer == 0) {
+		writel(cpu_to_le32(val), &udc->timer_regs->gptimer0ld);
+		writel(cpu_to_le32(ctrl), &udc->timer_regs->gptimer0ctrl);
+	} else {
+		writel(cpu_to_le32(val), &udc->timer_regs->gptimer1ld);
+		writel(cpu_to_le32(ctrl), &udc->timer_regs->gptimer1ctrl);
+	}
+
+	udc->gptimer[timer].num = timer;
+	udc->gptimer[timer].msec = msec;
+	udc->gptimer[timer].repeat = repeat;
+	udc->gptimer[timer].initialized = true;
+
+	return 0;
+}
+
+static int rx_opt_timer_start(struct mv_udc *udc, u8 timer)
+{
+	if (timer > 1)
+		return -EINVAL;
+
+	if (!udc->gptimer[timer].initialized)
+		return -EINVAL;
+
+	if (timer == 0)
+		writel(cpu_to_le32(
+			VUSBHS_GPTIMER_CTRL_GPTRUN | VUSBHS_GPTIMER_CTRL_GPTRST)
+			, &udc->timer_regs->gptimer0ctrl);
+	else
+		writel(cpu_to_le32(
+			VUSBHS_GPTIMER_CTRL_GPTRUN | VUSBHS_GPTIMER_CTRL_GPTRST)
+			, &udc->timer_regs->gptimer1ctrl);
+	return 0;
+}
+
+static int rx_opt_timer_stop(struct mv_udc *udc, u32 timer)
+{
+	u32 val;
+
+	if (timer > 1)
+		return -EINVAL;
+
+	if (!udc->gptimer[timer].initialized)
+		return -EINVAL;
+
+	if (timer == 0) {
+		val = readl(&udc->timer_regs->gptimer0ctrl) &
+			cpu_to_le32(~VUSBHS_GPTIMER_CTRL_GPTRUN);
+		writel(cpu_to_le32(val), &udc->timer_regs->gptimer0ctrl);
+	} else {
+		val = readl(&udc->timer_regs->gptimer1ctrl) &
+			cpu_to_le32(~VUSBHS_GPTIMER_CTRL_GPTRUN);
+		writel(cpu_to_le32(val), &udc->timer_regs->gptimer1ctrl);
+	}
+
+	return 0;
+}
+
+/* resets the rx_pkt_cnt for all EPs and starts a long timer */
+static inline int kick_long_timer(struct mv_udc *udc)
+{
+	memset(udc->rx_pkt_cnt, 0, sizeof(udc->rx_pkt_cnt));
+	return rx_opt_timer_start(udc, RX_LONG_TIMER_IDX);
+}
+
+static inline int stop_long_timer(struct mv_udc *udc)
+{
+	return rx_opt_timer_stop(udc, RX_LONG_TIMER_IDX);
+}
+
+static inline int kick_short_timer(struct mv_udc *udc)
+{
+	return rx_opt_timer_start(udc, RX_SHORT_TIMER_IDX);
+}
+
+static inline int stop_short_timer(struct mv_udc *udc)
+{
+	return rx_opt_timer_stop(udc, RX_SHORT_TIMER_IDX);
+}
+
+static void rx_opt_switch_state(struct mv_udc *udc, enum rx_opt_state_enum new)
+{
+	int i;
+	if (udc->rx_opt_state.cur != new) {
+		udc->rx_opt_state.cur = new;
+		udc->rx_opt_state.hits[new]++;
+
+		if (new == RX_OPT_DISABLE) {
+			for (i = 1; i < 16; i++) {
+				ep_dtd_set_ioc(udc, i);
+				udc->rx_no_int[i] = 0;
+			}
+			stop_short_timer(udc);
+			stop_long_timer(udc);
+			memset(udc->rx_opt_state.hits, 0,
+				sizeof(udc->rx_opt_state.hits));
+			irq_process_tr_complete(udc, 0);
+		}
+	}
+}
+
+static void rx_opt_process_long_timeout(struct mv_udc *udc)
+{
+	int i, flag = 0;
+	u32 pps_thr;
+	enum rx_opt_state_enum state;
+
+	pr_debug("process long timeout\n");
+
+	udc->rx_opt_stats[RX_LONG_TIMER_IDX].expired++;
+	state = udc->rx_opt_state.cur;
+
+	switch (state) {
+	case RX_OPT_DISABLE:
+	case RX_OPT_IDLE:
+		pr_err("state is %d and long timer expired\n", state);
+		break;
+	case RX_OPT_ANALYZE:
+	case RX_OPT_ENABLE:
+		pps_thr = (state == RX_OPT_ANALYZE) ?
+			udc->rx_opt_conf.pps_high : udc->rx_opt_conf.pps_low;
+		for (i = 1; i < 16; i++) {
+			if (udc->rx_pkt_cnt[i] > pps_thr *
+			    udc->rx_opt_conf.long_timeout_sec) {
+				udc->rx_no_int[i] = 1;
+				flag = 1;
+			} else {
+				if (state == RX_OPT_ENABLE && udc->rx_no_int[i])
+					ep_dtd_set_ioc(udc, i);
+				udc->rx_no_int[i] = 0;
+			}
+		}
+
+		if (flag) {
+			rx_opt_switch_state(udc, RX_OPT_ENABLE);
+			kick_short_timer(udc);
+			kick_long_timer(udc);
+		} else {
+			rx_opt_switch_state(udc, RX_OPT_IDLE);
+			stop_short_timer(udc);
+			stop_long_timer(udc);
+		}
+		break;
+	default:
+		pr_err("Unknown state\n");
+		BUG();
+		break;
+	}
+}
+
+static void rx_opt_process_short_timeout(struct mv_udc *udc)
+{
+	pr_debug("process short timeout\n");
+	udc->rx_opt_stats[RX_SHORT_TIMER_IDX].expired++;
+	kick_short_timer(udc);
+}
+
+static u8 mv_udc_rx_opt_init(struct mv_udc *udc)
+{
+	int ret;
+
+	udc->rx_opt_conf.pps_high = DEFAULT_PPS_HIGH_THR;
+	udc->rx_opt_conf.pps_low = DEFAULT_PPS_LOW_THR;
+	udc->rx_opt_conf.short_timeout_msec = DEFAULT_SHORT_TIMEOUT_MSEC;
+	udc->rx_opt_conf.long_timeout_sec = DEFAULT_LONG_TIMEOUT_SEC;
+
+#ifdef CONFIG_USB_MV_UDC_RX_INT_OPT
+	udc->rx_opt_state.cur = RX_OPT_IDLE;
+#else
+	udc->rx_opt_state.cur = RX_OPT_DISABLE;
+#endif
+
+	/* set timer0 to 2msec one shot */
+	ret = rx_opt_timer_init(udc, RX_SHORT_TIMER_IDX,
+		udc->rx_opt_conf.short_timeout_msec, false);
+	if (ret) {
+		pr_err("rx_opt_timer_init: USB gptimer%d init failed, ret=%d\n",
+			RX_SHORT_TIMER_IDX, ret);
+		goto err;
+	}
+
+	/* set timer1 to 2 sec one shot */
+	ret = rx_opt_timer_init(udc, RX_LONG_TIMER_IDX,
+		udc->rx_opt_conf.long_timeout_sec * 1000, false);
+	if (ret) {
+		pr_err("rx_opt_timer_init: USB gptimer%d init failed, ret=%d\n",
+			RX_LONG_TIMER_IDX, ret);
+		goto stop_st;
+	}
+	return 0;
+
+stop_st:
+	rx_opt_timer_stop(udc, RX_SHORT_TIMER_IDX);
+err:
+	return ret;
+}
+
+static void mv_udc_rx_opt_exit(struct mv_udc *udc)
+{
+	rx_opt_timer_stop(udc, RX_SHORT_TIMER_IDX);
+	rx_opt_timer_stop(udc, RX_LONG_TIMER_IDX);
+}
+
+/* Rx interrupt optimization sysfs */
+#ifdef CONFIG_USB_MV_UDC_RX_INT_OPT_SYS_FS
+
+/*
+ * Spinlock for accessing shared resources which are normally accessed from
+ * interrupt context from sysfs (thread context)
+ */
+static DEFINE_SPINLOCK(rx_opt_lock);
+
+static struct rx_opt_config rx_opt_get_config(struct mv_udc *udc)
+{
+	return udc->rx_opt_conf;
+}
+
+static void rx_opt_set_config(struct rx_opt_config *cfg, struct mv_udc *udc)
+{
+	/* only allowed in disabled mode */
+	if (udc->rx_opt_state.cur == RX_OPT_DISABLE) {
+		BUG_ON(!cfg);
+		udc->rx_opt_conf = *cfg;
+		rx_opt_timer_init(udc, RX_SHORT_TIMER_IDX,
+			cfg->short_timeout_msec, false);
+		rx_opt_timer_init(udc, RX_LONG_TIMER_IDX,
+			cfg->long_timeout_sec * 1000, false);
+	} else
+		pr_err("trying to change config not in DISABLE state\n");
+}
+
+static void rx_opt_get_pkt_cnt(struct mv_udc *udc, unsigned int *rx_pkt_cnt)
+{
+	BUG_ON(!rx_pkt_cnt);
+	memcpy(rx_pkt_cnt, udc->rx_pkt_cnt, sizeof(udc->rx_pkt_cnt));
+}
+
+static void rx_opt_get_no_int(struct mv_udc *udc, unsigned int *rx_no_int)
+{
+	BUG_ON(!rx_no_int);
+	memcpy(rx_no_int, udc->rx_no_int, sizeof(udc->rx_no_int));
+}
+
+static struct rx_opt_state rx_opt_get_state(void)
+{
+	struct mv_udc *udc = the_controller;
+	return udc->rx_opt_state;
+}
+
+static struct rx_opt_timer_stats rx_opt_get_timer_stats(int timer)
+{
+	struct mv_udc *udc = the_controller;
+	return udc->rx_opt_stats[timer];
+}
+
+static void rx_opt_reset_timer_stats(int timer)
+{
+	struct mv_udc *udc = the_controller;
+
+	memset(&udc->rx_opt_stats[timer], 0,
+		sizeof(struct rx_opt_timer_stats));
+}
+
+static ssize_t rx_opt_show_state(struct device *dev,
+				  struct device_attribute *attr, char *buf)
+{
+	int len, i;
+	struct rx_opt_state state;
+	unsigned long flags;
+	static char *rx_int_state_to_str[] = {"DISABLE", "IDLE", "ANALYZE",
+						"ENABLE"};
+
+	spin_lock_irqsave(&rx_opt_lock, flags);
+	state = rx_opt_get_state();
+	spin_unlock_irqrestore(&rx_opt_lock, flags);
+
+	len = sprintf(buf, "Current: %s\n", rx_int_state_to_str[state.cur]);
+	for (i = 0; i < RX_OPT_STATE_CNT; i++)
+		len += sprintf(buf + len, "%s hits: %d\n",
+				rx_int_state_to_str[i], state.hits[i]);
+	return len;
+}
+
+static ssize_t rx_opt_set_state(struct device *dev,
+				 struct device_attribute *attr,
+				 const char *buf, size_t size)
+{
+	unsigned long flags;
+	int enable;
+	struct rx_opt_state state;
+
+	if (sscanf(buf, "%d", &enable) != 1)
+		return -EINVAL;
+
+	spin_lock_irqsave(&rx_opt_lock, flags);
+	state = rx_opt_get_state();
+	spin_unlock_irqrestore(&rx_opt_lock, flags);
+
+	if (enable) {
+		if (state.cur == RX_OPT_DISABLE) {
+			spin_lock_irqsave(&rx_opt_lock, flags);
+			rx_opt_switch_state(the_controller, RX_OPT_IDLE);
+			spin_unlock_irqrestore(&rx_opt_lock, flags);
+		}
+	} else {
+		spin_lock_irqsave(&rx_opt_lock, flags);
+		rx_opt_switch_state(the_controller, RX_OPT_DISABLE);
+		spin_unlock_irqrestore(&rx_opt_lock, flags);
+	}
+	return size;
+}
+
+static ssize_t rx_opt_show_timer_stats(struct device *dev,
+					struct device_attribute *attr, char *buf)
+{
+	int len;
+	unsigned long flags;
+	struct rx_opt_timer_stats short_stats, long_stats;
+
+	spin_lock_irqsave(&rx_opt_lock, flags);
+	short_stats = rx_opt_get_timer_stats(RX_SHORT_TIMER_IDX);
+	long_stats = rx_opt_get_timer_stats(RX_LONG_TIMER_IDX);
+	spin_unlock_irqrestore(&rx_opt_lock, flags);
+
+	len = sprintf(buf, "short timer stats:\n");
+	len += sprintf(buf + len, "expired = %d\n", short_stats.expired);
+	len += sprintf(buf + len, "long timer stats:\n");
+	len += sprintf(buf + len, "expired = %d\n", long_stats.expired);
+
+	return len;
+}
+
+static ssize_t rx_opt_clear_timer_stats(struct device *dev,
+					 struct device_attribute *attr,
+					 const char *buf, size_t size)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&rx_opt_lock, flags);
+	rx_opt_reset_timer_stats(RX_LONG_TIMER_IDX);
+	rx_opt_reset_timer_stats(RX_SHORT_TIMER_IDX);
+	spin_unlock_irqrestore(&rx_opt_lock, flags);
+
+	return size;
+}
+
+static ssize_t rx_opt_show_ep_status(struct device *dev,
+				      struct device_attribute *attr, char *buf)
+{
+	struct mv_udc *udc = the_controller;
+	unsigned int rx_pkt_cnt[16];
+	unsigned int rx_no_int[16];
+	int len, i;
+	unsigned long flags;
+
+	spin_lock_irqsave(&rx_opt_lock, flags);
+	rx_opt_get_pkt_cnt(udc, rx_pkt_cnt);
+	rx_opt_get_no_int(udc, rx_no_int);
+	spin_unlock_irqrestore(&rx_opt_lock, flags);
+
+	len = sprintf(buf, "Endpoints rx optimization status\n");
+	len += sprintf(buf+len, "endpoint  rx_pkt_cnt  rx_no_int\n");
+	for (i = 0; i < 16; i++)
+		len += sprintf(buf+len, "EP%2d%11d%11d\n", i, rx_pkt_cnt[i],
+			       rx_no_int[i]);
+
+	return len;
+}
+
+static ssize_t rx_opt_show_config(struct device *dev,
+				   struct device_attribute *attr, char *buf)
+{
+	int len;
+
+	struct rx_opt_config cfg = rx_opt_get_config(the_controller);
+
+	len = sprintf(buf, "Configuration\n");
+	len += sprintf(buf + len, "PPS_HIGH = %d, PPS_LOW = %d\n"
+		       "LONG TIMEOUT = %d[sec], SHORT_TIMEOUT = %d[msec]\n",
+		       cfg.pps_high, cfg.pps_low, cfg.long_timeout_sec,
+		       cfg.short_timeout_msec);
+
+	return len;
+}
+
+static ssize_t rx_opt_set_short_timeout(struct device *dev,
+					 struct device_attribute *attr,
+					 const char *buf, size_t size)
+{
+	struct rx_opt_config cfg = rx_opt_get_config(the_controller);
+
+	if (sscanf(buf, "%d", &cfg.short_timeout_msec) != 1)
+		return -EINVAL;
+
+	cfg.pps_low = 1000 / cfg.short_timeout_msec;
+	cfg.pps_high = cfg.pps_low + 100;
+	rx_opt_set_config(&cfg, the_controller);
+
+	return size;
+}
+
+static ssize_t rx_opt_set_long_timeout(struct device *dev,
+					struct device_attribute *attr,
+					const char *buf, size_t size)
+{
+	struct rx_opt_config cfg = rx_opt_get_config(the_controller);
+
+	if (sscanf(buf, "%d", &cfg.long_timeout_sec) != 1)
+		return -EINVAL;
+
+	rx_opt_set_config(&cfg, the_controller);
+
+	return size;
+}
+
+static DEVICE_ATTR(state, S_IRUGO|S_IWUSR, rx_opt_show_state, rx_opt_set_state);
+static DEVICE_ATTR(gptimers, S_IRUGO|S_IWUSR, rx_opt_show_timer_stats,
+		    rx_opt_clear_timer_stats);
+static DEVICE_ATTR(ep_status, S_IRUGO, rx_opt_show_ep_status, NULL);
+static DEVICE_ATTR(config, S_IRUGO, rx_opt_show_config, NULL);
+static DEVICE_ATTR(short_timeout_msec, S_IWUSR, NULL, rx_opt_set_short_timeout);
+static DEVICE_ATTR(long_timeout_sec, S_IWUSR, NULL, rx_opt_set_long_timeout);
+
+static struct attribute *mv_udc_attrs[] = {
+	&dev_attr_state.attr,
+	&dev_attr_gptimers.attr,
+	&dev_attr_ep_status.attr,
+	&dev_attr_config.attr,
+	&dev_attr_short_timeout_msec.attr,
+	&dev_attr_long_timeout_sec.attr,
+	NULL,
+};
+
+struct attribute_group mv_udc_attr_group = {
+	.attrs = mv_udc_attrs,
+};
+
+#endif
+/* end Rx interrupt optimization */
+
+/*
+ * Set IOC for all pending dTDs - called from interrupt context or
+ * interrupts disabled !
+ */
+static void ep_dtd_set_ioc(struct mv_udc *udc, u32 ep_num)
+{
+	u32 i;
+	struct mv_ep	*curr_ep;
+	struct mv_req *curr_req, *temp_req;
+	struct mv_dtd	*curr_dtd;
+
+	curr_ep = &udc->eps[ep_num * 2];
+
+	/* mark the last dtd in each request as ioc */
+	list_for_each_entry_safe(curr_req, temp_req, &curr_ep->queue, queue) {
+		curr_dtd = curr_req->head;
+		for (i = 0; i < curr_req->dtd_count - 1; i++)
+			curr_dtd = curr_dtd->next_dtd_virt;
+		set_ioc_safe(curr_dtd);
+	}
+}
 
 static const char *charger_type(unsigned int type)
 {
@@ -217,6 +699,9 @@ static int process_ep_req(struct mv_udc *udc, int index,
 				(curr_dtd->size_ioc_sts	& DTD_PACKET_SIZE)
 					>> DTD_LENGTH_BIT_POS;
 			actual -= remaining_length;
+
+			if (direction == EP_DIR_OUT)
+				udc->rx_pkt_cnt[curr_req->ep->ep_num]++;
 
 			if (remaining_length) {
 				if (direction) {
@@ -506,6 +991,9 @@ static struct mv_dtd *build_dtd(struct mv_req *req, unsigned *length,
 
 	/* Enable interrupt for the last dtd of a request */
 	if (*is_last && !req->req.no_interrupt)
+		temp |= DTD_IOC;
+	else if (ep_dir(req->ep) == EP_DIR_OUT && *is_last &&
+		   !udc->rx_no_int[req->ep->ep_num])
 		temp |= DTD_IOC;
 
 	temp |= mult << 10;
@@ -1164,7 +1652,8 @@ static void udc_stop(struct mv_udc *udc)
 	tmp = readl(&udc->op_regs->usbintr);
 	tmp &= ~(USBINTR_INT_EN | USBINTR_ERR_INT_EN |
 		USBINTR_PORT_CHANGE_DETECT_EN |
-		USBINTR_RESET_EN | USBINTR_DEVICE_SUSPEND);
+		USBINTR_RESET_EN | USBINTR_DEVICE_SUSPEND |
+		USBINTR_GPTIMER0_EN | USBINTR_GPTIMER1_EN);
 	writel(tmp, &udc->op_regs->usbintr);
 
 	udc->stopped = 1;
@@ -1181,7 +1670,8 @@ static void udc_start(struct mv_udc *udc)
 
 	usbintr = USBINTR_INT_EN | USBINTR_ERR_INT_EN
 		| USBINTR_PORT_CHANGE_DETECT_EN
-		| USBINTR_RESET_EN | USBINTR_DEVICE_SUSPEND;
+		| USBINTR_RESET_EN | USBINTR_DEVICE_SUSPEND
+		| USBINTR_GPTIMER0_EN | USBINTR_GPTIMER1_EN;
 	/* Enable interrupts */
 	writel(usbintr, &udc->op_regs->usbintr);
 
@@ -2123,7 +2613,7 @@ static void get_setup_data(struct mv_udc *udc, u8 ep_num, u8 *buffer_ptr)
 	writel(temp & ~USBCMD_SETUP_TRIPWIRE_SET, &udc->op_regs->usbcmd);
 }
 
-static void irq_process_tr_complete(struct mv_udc *udc)
+static void irq_process_tr_complete(struct mv_udc *udc, u32 type)
 {
 	u32 tmp, bit_pos;
 	int i, ep_num = 0, direction = 0;
@@ -2132,8 +2622,12 @@ static void irq_process_tr_complete(struct mv_udc *udc)
 	int status;
 
 #ifdef CONFIG_USB_GADGET_DEBUG_FILES
-	udc->stats.interrupts.tr_complete++;
+	if (type == USBSTS_INT)
+		udc->stats.interrupts.tr_complete++;
+	else
+		udc->stats.interrupts.tr_complete_fake++;
 #endif
+
 	/*
 	 * We use separate loops for ENDPTSETUPSTAT and ENDPTCOMPLETE
 	 * because the setup packets are to be read ASAP
@@ -2158,6 +2652,14 @@ static void irq_process_tr_complete(struct mv_udc *udc)
 
 	if (!udc->active)
 		return;
+
+	if (type == USBSTS_INT) {
+		if (udc->rx_opt_state.cur == RX_OPT_IDLE) {
+			kick_long_timer(udc);
+			rx_opt_switch_state(udc, RX_OPT_ANALYZE);
+		} else if (udc->rx_opt_state.cur == RX_OPT_ENABLE)
+			kick_short_timer(udc);
+	}
 
 	/* Don't clear the endpoint setup status register here.
 	 * It is cleared as a setup packet is read out of the buffer
@@ -2407,7 +2909,17 @@ static irqreturn_t mv_udc_irq(int irq, void *dev)
 		irq_process_suspend(udc);
 
 	if (status & USBSTS_INT)
-		irq_process_tr_complete(udc);
+		irq_process_tr_complete(udc, USBSTS_INT);
+
+	if (status & USBSTS_IT0) {
+		rx_opt_process_short_timeout(udc);
+		irq_process_tr_complete(udc, USBSTS_IT0);
+	}
+
+	if (status & USBSTS_IT1) {
+		rx_opt_process_long_timeout(udc);
+		irq_process_tr_complete(udc, USBSTS_IT1);
+	}
 
 	spin_unlock(&udc->lock);
 
@@ -2571,14 +3083,17 @@ static int mv_proc_read(struct seq_file *m, void *v)
 			"Reset Enable: %d\n"
 			"System Error Enable: %d "
 			"Port Change Detected Enable: %d\n"
-			"USB Error Intr Enable: %d USB Intr Enable: %d\n\n",
+			"USB Error Intr Enable: %d USB Intr Enable: %d"
+			"gptimer 0 enable: %d gptimer 1 enable: %d\n\n",
 			(tmp_reg & USBINTR_DEVICE_SUSPEND) ? 1 : 0,
 			(tmp_reg & USBINTR_SOF_UFRAME_EN) ? 1 : 0,
 			(tmp_reg & USBINTR_RESET_EN) ? 1 : 0,
 			(tmp_reg & USBINTR_SYS_ERR_EN) ? 1 : 0,
 			(tmp_reg & USBINTR_PORT_CHANGE_DETECT_EN) ? 1 : 0,
 			(tmp_reg & USBINTR_ERR_INT_EN) ? 1 : 0,
-			(tmp_reg & USBINTR_INT_EN) ? 1 : 0);
+			(tmp_reg & USBINTR_INT_EN) ? 1 : 0,
+			(tmp_reg & USBINTR_GPTIMER0_EN) ? 1 : 0,
+			(tmp_reg & USBINTR_GPTIMER1_EN) ? 1 : 0);
 
 	tmp_reg = readl(&udc->op_regs->frindex);
 	seq_printf(m,
@@ -2802,6 +3317,12 @@ static int mv_udc_remove(struct platform_device *pdev)
 
 	remove_proc_file();
 
+#ifdef CONFIG_USB_MV_UDC_RX_INT_OPT_SYS_FS
+	sysfs_remove_group(&udc->gadget.dev.kobj, &mv_udc_attr_group);
+#endif
+
+	mv_udc_rx_opt_exit(udc);
+
 	/* free memory allocated in probe */
 	if (udc->dtd_pool)
 		dma_pool_destroy(udc->dtd_pool);
@@ -2977,6 +3498,8 @@ static int mv_udc_probe(struct platform_device *pdev)
 	const __be32 *prop;
 	unsigned int proplen;
 
+	unsigned char *regbase;
+
 	pdata = devm_kzalloc(&pdev->dev, sizeof(*pdata), GFP_KERNEL);
 	if (pdata == NULL) {
 		dev_err(&pdev->dev, "failed to allocate memory for platform_data\n");
@@ -3016,12 +3539,18 @@ static int mv_udc_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
-	udc->cap_regs = (struct mv_cap_regs __iomem *)
+	regbase = (unsigned char *)
 		devm_ioremap(&pdev->dev, r->start, resource_size(r));
-	if (udc->cap_regs == NULL) {
+	if (regbase == NULL) {
 		dev_err(&pdev->dev, "failed to map I/O memory\n");
 		return -EBUSY;
 	}
+
+	udc->timer_regs = (struct mv_timer_regs __iomem *)
+		((unsigned long)regbase + USB_GPTIMER_REG_OFFSET);
+
+	udc->cap_regs = (struct mv_cap_regs __iomem *)
+		((unsigned long)regbase + USB_CAP_REG_OFFSET);
 
 	udc->phy = devm_usb_get_phy_dev(&pdev->dev, MV_USB2_PHY_INDEX);
 	if (IS_ERR_OR_NULL(udc->phy))
@@ -3190,12 +3719,31 @@ static int mv_udc_probe(struct platform_device *pdev)
 	pm_qos_add_request(&udc->qos_idle, PM_QOS_CPUIDLE_BLOCK,
 			PM_QOS_CPUIDLE_BLOCK_DEFAULT_VALUE);
 
+	retval = mv_udc_rx_opt_init(udc);
+	if (retval) {
+		pr_err("rx interrutp optimization failed\n");
+		goto err_create_workqueue;
+
+	}
+
+#ifdef CONFIG_USB_MV_UDC_RX_INT_OPT_SYS_FS
+	retval = sysfs_create_group(&udc->gadget.dev.kobj, &mv_udc_attr_group);
+	if (retval) {
+		pr_err("mv_udc: sysfs_create_group failed\n");
+		goto err_rx_opt_exit;
+	}
+#endif
+
 	dev_info(&pdev->dev, "successful probe UDC device %s clock gating.\n",
 		udc->clock_gating ? "with" : "without");
 
 	create_proc_file();
 	return 0;
 
+#ifdef CONFIG_USB_MV_UDC_RX_INT_OPT_SYS_FS
+err_rx_opt_exit:
+	mv_udc_rx_opt_exit(udc);
+#endif
 err_create_workqueue:
 	mv_udc_psy_unregister(udc);
 

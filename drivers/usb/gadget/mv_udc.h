@@ -36,6 +36,9 @@
 
 #define HCSPARAMS_PPC		(0x10)
 
+#define USB_CAP_REG_OFFSET	(0x100)
+#define USB_GPTIMER_REG_OFFSET	(0x80)
+
 /* Frame Index Register Bit Masks */
 #define USB_FRINDEX_MASKS	0x3fff
 
@@ -132,6 +135,8 @@
 #define USBSTS_RCL			0x00002000
 #define USBSTS_PERIODIC_SCHEDULE	0x00004000
 #define USBSTS_ASYNC_SCHEDULE		0x00008000
+#define USBSTS_IT0			0x01000000
+#define USBSTS_IT1			0x02000000
 
 
 /* Interrupt Enable Register Bit Masks */
@@ -148,8 +153,67 @@
 #define USBINTR_SOF_UFRAME_EN                   (0x00000080)
 #define USBINTR_DEVICE_SUSPEND                  (0x00000100)
 
+#define USBINTR_GPTIMER0_EN                     (0x01000000)
+#define USBINTR_GPTIMER1_EN                     (0x02000000)
+
 #define USB_DEVICE_ADDRESS_MASK			(0xfe000000)
 #define USB_DEVICE_ADDRESS_BIT_SHIFT		(25)
+
+/* General Purpose Timers bit masks */
+#define VUSBHS_GPTIMER_CTRL_GPTRUN                 (0x80000000)
+#define VUSBHS_GPTIMER_CTRL_GPTRST                 (0x40000000)
+#define VUSBHS_GPTIMER_CTRL_GPTMODE                (0x01000000)
+#define VUSBHS_GPTIMER_CTRL_GPTCNT_MASK            (0x00FFFFFF)
+#define VUSBHS_GPTIMER_CTRL_GPTLD_MASK             (0x00FFFFFF)
+
+/* Rx Reduce interrupts optimization*/
+#define DEFAULT_SHORT_TIMEOUT_MSEC		(2)
+#define DEFAULT_LONG_TIMEOUT_SEC		(2)
+#define DEFAULT_PPS_LOW_THR			(1000 / DEFAULT_SHORT_TIMEOUT_MSEC)
+#define DEFAULT_PPS_HIGH_THR			(DEFAULT_PPS_LOW_THR + 100)
+
+#define RX_SHORT_TIMER_IDX			(0)
+#define RX_LONG_TIMER_IDX			(1)
+
+enum rx_opt_state_enum {
+
+	RX_OPT_DISABLE,	/* Optimization disabled */
+	RX_OPT_IDLE,	/* No traffic */
+	RX_OPT_ANALYZE,	/* Analyze traffic before enabling optimization*/
+	RX_OPT_ENABLE,	/* Optimization enabled (for at least one EP) */
+	RX_OPT_STATE_CNT
+};
+
+struct rx_opt_state {
+	enum rx_opt_state_enum	cur;
+	u32	hits[RX_OPT_STATE_CNT];
+};
+
+struct rx_opt_timer_stats {
+	u32	expired;
+};
+
+struct rx_opt_config {
+	u32	pps_high;
+	u32	pps_low;
+	u32	short_timeout_msec;
+	u32	long_timeout_sec;
+};
+
+struct rx_opt_timer {
+	u8	num;
+	int	initialized;
+	int	repeat;
+	u32	msec;
+};
+
+struct mv_timer_regs {
+	u32	gptimer0ld;	/* timer 0 load register*/
+	u32	gptimer0ctrl;	/* timer 0 control register*/
+	u32	gptimer1ld;	/* timer 1 load register*/
+	u32	gptimer1ctrl;	/* timer 1 control register*/
+	u32	reserved1[1];
+};
 
 struct mv_cap_regs {
 	u32	caplength_hciversion;
@@ -197,6 +261,7 @@ struct mv_udc_int_stats {
 	u32 port_change;
 	u32 suspend;
 	u32 tr_complete;
+	u32 tr_complete_fake;
 };
 
 struct mv_udc_stats {
@@ -229,6 +294,17 @@ struct mv_udc {
 
 	struct mv_cap_regs __iomem	*cap_regs;
 	struct mv_op_regs __iomem	*op_regs;
+	struct mv_timer_regs __iomem	*timer_regs;
+
+	/* Counts the Rx packets - used by the LONG_TIMER to measure the PPS */
+	u32				rx_pkt_cnt[16];
+	/* Set when optimization is active */
+	u32				rx_no_int[16];
+	struct rx_opt_timer		gptimer[2];
+	struct rx_opt_timer_stats	rx_opt_stats[2];
+	struct rx_opt_state		rx_opt_state;
+	struct rx_opt_config		rx_opt_conf;
+
 	unsigned int			max_eps;
 	struct mv_dqh			*ep_dqh;
 	size_t				ep_dqh_size;

@@ -352,6 +352,28 @@ config USB_MV_U3D
 	  MARVELL PXA2128 Processor series include a super speed USB3.0 device
 	  controller, which support super speed USB peripheral.
 
+config USB_MV_UDC_RX_INT_OPT
+	boolean "USB gadget Rx interrupt optimization"
+	depends on USB_MV_UDC
+	default n
+	help
+	   This enables the USB rx interrupts optimization in the MV_UDC driver.
+	   the optimization switches the usb driver between two modes, interrupt
+	   mode for low throughput where the interrupt is requested from the
+	   controller for each RX request, and polling mode for high throughput
+	   where the driver polls the controlled each 2 ms for completed
+	   requests. this optimization improves the number of interrupts and
+	   cpu idle time.
+
+config USB_MV_UDC_RX_INT_OPT_SYS_FS
+	boolean "USB gadget Rx interrupt optimization sysfs"
+	depends on USB_MV_UDC_RX_INT_OPT
+	default n
+	help
+	   This enables the USB rx interrupts optimization sysfs files. This
+	   enables the control over the optimiztion parameters and viewing the
+	   optimization statistics.
+
 #
 # Controllers available in both integrated and discrete versions
 #

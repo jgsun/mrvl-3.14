@@ -272,6 +272,9 @@ rx_submit(struct eth_dev *dev, struct usb_request *req, gfp_t gfp_flags)
 	req->length = size;
 	req->context = skb;
 
+	/* Always active, handled in the low level driver*/
+	req->no_interrupt = 1;
+
 	retval = usb_ep_queue(out, req, gfp_flags);
 
 	spin_unlock_irqrestore(&dev->lock, flags);
