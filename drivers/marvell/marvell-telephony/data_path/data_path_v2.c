@@ -32,6 +32,7 @@
 #include <linux/llist.h>
 #include <linux/pxa9xx_acipc.h>
 #include <linux/compiler.h>
+#include <linux/static_key.h>
 #include "tel_trace.h"
 #include "debugfs.h"
 #include "pxa_cp_load.h"
@@ -104,6 +105,10 @@ struct data_path {
 	struct work_struct free_work;
 	struct llist_head free_list;
 
+	struct mutex rx_copy_lock;
+	struct static_key rx_copy;
+	bool copy_on_rx;
+
 	/* stat */
 	struct data_path_stat stat;
 };
@@ -111,6 +116,7 @@ struct data_path {
 struct free_entry {
 	struct llist_node llnode;
 	struct free_descriptor desc;
+	struct data_path *dp;
 };
 
 enum data_path_state {
@@ -259,22 +265,35 @@ pushback:
 	}
 }
 
-static inline void free_rx_memory(struct data_path *dp, void *p, size_t length)
+static inline struct free_entry *alloc_free_entry(struct data_path *dp,
+	void *p, size_t length, gfp_t priority)
 {
 	struct free_entry *entry;
 
-	entry = kmem_cache_alloc(dp->free_entry_cache, GFP_ATOMIC);
+	entry = kmem_cache_alloc(dp->free_entry_cache, priority);
 	if (unlikely(!entry)) {
 		pr_emerg_ratelimited(
 			"%s: cannot allocate memory, %p(%zu) is leaked\n",
 			__func__, p, length);
-			return;
+			return NULL;
 	}
+	entry->dp = dp;
 	entry->desc.buffer_offset = (u32)((unsigned long)p -
 		(unsigned long)dp->rbctl->rx_va);
 	entry->desc.length = (u16)length;
-	llist_add(&entry->llnode, &dp->free_list);
-	schedule_free(dp);
+
+	return entry;
+}
+
+static inline void free_rx_memory(struct data_path *dp, void *p, size_t length)
+{
+	struct free_entry *entry;
+
+	entry = alloc_free_entry(dp, p, length, GFP_ATOMIC);
+	if (likely(entry)) {
+		llist_add(&entry->llnode, &dp->free_list);
+		schedule_free(dp);
+	}
 }
 
 static void clean_free_list(struct data_path *dp)
@@ -291,13 +310,26 @@ static void clean_free_list(struct data_path *dp)
 	}
 }
 
+static void rx_free_cb(void *p)
+{
+	struct free_entry *entry = p;
+
+	/* flush the cache before scheduling free */
+	if (entry->dp->rbctl->rx_cacheable)
+		__shm_flush_dcache(entry->desc.buffer_offset +
+			entry->dp->rbctl->rx_va, entry->desc.length);
+
+	llist_add(&entry->llnode, &entry->dp->free_list);
+	schedule_free(entry->dp);
+}
+
 static inline int dp_data_rx(struct data_path *dp,
 	struct dl_descriptor *desc)
 {
 	struct psd_rbctl *rbctl = dp->rbctl;
 	unsigned char *p;
 	size_t total_length;
-	struct sk_buff *skb;
+	struct sk_buff *skb = NULL;
 	size_t headroom;
 
 	p = rbctl->rx_va + desc->buffer_offset;
@@ -309,23 +341,45 @@ static inline int dp_data_rx(struct data_path *dp,
 	dp->stat.rx_bytes += total_length;
 	dp->stat.rx_packets++;
 
-	headroom = psd_get_headroom(desc->cid);
-	skb = dev_alloc_skb(desc->packet_length + headroom);
-	if (likely(skb)) {
-		skb_reserve(skb, headroom);
-		memcpy(skb_put(skb, desc->packet_length),
-			p + desc->exhdr_length + desc->packet_offset,
-			desc->packet_length);
+	if (static_key_false(&data_path.rx_copy)) {
+		headroom = psd_get_headroom(desc->cid);
+		skb = dev_alloc_skb(desc->packet_length + headroom);
+		if (likely(skb)) {
+			skb_reserve(skb, headroom);
+			memcpy(skb_put(skb, desc->packet_length),
+				p + desc->exhdr_length + desc->packet_offset,
+				desc->packet_length);
 
-		/* push to upper layer */
-		psd_data_rx(desc->cid, skb);
+			/* push to upper layer */
+			psd_data_rx(desc->cid, skb);
+		} else {
+			pr_err_ratelimited(
+				"low mem, packet dropped\n");
+		}
+		/* free rx memory */
+		free_rx_memory(dp, p, total_length);
 	} else {
-		pr_err_ratelimited(
-			"low mem, packet dropped\n");
-	}
+		struct free_entry *entry;
 
-	/* free rx memory */
-	free_rx_memory(dp, p, total_length);
+		entry = alloc_free_entry(dp, p, total_length, GFP_ATOMIC);
+		if (likely(entry))
+			skb = alloc_skb_p(p, total_length, rx_free_cb,
+				entry, GFP_ATOMIC);
+
+		if (likely(skb)) {
+			skb_reserve(skb, desc->exhdr_length +
+				desc->packet_offset);
+			skb_put(skb, desc->packet_length);
+
+			/* push to upper layer */
+			psd_data_rx(desc->cid, skb);
+		} else {
+			pr_err_ratelimited(
+				"low mem, packet dropped\n");
+			/* free rx memory */
+			rx_free_cb(entry);
+		}
+	}
 
 	return 0;
 }
@@ -501,6 +555,57 @@ static int debugfs_show_stat(struct seq_file *s, void *data)
 
 TEL_DEBUG_ENTRY(stat);
 
+static ssize_t read_copy_on_rx(struct file *file, char __user *ubuf,
+	size_t count, loff_t *ppos)
+{
+	struct data_path *dp = file->private_data;
+	char buf[3];
+
+	if (dp->copy_on_rx)
+		buf[0] = 'Y';
+	else
+		buf[0] = 'N';
+	buf[1] = '\n';
+	buf[2] = 0x00;
+	return simple_read_from_buffer(ubuf, count, ppos, buf, 2);
+}
+
+static ssize_t write_copy_on_rx(struct file *file, const char __user *ubuf,
+	size_t count, loff_t *ppos)
+{
+	struct data_path *dp = file->private_data;
+
+	char buf[32];
+	size_t buf_size;
+	bool bv;
+
+	buf_size = min(count, (sizeof(buf)-1));
+	if (copy_from_user(buf, ubuf, buf_size))
+		return -EFAULT;
+
+	buf[buf_size] = '\0';
+	mutex_lock(&dp->rx_copy_lock);
+	if (strtobool(buf, &bv) == 0) {
+		if (bv != dp->copy_on_rx) {
+			if (bv)
+				static_key_slow_inc(&data_path.rx_copy);
+			else
+				static_key_slow_dec(&data_path.rx_copy);
+			dp->copy_on_rx = bv;
+		}
+	}
+	mutex_unlock(&dp->rx_copy_lock);
+
+	return count;
+}
+
+static const struct file_operations fops_copy_on_rx = {
+	.read =		read_copy_on_rx,
+	.write =	write_copy_on_rx,
+	.open =		simple_open,
+	.llseek =	default_llseek,
+};
+
 static int dp_debugfs_init(struct data_path *dp)
 {
 	dp->dentry = debugfs_create_dir(dp->name ? dp->name : "data_path",
@@ -516,6 +621,12 @@ static int dp_debugfs_init(struct data_path *dp)
 	if (IS_ERR_OR_NULL(debugfs_create_u32(
 				"max_pending_reclaim_req", S_IRUGO | S_IWUSR,
 				dp->dentry, &dp->max_pending_reclaim_req)))
+		goto error;
+
+	if (IS_ERR_OR_NULL(debugfs_create_file("copy_on_rx",
+				S_IRUGO | S_IWUSR,
+				dp->dentry, dp,
+				&fops_copy_on_rx)))
 		goto error;
 
 	return 0;
@@ -927,6 +1038,9 @@ static struct data_path data_path = {
 	.rbctl = &psd_rbctl,
 	.free_list = LLIST_HEAD_INIT(data_path.free_list),
 	.max_pending_reclaim_req = MAX_PENDING_RECLAIM_REQ,
+	.rx_copy_lock = __MUTEX_INITIALIZER(data_path.rx_copy_lock),
+	.rx_copy = STATIC_KEY_INIT_FALSE,
+	.copy_on_rx = false,
 };
 
 static struct psd_driver dp_drvier = {
