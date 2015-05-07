@@ -836,6 +836,12 @@
 				remap-smc-funcid = <0xd0002001>;
 				status = "disabled";
 			};
+
+			data-path {
+				compatible = "marvell,data-path";
+				version = <1>;
+				status = "disabled";
+			};
 		};
 	};
 

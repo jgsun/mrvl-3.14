@@ -1,0 +1,13 @@
+* PSD data path driver
+
+** data-path
+
+Required properties:
+- version: supported driver version
+- compatible: compatible name, must be "marvell,data-path"
+
+Example:
+data-path {
+	compatible = "marvell,data-path";
+	version = <1>;
+};
