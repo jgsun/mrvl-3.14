@@ -15,6 +15,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <linux/types.h>
 #include <linux/sched.h>
 #include <linux/device.h>
 #include <linux/pm_wakeup.h>
@@ -26,24 +27,86 @@
 #include <linux/ctype.h>
 #include <linux/ratelimit.h>
 #include <linux/pxa9xx_acipc.h>
-#include "shm_share.h"
+#include <linux/interrupt.h>
+#include <linux/skbuff.h>
 #include "shm.h"
-#include "msocket.h"
-#include "data_path.h"
 #include "tel_trace.h"
 #include "debugfs.h"
 #include "pxa_cp_load.h"
+#include "pxa_cp_load_ioctl.h"
+#include "data_path_common.h"
+#include "psdatastub.h"
+#include "skb_llist.h"
 
+#define DATA_ALIGN_SIZE 8
 
-static struct wakeup_source dp_rx_wakeup;
-static struct wakeup_source dp_acipc_wakeup;
+struct data_path_stat {
+	u32 rx_bytes;
+	u32 rx_packets; /* unused */
+	u32 rx_slots;
+	u32 rx_interrupts;
+	u32 rx_used_bytes;
+	u32 rx_free_bytes;
+	u32 rx_sched_cnt;
+	u32 rx_resched_cnt;
 
-static struct data_path data_path = {
-	.name = "psd",
+	u32 tx_bytes;
+	u32 tx_packets[PSD_QUEUE_CNT];
+	u64 tx_packets_delay[PSD_QUEUE_CNT];
+	u32 tx_q_bytes;
+	u32 tx_q_packets[PSD_QUEUE_CNT];
+	u32 tx_slots;
+	u32 tx_interrupts;
+	u32 tx_used_bytes;
+	u32 tx_free_bytes;
+	u32 tx_sched_cnt;
+	u32 tx_resched_cnt;
+	u32 tx_force_sched_cnt;
+	u32 tx_sched_q_len;
 };
 
-static struct dentry *tel_debugfs_root_dir;
-static struct dentry *dp_debugfs_root_dir;
+struct data_path {
+	atomic_t state;
+
+	const char *name;
+	struct dentry *dentry;
+
+	struct shm_rbctl *rbctl;
+
+	struct tasklet_struct tx_tl;
+	struct tasklet_struct rx_tl;
+
+	struct timer_list tx_sched_timer;
+
+	u32 tx_q_max_len;
+	struct skb_llist tx_q[PSD_QUEUE_CNT];
+	u32 is_tx_stopped;
+
+	int tx_wm[PSD_QUEUE_CNT];
+	u32 enable_piggyback;
+
+	u16 max_tx_shots;
+	u16 max_rx_shots;
+
+	u16 tx_sched_delay_in_ms;
+	u16 tx_q_min_sched_len;
+
+	/* stat */
+	struct data_path_stat stat;
+};
+
+/* PSD share memory socket header structure */
+struct shm_psd_skhdr {
+	unsigned short length;		/* payload length */
+	unsigned short reserved;	/* not used */
+};
+
+struct pduhdr {
+	__be16 length;
+	__u8 offset;
+	__u8 reserved;
+	int cid;
+} __packed;
 
 enum data_path_state {
 	dp_state_idle,
@@ -73,85 +136,9 @@ enum data_path_state {
  */
 #define TX_MIN_SCHED_LEN 0
 
-static inline void tx_q_enqueue(struct data_path *dp, struct sk_buff *skb,
-				enum data_path_priority prio)
-{
-	dp->stat.tx_q_bytes += skb->len;
-	dp->stat.tx_q_packets[prio]++;
-	skb_llist_enqueue(&dp->tx_q[prio], skb);
-}
-
-static inline void tx_q_queue_head(struct data_path *dp, struct sk_buff *skb,
-				enum data_path_priority prio)
-{
-	skb_llist_queue_head(&dp->tx_q[prio], skb);
-}
-
-static inline struct sk_buff *tx_q_peek(struct data_path *dp, int *prio)
-{
-	struct sk_buff *skb = NULL;
-	int i;
-
-	for (i = 0; i < dp_priority_cnt; i++) {
-		skb = skb_llist_peek(&dp->tx_q[i]);
-		if (skb) {
-			if (prio)
-				*prio = i;
-			break;
-		}
-	}
-
-	return skb;
-}
-
-static inline struct sk_buff *tx_q_dequeue(struct data_path *dp, int *prio)
-{
-	struct sk_buff *skb = NULL;
-	int i;
-
-	for (i = 0; i < dp_priority_cnt; i++) {
-		skb = skb_llist_dequeue(&dp->tx_q[i]);
-		if (skb) {
-			if (prio)
-				*prio = i;
-			break;
-		}
-	}
-
-	return skb;
-}
-
-static inline void tx_q_init(struct data_path *dp)
-{
-	int i;
-	for (i = 0; i < dp_priority_cnt; i++)
-		skb_llist_init(&dp->tx_q[i]);
-}
-
-static inline void tx_q_clean(struct data_path *dp)
-{
-	int i;
-	for (i = 0; i < dp_priority_cnt; i++)
-		skb_llist_clean(&dp->tx_q[i]);
-}
-
-static inline bool has_enough_free_tx_slot(const struct data_path *dp,
-	int free_slots, int prio)
-{
-	return free_slots > dp->tx_wm[prio];
-}
-
-static inline int tx_q_avail_length(struct data_path *dp, int free_slots)
-{
-	int len = 0;
-	int i;
-
-	for (i = 0; i < dp_priority_cnt; i++)
-		if (has_enough_free_tx_slot(dp, free_slots, i))
-			len += skb_llist_len(&dp->tx_q[i]);
-
-	return len;
-}
+static struct wakeup_source dp_rx_wakeup;
+static struct wakeup_source dp_acipc_wakeup;
+static struct data_path data_path;
 
 /* notify cp psd that new packet available in the socket buffer */
 static inline void acipc_notify_psd_packet_sent(void)
@@ -173,6 +160,233 @@ static inline void acipc_notify_ap_psd_tx_stopped(void)
 	pr_warn_ratelimited(
 		"MSOCK: acipc_notify_ap_psd_tx_stopped!!!\n");
 	acipc_event_set(ACIPC_RINGBUF_PSD_TX_STOP);
+}
+
+static inline int tx_q_length(struct data_path *dp)
+{
+	int len = 0;
+	int i;
+
+	for (i = 0; i < PSD_QUEUE_CNT; i++)
+		len += skb_llist_len(&dp->tx_q[i]);
+
+	return len;
+}
+
+static inline bool data_path_is_tx_q_full(struct data_path *dp)
+{
+	return tx_q_length(dp) > dp->tx_q_max_len;
+}
+
+static inline bool data_path_is_rx_stopped(struct data_path *dp)
+{
+	return dp->rbctl->is_cp_xmit_stopped;
+}
+
+static inline void tx_q_enqueue(struct data_path *dp, struct sk_buff *skb,
+				int prio)
+{
+	dp->stat.tx_q_bytes += skb->len;
+	dp->stat.tx_q_packets[prio]++;
+	skb_llist_enqueue(&dp->tx_q[prio], skb);
+}
+
+static inline void tx_q_queue_head(struct data_path *dp, struct sk_buff *skb,
+				int prio)
+{
+	skb_llist_queue_head(&dp->tx_q[prio], skb);
+}
+
+static inline struct sk_buff *tx_q_peek(struct data_path *dp, int *prio)
+{
+	struct sk_buff *skb = NULL;
+	int i;
+
+	for (i = 0; i < PSD_QUEUE_CNT; i++) {
+		skb = skb_llist_peek(&dp->tx_q[i]);
+		if (skb) {
+			if (prio)
+				*prio = i;
+			break;
+		}
+	}
+
+	return skb;
+}
+
+static inline struct sk_buff *tx_q_dequeue(struct data_path *dp, int *prio)
+{
+	struct sk_buff *skb = NULL;
+	int i;
+
+	for (i = 0; i < PSD_QUEUE_CNT; i++) {
+		skb = skb_llist_dequeue(&dp->tx_q[i]);
+		if (skb) {
+			if (prio)
+				*prio = i;
+			break;
+		}
+	}
+
+	return skb;
+}
+
+static inline void tx_q_init(struct data_path *dp)
+{
+	int i;
+	for (i = 0; i < PSD_QUEUE_CNT; i++)
+		skb_llist_init(&dp->tx_q[i]);
+}
+
+static inline void tx_q_clean(struct data_path *dp)
+{
+	int i;
+	for (i = 0; i < PSD_QUEUE_CNT; i++)
+		skb_llist_clean(&dp->tx_q[i]);
+}
+
+static inline bool has_enough_free_tx_slot(const struct data_path *dp,
+	int free_slots, int prio)
+{
+	return free_slots > dp->tx_wm[prio];
+}
+
+static inline int tx_q_avail_length(struct data_path *dp, int free_slots)
+{
+	int len = 0;
+	int i;
+
+	for (i = 0; i < PSD_QUEUE_CNT; i++)
+		if (has_enough_free_tx_slot(dp, free_slots, i))
+			len += skb_llist_len(&dp->tx_q[i]);
+
+	return len;
+}
+
+static void tx_sched_timeout(unsigned long data)
+{
+	struct data_path *dp = (struct data_path *)data;
+
+	if (dp && atomic_read(&dp->state) == dp_state_opened)
+		tasklet_schedule(&dp->tx_tl);
+}
+
+/*
+ * force_delay: delay the schedule forcibly, for the high watermark case
+ */
+static void __data_path_schedule_tx(struct data_path *dp, bool force_delay)
+{
+	if (dp && atomic_read(&dp->state) == dp_state_opened) {
+		int free_slots = shm_free_tx_skbuf(dp->rbctl);
+		int len = tx_q_avail_length(dp, free_slots);
+
+		/*
+		 * ok, we have enough packet in queue, fire the work immediately
+		 */
+		if (!force_delay && len > dp->tx_q_min_sched_len) {
+			tasklet_schedule(&dp->tx_tl);
+			del_timer(&dp->tx_sched_timer);
+		} else {
+			if (!timer_pending(&dp->tx_sched_timer)) {
+				unsigned long expires = jiffies +
+					msecs_to_jiffies
+					(dp->tx_sched_delay_in_ms);
+				mod_timer(&dp->tx_sched_timer, expires);
+			}
+		}
+	}
+}
+
+static inline void data_path_schedule_tx(struct data_path *dp)
+{
+	__data_path_schedule_tx(dp, false);
+}
+
+static inline void data_path_schedule_rx(struct data_path *dp)
+{
+	if (dp && atomic_read(&dp->state) == dp_state_opened)
+		tasklet_schedule(&dp->rx_tl);
+}
+
+static inline int data_path_max_payload(struct data_path *dp)
+{
+	struct shm_rbctl *rbctl = dp->rbctl;
+	return rbctl->tx_skbuf_size - sizeof(struct shm_psd_skhdr);
+}
+
+static int data_path_xmit(struct data_path *dp,
+				     struct sk_buff *skb, int prio)
+{
+	int ret = -1;
+
+	if (dp && atomic_read(&dp->state) == dp_state_opened) {
+		tx_q_enqueue(dp, skb, prio);
+		data_path_schedule_tx(dp);
+		ret = 0;
+	}
+
+	return ret;
+}
+
+static int dp_data_rx(unsigned char *data, unsigned int length)
+{
+	unsigned char *p = data;
+	unsigned int remains = length;
+
+	while (remains > 0) {
+		struct pduhdr	*hdr = (void *)p;
+		u32				iplen, offset_len;
+		u32				tailpad;
+		u32				total_len;
+		int				sim_id;
+		struct			sk_buff *skb;
+		size_t			headroom;
+
+		total_len = be16_to_cpu(hdr->length);
+		offset_len = hdr->offset;
+
+		if (unlikely(total_len < offset_len)) {
+			pr_err("%s: packet error\n", __func__);
+			return -1;
+		}
+
+		iplen = total_len - offset_len;
+		tailpad = padding_size(sizeof(*hdr) + iplen + offset_len,
+			DATA_ALIGN_SIZE);
+		sim_id = (hdr->cid >> 31) & 1;
+		hdr->cid &= ~(1 << 31);
+
+		if (unlikely(remains < (iplen + offset_len
+					+ sizeof(*hdr) + tailpad))) {
+			pr_err("%s: packet length error\n", __func__);
+			return -1;
+		}
+
+		/* offset domain data */
+		p += sizeof(*hdr);
+		remains -= sizeof(*hdr);
+
+		/* ip payload */
+		p += offset_len;
+		remains -= offset_len;
+
+		headroom = psd_get_headroom(hdr->cid);
+		skb = dev_alloc_skb(iplen + headroom);
+		if (likely(skb)) {
+			skb_reserve(skb, headroom);
+			memcpy(skb_put(skb, iplen), p, iplen);
+		} else {
+			pr_err_ratelimited(
+				"low mem, packet dropped\n");
+			return -1;
+		}
+
+		psd_data_rx(hdr->cid, skb);
+
+		p += iplen + tailpad;
+		remains -= iplen + tailpad;
+	}
+	return 0;
 }
 
 static void data_path_tx_func(unsigned long arg)
@@ -202,7 +416,7 @@ static void data_path_tx_func(unsigned long arg)
 	dp->stat.tx_sched_cnt++;
 
 	while (consumed_slot < max_tx_shots) {
-		if (!cp_is_synced) {
+		if (!psd_is_link_up()) {
 			tx_q_clean(dp);
 			break;
 		}
@@ -236,7 +450,8 @@ static void data_path_tx_func(unsigned long arg)
 				break;
 
 			/* packet is too large, notify cp and break */
-			if (padded_size(packet->len) > remain_bytes &&
+			if (padded_size(packet->len, DATA_ALIGN_SIZE) >
+				remain_bytes &&
 				!rbctl->is_ap_xmit_stopped) {
 				shm_notify_ap_tx_stopped(rbctl);
 				acipc_notify_ap_psd_tx_stopped();
@@ -257,7 +472,8 @@ static void data_path_tx_func(unsigned long arg)
 			 * the packet is too large for the pending slot
 			 * send out the pending slot firstly
 			 */
-			if (padded_size(packet->len) > remain_bytes) {
+			if (padded_size(packet->len, DATA_ALIGN_SIZE) >
+				remain_bytes) {
 				shm_flush_dcache(rbctl,
 						SHM_PACKET_PTR(rbctl->tx_va,
 							pending_slot,
@@ -313,12 +529,13 @@ static void data_path_tx_func(unsigned long arg)
 				rbctl->tx_skbuf_size);
 
 		/* we are sure our remains is enough for current packet */
-		skhdr->length = used_bytes + padded_size(packet->len);
+		skhdr->length = used_bytes + padded_size(packet->len,
+			DATA_ALIGN_SIZE);
 		memcpy((unsigned char *)(skhdr + 1) + used_bytes,
 			packet->data, packet->len);
 
-		used_bytes += padded_size(packet->len);
-		remain_bytes -= padded_size(packet->len);
+		used_bytes += padded_size(packet->len, DATA_ALIGN_SIZE);
+		remain_bytes -= padded_size(packet->len, DATA_ALIGN_SIZE);
 
 		trace_psd_xmit(packet, slot);
 
@@ -367,8 +584,7 @@ static void data_path_tx_func(unsigned long arg)
 		dp->is_tx_stopped = true;
 
 		/* notify upper layer tx stopped */
-		if (dp->cbs->tx_stop)
-			dp->cbs->tx_stop();
+		psd_tx_stop();
 
 		/* reschedule tx to polling the ring buffer */
 		if (tx_q_length(dp))
@@ -384,8 +600,7 @@ static void data_path_tx_func(unsigned long arg)
 		pr_err("%s tx resume\n", __func__);
 
 		/* notify upper layer tx resumed */
-		if (dp->cbs->tx_resume)
-			dp->cbs->tx_resume();
+		psd_tx_resume();
 
 		dp->is_tx_stopped = false;
 	}
@@ -399,14 +614,13 @@ static void data_path_rx_func(unsigned long arg)
 	struct shm_psd_skhdr *skhdr;
 	int slot;
 	int count;
-	enum data_path_result result;
 	int i;
 	int max_rx_shots = dp->max_rx_shots;
 
 	dp->stat.rx_sched_cnt++;
 
 	for (i = 0; i < max_rx_shots; i++) {
-		if (!cp_is_synced) {
+		if (!psd_is_link_up()) {
 			/* if not sync, just return */
 			break;
 		}
@@ -446,21 +660,8 @@ static void data_path_rx_func(unsigned long arg)
 		dp->stat.rx_used_bytes += count;
 		dp->stat.rx_free_bytes += rbctl->rx_skbuf_size - count;
 
-		if (dp->cbs && dp->cbs->data_rx)
-			result =
-			    dp->cbs->data_rx((unsigned char *)(skhdr + 1),
-					     skhdr->length);
-		else
-			result = dp_success;
+		dp_data_rx((unsigned char *)(skhdr + 1), skhdr->length);
 
-		/*
-		 * upper layer decide to keep the packet as pending
-		 * and we need to return now
-		 */
-		if (result == dp_rx_keep_pending) {
-			pr_err("%s: packet is pending\n", __func__);
-			break;
-		}
 error_length:
 		skctl->ap_rptr = slot;
 	}
@@ -471,82 +672,10 @@ error_length:
 	}
 }
 
-static void tx_sched_timeout(unsigned long data)
+static void data_path_broadcast_msg(struct data_path *dp, int status)
 {
-	struct data_path *dp = (struct data_path *)data;
-
-	if (dp && atomic_read(&dp->state) == dp_state_opened)
-		tasklet_schedule(&dp->tx_tl);
-}
-
-/*
- * force_delay: delay the schedule forcibly, for the high watermark case
- */
-void __data_path_schedule_tx(struct data_path *dp, bool force_delay)
-{
-	if (dp && atomic_read(&dp->state) == dp_state_opened) {
-		int free_slots = shm_free_tx_skbuf(dp->rbctl);
-		int len = tx_q_avail_length(dp, free_slots);
-
-		/*
-		 * ok, we have enough packet in queue, fire the work immediately
-		 */
-		if (!force_delay && len > dp->tx_q_min_sched_len) {
-			tasklet_schedule(&dp->tx_tl);
-			del_timer(&dp->tx_sched_timer);
-		} else {
-			if (!timer_pending(&dp->tx_sched_timer)) {
-				unsigned long expires = jiffies +
-					msecs_to_jiffies
-					(dp->tx_sched_delay_in_ms);
-				mod_timer(&dp->tx_sched_timer, expires);
-			}
-		}
-	}
-}
-
-void data_path_schedule_tx(struct data_path *dp)
-{
-	__data_path_schedule_tx(dp, false);
-}
-EXPORT_SYMBOL(data_path_schedule_tx);
-
-void data_path_schedule_rx(struct data_path *dp)
-{
-	if (dp && atomic_read(&dp->state) == dp_state_opened)
-		tasklet_schedule(&dp->rx_tl);
-}
-EXPORT_SYMBOL(data_path_schedule_rx);
-
-int data_path_max_payload(struct data_path *dp)
-{
-	struct shm_rbctl *rbctl = dp->rbctl;
-	return rbctl->tx_skbuf_size - sizeof(struct shm_psd_skhdr);
-}
-EXPORT_SYMBOL(data_path_max_payload);
-
-enum data_path_result data_path_xmit(struct data_path *dp,
-				     struct sk_buff *skb,
-				     enum data_path_priority prio)
-{
-	enum data_path_result ret = dp_not_open;
-
-	if (dp && atomic_read(&dp->state) == dp_state_opened) {
-		tx_q_enqueue(dp, skb, prio);
-		data_path_schedule_tx(dp);
-		ret = dp_success;
-	}
-
-	return ret;
-}
-EXPORT_SYMBOL(data_path_xmit);
-
-static void data_path_broadcast_msg(int proc)
-{
-	struct data_path *dp = &data_path;
-
 	if (atomic_read(&dp->state) == dp_state_opened) {
-		if (proc == MsocketLinkdownProcId) {
+		if (status == PSD_LINK_DOWN) {
 			/* make sure tx/rx tasklet is stopped */
 			tasklet_disable(&dp->tx_tl);
 			/*
@@ -558,10 +687,7 @@ static void data_path_broadcast_msg(int proc)
 
 			tasklet_disable(&dp->rx_tl);
 			tasklet_enable(&dp->rx_tl);
-
-			if (dp->cbs && dp->cbs->link_down)
-				dp->cbs->link_down();
-		} else if (proc == MsocketLinkupProcId) {
+		} else if (status == PSD_LINK_UP) {
 			/*
 			 * Now both AP and CP will not send packet
 			 * to ring buffer or receive packet from ring
@@ -571,8 +697,6 @@ static void data_path_broadcast_msg(int proc)
 			 * process and CP may occur error
 			 */
 			shm_rb_data_init(dp->rbctl);
-			if (dp->cbs && dp->cbs->link_up)
-				dp->cbs->link_up();
 		}
 	}
 }
@@ -584,7 +708,7 @@ static int debugfs_show_tx_q(struct seq_file *s, void *data)
 	int i;
 
 	ret += seq_puts(s, "len :");
-	for (i = 0; i < dp_priority_cnt; i++)
+	for (i = 0; i < PSD_QUEUE_CNT; i++)
 		ret += seq_printf(s, " %d",
 			skb_llist_len(&dp->tx_q[i]));
 	ret += seq_puts(s, "\n");
@@ -619,13 +743,13 @@ static int debugfs_show_stat(struct seq_file *s, void *data)
 		(unsigned long)dp->stat.tx_bytes);
 
 	ret += seq_puts(s, "tx_packets\t:");
-	for (i = 0; i < dp_priority_cnt; ++i)
+	for (i = 0; i < PSD_QUEUE_CNT; ++i)
 		ret += seq_printf(s, " %lu",
 			(unsigned long)dp->stat.tx_packets[i]);
 	ret += seq_puts(s, "\n");
 
 	ret += seq_puts(s, "tx_packets_delay\t:");
-	for (i = 0; i < dp_priority_cnt; ++i)
+	for (i = 0; i < PSD_QUEUE_CNT; ++i)
 		ret += seq_printf(s, " %llu",
 			(unsigned long long)dp->stat.tx_packets_delay[i]);
 	ret += seq_puts(s, "\n");
@@ -634,7 +758,7 @@ static int debugfs_show_stat(struct seq_file *s, void *data)
 		(unsigned long)dp->stat.tx_q_bytes);
 
 	ret += seq_puts(s, "tx_q_packets\t:");
-	for (i = 0; i < dp_priority_cnt; ++i)
+	for (i = 0; i < PSD_QUEUE_CNT; ++i)
 		ret += seq_printf(s, " %lu",
 			(unsigned long)dp->stat.tx_q_packets[i]);
 	ret += seq_puts(s, "\n");
@@ -666,7 +790,7 @@ static ssize_t read_wm(struct file *file, char __user *user_buf,
 	size_t count, loff_t *ppos)
 {
 	struct data_path *dp = file->private_data;
-	char buf[dp_priority_cnt * 8 + 1];
+	char buf[PSD_QUEUE_CNT * 8 + 1];
 	int *wm = dp->tx_wm;
 	char *p, *pend;
 	int i;
@@ -675,7 +799,7 @@ static ssize_t read_wm(struct file *file, char __user *user_buf,
 	pend = buf + sizeof(buf) - 1;
 	p[0] = '\0';
 
-	for (i = 0; i < dp_priority_cnt; ++i)
+	for (i = 0; i < PSD_QUEUE_CNT; ++i)
 		p += snprintf(p, pend - p, "%d ", wm[i]);
 
 	buf[strlen(buf) - 1] = '\n';
@@ -687,7 +811,7 @@ static ssize_t write_wm(struct file *file, const char __user *user_buf,
 	size_t count, loff_t *ppos)
 {
 	struct data_path *dp = file->private_data;
-	char buf[dp_priority_cnt * 8 + 1];
+	char buf[PSD_QUEUE_CNT * 8 + 1];
 	int *wm = dp->tx_wm;
 	char *p, *tok;
 	const char delim[] = " \t";
@@ -706,7 +830,7 @@ static ssize_t write_wm(struct file *file, const char __user *user_buf,
 
 	p = buf;
 
-	for (i = 0; i < dp_priority_cnt; ++i) {
+	for (i = 0; i < PSD_QUEUE_CNT; ++i) {
 		while (p && *p && isspace(*p))
 			++p;
 
@@ -733,7 +857,7 @@ static ssize_t write_wm(struct file *file, const char __user *user_buf,
 	if (wm[0])
 		pr_err("%s: wm[0] is set to non-zero!!\n", __func__);
 
-	for (i = 0; i < dp_priority_cnt - 1; ++i) {
+	for (i = 0; i < PSD_QUEUE_CNT - 1; ++i) {
 		if (wm[i] > wm[i + 1]) {
 			pr_err("%s: wm[%d] is larger than wm[%d], reset wm[%d]\n",
 				__func__, i, i + i, i + 1);
@@ -752,20 +876,10 @@ static const struct file_operations fops_wm = {
 
 static int dp_debugfs_init(struct data_path *dp)
 {
-	char buf[256];
-	char path[256];
-
-	dp->dentry = debugfs_create_dir(dp->name ? dp->name : "dp",
-		dp_debugfs_root_dir);
+	dp->dentry = debugfs_create_dir(dp->name ? dp->name : "data_path",
+		psd_debugfs_root_dir);
 	if (!dp->dentry)
 		return -ENOMEM;
-
-	snprintf(path, sizeof(path), "../../../%s",
-		dentry_path_raw(dp->rbctl->rbdir, buf, sizeof(buf)));
-
-	if (IS_ERR_OR_NULL(debugfs_create_symlink(
-				"shm", dp->dentry, path)))
-		goto error;
 
 	if (IS_ERR_OR_NULL(debugfs_create_file(
 				"tx_q", S_IRUGO, dp->dentry,
@@ -832,40 +946,105 @@ static int dp_debugfs_exit(struct data_path *dp)
 	return 0;
 }
 
-struct data_path *data_path_open(struct data_path_callback *cbs)
+/* cp psd xmit stopped notify interrupt */
+static u32 acipc_cb_psd_rb_stop(u32 status)
 {
 	struct data_path *dp = &data_path;
+	struct shm_rbctl *rbctl = dp->rbctl;
 
-	if (!cbs) {
-		pr_err("%s: cbs is NULL\n", __func__);
-		return NULL;
+	__pm_wakeup_event(&dp_acipc_wakeup, 5000);
+	pr_warn("MSOCK: %s!!!\n", __func__);
+
+	shm_rb_stop(rbctl);
+
+	if (atomic_read(&dp->state) == dp_state_opened) {
+		psd_rx_stop();
+		data_path_schedule_rx(dp);
 	}
+
+	return 0;
+}
+
+/* cp psd wakeup ap xmit interrupt */
+static u32 acipc_cb_psd_rb_resume(u32 status)
+{
+	struct data_path *dp = &data_path;
+	struct shm_rbctl *rbctl = dp->rbctl;
+
+	__pm_wakeup_event(&dp_acipc_wakeup, 2000);
+	pr_warn("MSOCK: %s!!!\n", __func__);
+
+	shm_rb_resume(rbctl);
+
+	if (atomic_read(&dp->state) == dp_state_opened) {
+		/* do not need to check queue length,
+		 * as we need to resume upper layer in tx_func */
+		data_path_schedule_tx(dp);
+	}
+
+	return 0;
+}
+
+/* psd new packet arrival interrupt */
+static u32 acipc_cb_psd_cb(u32 status)
+{
+	struct data_path *dp = &data_path;
+	static unsigned long last_time = INITIAL_JIFFIES;
+
+	/*
+	 * hold 2s wakeup source for user space
+	 * do not try to hold again if it is already held in last 0.5s
+	 */
+	if (time_after(jiffies, last_time + HZ / 2)) {
+		__pm_wakeup_event(&dp_rx_wakeup, 2000);
+		last_time = jiffies;
+	}
+
+	dp->stat.rx_interrupts++;
+
+	data_path_schedule_rx(dp);
+
+	return 0;
+}
+
+static int dp_acipc_init(void)
+{
+	/* we do not check any return value */
+	acipc_event_bind(ACIPC_RINGBUF_PSD_TX_STOP, acipc_cb_psd_rb_stop,
+		ACIPC_CB_NORMAL, NULL);
+	acipc_event_bind(ACIPC_RINGBUF_PSD_TX_RESUME, acipc_cb_psd_rb_resume,
+		ACIPC_CB_NORMAL, NULL);
+	acipc_event_bind(ACIPC_SHM_PSD_PACKET_NOTIFY, acipc_cb_psd_cb,
+		ACIPC_CB_NORMAL, NULL);
+
+	return 0;
+}
+
+static void dp_acipc_exit(void)
+{
+	acipc_event_unbind(ACIPC_SHM_PSD_PACKET_NOTIFY);
+	acipc_event_unbind(ACIPC_RINGBUF_PSD_TX_RESUME);
+	acipc_event_unbind(ACIPC_RINGBUF_PSD_TX_STOP);
+}
+
+static int dp_init(void *priv)
+{
+	struct data_path *dp = (struct data_path *)priv;
 
 	if (atomic_cmpxchg(&dp->state, dp_state_idle,
 			   dp_state_opening) != dp_state_idle) {
 		pr_err("%s: path is already opened(state %d)\n",
 			 __func__, atomic_read(&dp->state));
-		return NULL;
+		return -1;
 	}
 
-	dp->tx_q_max_len = MAX_TX_Q_LEN;
-	dp->is_tx_stopped = false;
 	tx_q_init(dp);
-	dp->tx_wm[dp_priority_high] = 0;
-	dp->tx_wm[dp_priority_default]
+	dp->tx_wm[PSD_QUEUE_HIGH] = 0;
+	dp->tx_wm[PSD_QUEUE_DEFAULT]
 		= dp->rbctl->tx_skbuf_num / 10;
-
-	dp->enable_piggyback = true;
-
-	dp->max_tx_shots = MAX_TX_SHOTS;
-	dp->max_rx_shots = MAX_RX_SHOTS;
-
-	dp->tx_sched_delay_in_ms = TX_SCHED_DELAY;
-	dp->tx_q_min_sched_len = TX_MIN_SCHED_LEN;
 
 	memset(&dp->stat, 0, sizeof(dp->stat));
 
-	dp->cbs = cbs;
 	tasklet_init(&dp->tx_tl, data_path_tx_func,
 		     (unsigned long)dp);
 	tasklet_init(&dp->rx_tl, data_path_rx_func,
@@ -879,21 +1058,31 @@ struct data_path *data_path_open(struct data_path_callback *cbs)
 	if (dp_debugfs_init(dp) < 0) {
 		pr_err("%s: debugfs failed\n", __func__);
 		atomic_set(&dp->state, dp_state_idle);
-		return NULL;
+		return -1;
 	}
+
+	if (dp_acipc_init() < 0) {
+		pr_err("%s: init acipc callback failed\n",
+			__func__);
+		goto exit_debugfs;
+	}
+
+	wakeup_source_init(&dp_acipc_wakeup, "dp_acipc_wakeup");
+	wakeup_source_init(&dp_rx_wakeup, "dp_rx_wakeups");
 
 	atomic_set(&dp->state, dp_state_opened);
 
-	return dp;
-}
-EXPORT_SYMBOL(data_path_open);
+	return 0;
 
-void data_path_close(struct data_path *dp)
+exit_debugfs:
+	dp_debugfs_exit(dp);
+	atomic_set(&dp->state, dp_state_idle);
+	return -1;
+}
+
+static void dp_exit(void *priv)
 {
-	if (!dp) {
-		pr_err("%s: empty data channel\n", __func__);
-		return;
-	}
+	struct data_path *dp = (struct data_path *)priv;
 
 	if (atomic_cmpxchg(&dp->state, dp_state_opened,
 			   dp_state_closing) != dp_state_opened) {
@@ -901,6 +1090,11 @@ void data_path_close(struct data_path *dp)
 			 __func__, atomic_read(&dp->state));
 		return;
 	}
+
+	wakeup_source_trash(&dp_rx_wakeup);
+	wakeup_source_trash(&dp_acipc_wakeup);
+
+	dp_acipc_exit();
 
 	dp_debugfs_exit(dp);
 
@@ -912,80 +1106,134 @@ void data_path_close(struct data_path *dp)
 
 	tasklet_kill(&dp->tx_tl);
 	tasklet_kill(&dp->rx_tl);
-	dp->cbs = NULL;
 
 	atomic_set(&dp->state, dp_state_idle);
 }
-EXPORT_SYMBOL(data_path_close);
 
-void dp_rb_stop_cb(struct shm_rbctl *rbctl)
+static int dp_data_tx(void *priv, int cid, int prio,
+	struct sk_buff *skb, void *queue __attribute__((__unused__)))
 {
-	struct data_path *dp;
+	struct data_path *dp = (struct data_path *)priv;
+	struct pduhdr *hdr;
+	struct sk_buff *skb2;
+	unsigned len;
+	unsigned tailpad;
 
-	if (!rbctl)
-		return;
-
-	shm_rb_stop(rbctl);
-
-	dp = rbctl->priv;
-
-	__pm_wakeup_event(&dp_acipc_wakeup, 5000);
-	pr_warn("MSOCK: dp_rb_stop_cb!!!\n");
-
-	if (dp && (atomic_read(&dp->state) == dp_state_opened)) {
-		if (dp->cbs && dp->cbs->rx_stop)
-			dp->cbs->rx_stop();
-		data_path_schedule_rx(dp);
+	/* data path is not open, drop the packet and return */
+	if (!dp || atomic_read(&dp->state) != dp_state_opened) {
+		pr_err("%s: data path is not open!\n", __func__);
+		goto drop;
 	}
+
+	len = skb->len;
+	if (padded_size(sizeof(*hdr) + len, DATA_ALIGN_SIZE) >
+			data_path_max_payload(dp)) {
+		pr_err("%s: packet too large %d\n", __func__, len);
+		goto drop;
+	}
+
+	tailpad = padding_size(sizeof(*hdr) + len, DATA_ALIGN_SIZE);
+
+	if (likely(!skb_cloned(skb))) {
+		int headroom = skb_headroom(skb);
+		int tailroom = skb_tailroom(skb);
+
+		/* enough room as-is? */
+		if (likely(sizeof(*hdr) + tailpad <= headroom + tailroom)) {
+			/* do not need to be readjusted */
+			if (sizeof(*hdr) <= headroom && tailpad <= tailroom)
+				goto fill;
+
+			skb->data = memmove(skb->head + sizeof(*hdr),
+					    skb->data, len);
+			skb_set_tail_pointer(skb, len);
+			goto fill;
+		}
+	}
+
+	/* create a new skb, with the correct size (and tailpad) */
+	skb2 = skb_copy_expand(skb, sizeof(*hdr), tailpad + 1, GFP_ATOMIC);
+	if (skb2)
+		trace_psd_xmit_skb_realloc(skb, skb2);
+	if (unlikely(!skb2))
+		return PSD_DATA_SEND_BUSY;
+	dev_kfree_skb_any(skb);
+	skb = skb2;
+
+	/* fill out the pdu header */
+fill:
+	hdr = (void *)__skb_push(skb, sizeof(*hdr));
+	memset(hdr, 0, sizeof(*hdr));
+	hdr->length = cpu_to_be16(len);
+	hdr->cid = cid;
+	memset(skb_put(skb, tailpad), 0, tailpad);
+
+	data_path_xmit(dp, skb, prio);
+	return PSD_DATA_SEND_OK;
+drop:
+	dev_kfree_skb_any(skb);
+	return PSD_DATA_SEND_DROP;
+
 }
 
-void dp_rb_resume_cb(struct shm_rbctl *rbctl)
+static void dp_link_status_changed(void *priv, int status)
 {
-	struct data_path *dp;
-
-	if (!rbctl)
-		return;
-
-	shm_rb_resume(rbctl);
-
-	dp = rbctl->priv;
-
-	__pm_wakeup_event(&dp_acipc_wakeup, 2000);
-	pr_warn("MSOCK: dp_rb_resume_cb!!!\n");
-
-	if (dp && (atomic_read(&dp->state) == dp_state_opened)) {
-		/* do not need to check queue length,
-		 * as we need to resume upper layer in tx_func */
-		data_path_schedule_tx(dp);
-	}
+	data_path_broadcast_msg((struct data_path *)priv, status);
 }
 
-void dp_packet_send_cb(struct shm_rbctl *rbctl)
+#define SHM_PSD_TX_SKBUF_SIZE	2048	/* PSD tx maximum packet size */
+#define SHM_PSD_RX_SKBUF_SIZE	16384	/* PSD rx maximum packet size */
+static int shm_param_init(struct shm_rbctl *rbctl,
+	const struct cpload_cp_addr *addr)
 {
-	struct data_path *dp;
-	struct shm_skctl *skctl;
-	static unsigned long last_time = INITIAL_JIFFIES;
+	if (!addr)
+		return -1;
 
-	if (!rbctl)
-		return;
+	/* psd dedicated ring buffer */
+	rbctl->skctl_pa = addr->psd_skctl_pa;
 
-	dp = rbctl->priv;
+	rbctl->tx_skbuf_size = SHM_PSD_TX_SKBUF_SIZE;
+	rbctl->rx_skbuf_size = SHM_PSD_RX_SKBUF_SIZE;
 
-	dp->stat.rx_interrupts++;
+	rbctl->tx_pa = addr->psd_tx_pa;
+	rbctl->rx_pa = addr->psd_rx_pa;
 
-	/*
-	 * hold 2s wakeup source for user space
-	 * do not try to hold again if it is already held in last 0.5s
-	 */
-	if (time_after(jiffies, last_time + HZ / 2)) {
-		__pm_wakeup_event(&dp_rx_wakeup, 2000);
-		last_time = jiffies;
-	}
+	rbctl->tx_total_size = addr->psd_tx_total_size;
+	rbctl->rx_total_size = addr->psd_rx_total_size;
 
-	skctl = rbctl->skctl_va;
-	trace_psd_recv_irq(skctl->cp_wptr);
+	rbctl->tx_skbuf_num =
+		rbctl->tx_total_size /
+		rbctl->tx_skbuf_size;
+	rbctl->rx_skbuf_num =
+		rbctl->rx_total_size /
+		rbctl->rx_skbuf_size;
 
-	data_path_schedule_rx(dp);
+	rbctl->tx_skbuf_low_wm =
+		(rbctl->tx_skbuf_num + 1) / 4;
+	rbctl->rx_skbuf_low_wm =
+		(rbctl->rx_skbuf_num + 1) / 4;
+
+	return 0;
+}
+
+static int dp_set_addr(void *priv, const struct cpload_cp_addr *addr)
+{
+	struct data_path *dp = (struct data_path *)priv;
+
+	if (!addr->first_boot)
+		shm_rb_exit(dp->rbctl);
+
+	shm_param_init(dp->rbctl, addr);
+	if (shm_rb_init(dp->rbctl, psd_debugfs_root_dir) < 0)
+		pr_err("%s: init psd rbctl failed\n", __func__);
+
+	return 0;
+}
+
+static bool dp_is_tx_stopped(void *priv)
+{
+	struct data_path *dp = (struct data_path *)priv;
+	return dp->is_tx_stopped;
 }
 
 static size_t dp_get_packet_length(const unsigned char *hdr)
@@ -994,187 +1242,50 @@ static size_t dp_get_packet_length(const unsigned char *hdr)
 	return skhdr->length + sizeof(*skhdr);
 }
 
-struct shm_callback dp_shm_cb = {
+static struct shm_callback dp_shm_cb = {
 	.get_packet_length = dp_get_packet_length,
 };
 
-struct shm_rbctl psd_rbctl = {
+static struct shm_rbctl psd_rbctl = {
 	.name = "cp-psd",
 	.cbs = &dp_shm_cb,
-	.priv = &data_path,
 	.va_lock = __MUTEX_INITIALIZER(psd_rbctl.va_lock),
 };
 
-/* cp psd xmit stopped notify interrupt */
-static u32 acipc_cb_psd_rb_stop(u32 status)
-{
-	dp_rb_stop_cb(&psd_rbctl);
-	return 0;
-}
-
-/* cp psd wakeup ap xmit interrupt */
-static u32 acipc_cb_psd_rb_resume(u32 status)
-{
-	dp_rb_resume_cb(&psd_rbctl);
-	return 0;
-}
-
-/* psd new packet arrival interrupt */
-static u32 acipc_cb_psd_cb(u32 status)
-{
-	dp_packet_send_cb(&psd_rbctl);
-	return 0;
-}
-
-static int dp_acipc_init(void)
-{
-	/* we do not check any return value */
-	acipc_event_bind(ACIPC_RINGBUF_PSD_TX_STOP, acipc_cb_psd_rb_stop,
-		       ACIPC_CB_NORMAL, NULL);
-	acipc_event_bind(ACIPC_RINGBUF_PSD_TX_RESUME, acipc_cb_psd_rb_resume,
-		       ACIPC_CB_NORMAL, NULL);
-	acipc_event_bind(ACIPC_SHM_PSD_PACKET_NOTIFY, acipc_cb_psd_cb,
-		       ACIPC_CB_NORMAL, NULL);
-
-	return 0;
-}
-
-/* acipc_exit used to unregister interrupt call-back function */
-static void dp_acipc_exit(void)
-{
-	acipc_event_unbind(ACIPC_SHM_PSD_PACKET_NOTIFY);
-	acipc_event_unbind(ACIPC_RINGBUF_PSD_TX_RESUME);
-	acipc_event_unbind(ACIPC_RINGBUF_PSD_TX_STOP);
-}
-
-static int cp_link_status_notifier_func(struct notifier_block *this,
-	unsigned long code, void *cmd)
-{
-	data_path_broadcast_msg((int)code);
-	return 0;
-}
-
-static struct notifier_block cp_link_status_notifier = {
-	.notifier_call = cp_link_status_notifier_func,
+static struct data_path data_path = {
+	.state = ATOMIC_INIT(dp_state_idle),
+	.name = "data-pathv1",
+	.rbctl = &psd_rbctl,
+	.tx_q_max_len = MAX_TX_Q_LEN,
+	.is_tx_stopped = false,
+	.enable_piggyback = true,
+	.max_tx_shots = MAX_TX_SHOTS,
+	.max_rx_shots = MAX_RX_SHOTS,
+	.tx_sched_delay_in_ms = TX_SCHED_DELAY,
+	.tx_q_min_sched_len = TX_MIN_SCHED_LEN,
 };
 
-#define SHM_PSD_TX_SKBUF_SIZE	2048	/* PSD tx maximum packet size */
-#define SHM_PSD_RX_SKBUF_SIZE	16384	/* PSD rx maximum packet size */
-static int shm_param_init(const struct cpload_cp_addr *addr)
-{
-	if (!addr)
-		return -1;
-
-	/* psd dedicated ring buffer */
-	psd_rbctl.skctl_pa = addr->psd_skctl_pa;
-
-	psd_rbctl.tx_skbuf_size = SHM_PSD_TX_SKBUF_SIZE;
-	psd_rbctl.rx_skbuf_size = SHM_PSD_RX_SKBUF_SIZE;
-
-	psd_rbctl.tx_pa = addr->psd_tx_pa;
-	psd_rbctl.rx_pa = addr->psd_rx_pa;
-
-	psd_rbctl.tx_total_size = addr->psd_tx_total_size;
-	psd_rbctl.rx_total_size = addr->psd_rx_total_size;
-
-	psd_rbctl.tx_skbuf_num =
-		psd_rbctl.tx_total_size /
-		psd_rbctl.tx_skbuf_size;
-	psd_rbctl.rx_skbuf_num =
-		psd_rbctl.rx_total_size /
-		psd_rbctl.rx_skbuf_size;
-
-	psd_rbctl.tx_skbuf_low_wm =
-		(psd_rbctl.tx_skbuf_num + 1) / 4;
-	psd_rbctl.rx_skbuf_low_wm =
-		(psd_rbctl.rx_skbuf_num + 1) / 4;
-
-	return 0;
-}
-
-static int cp_mem_set_notifier_func(struct notifier_block *this,
-	unsigned long code, void *cmd)
-{
-	struct cpload_cp_addr *addr = (struct cpload_cp_addr *)cmd;
-
-	if (!addr->first_boot)
-		shm_rb_exit(&psd_rbctl);
-
-	shm_param_init(addr);
-	if (shm_rb_init(&psd_rbctl, dp_debugfs_root_dir) < 0)
-		pr_err("%s: init psd rbctl failed\n", __func__);
-
-	return 0;
-}
-
-static struct notifier_block cp_mem_set_notifier = {
-	.notifier_call = cp_mem_set_notifier_func,
+static struct psd_driver dp_drvier = {
+	.name = "data-pathv1",
+	.init = dp_init,
+	.exit = dp_exit,
+	.set_addr = dp_set_addr,
+	.data_tx = dp_data_tx,
+	.is_tx_stopped = dp_is_tx_stopped,
+	.link_status_changed = dp_link_status_changed,
+	.version = 1,
+	.priv = &data_path,
 };
 
 static int __init data_path_init(void)
 {
-	struct data_path *dp = &data_path;
-
-	tel_debugfs_root_dir = tel_debugfs_get();
-	if (!tel_debugfs_root_dir)
-		return -1;
-
-	dp_debugfs_root_dir = debugfs_create_dir("data_path",
-		tel_debugfs_root_dir);
-	if (IS_ERR_OR_NULL(dp_debugfs_root_dir))
-		goto putrootfs;
-
-	wakeup_source_init(&dp_rx_wakeup, "dp_rx_wakeups");
-
-	dp->rbctl = &psd_rbctl;
-	atomic_set(&dp->state, dp_state_idle);
-
-	if (register_cp_link_status_notifier(&cp_link_status_notifier) < 0)
-		goto exit1;
-
-	if (register_cp_mem_set_notifier(&cp_mem_set_notifier) < 0)
-		goto exit2;
-
-	if (dp_acipc_init() < 0)
-		goto unregister;
-
-	wakeup_source_init(&dp_acipc_wakeup, "dp_acipc_wakeup");
-
+	register_psd_driver(&dp_drvier);
 	return 0;
-
-unregister:
-	unregister_cp_mem_set_notifier(&cp_mem_set_notifier);
-exit2:
-	unregister_cp_link_status_notifier(&cp_link_status_notifier);
-exit1:
-	wakeup_source_trash(&dp_rx_wakeup);
-
-	debugfs_remove(dp_debugfs_root_dir);
-	dp_debugfs_root_dir = NULL;
-
-putrootfs:
-	tel_debugfs_put(tel_debugfs_root_dir);
-	tel_debugfs_root_dir = NULL;
-
-	return -1;
 }
 
 static void __exit data_path_exit(void)
 {
-	wakeup_source_trash(&dp_acipc_wakeup);
-
-	dp_acipc_exit();
-
-	unregister_cp_mem_set_notifier(&cp_mem_set_notifier);
-
-	unregister_cp_link_status_notifier(&cp_link_status_notifier);
-
-	wakeup_source_trash(&dp_rx_wakeup);
-
-	debugfs_remove(dp_debugfs_root_dir);
-	dp_debugfs_root_dir = NULL;
-	tel_debugfs_put(tel_debugfs_root_dir);
-	tel_debugfs_root_dir = NULL;
+	unregister_psd_driver(&dp_drvier);
 }
 
 module_init(data_path_init);

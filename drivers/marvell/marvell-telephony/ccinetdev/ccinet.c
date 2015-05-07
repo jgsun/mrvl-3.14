@@ -134,12 +134,10 @@ static void ccinet_tx_timeout(struct net_device *netdev)
  */
 #define CCINET_RESERVE_HDR_LEN (192)
 
-static int ccinet_rx(void *user_obj, const unsigned char *packet,
-		unsigned int pktlen)
+static int ccinet_rx(void *user_obj, struct sk_buff *skb)
 {
 	struct net_device *netdev = (struct net_device *)user_obj;
-	struct sk_buff *skb;
-	struct iphdr *ip_header = (struct iphdr *)packet;
+	struct iphdr *ip_header = (struct iphdr *)skb->data;
 	__be16	protocol;
 
 	if (ip_header->version == 4) {
@@ -150,21 +148,9 @@ static int ccinet_rx(void *user_obj, const unsigned char *packet,
 		netdev_err(netdev, "ccinet_rx: invalid ip version: %d\n",
 		       ip_header->version);
 		netdev->stats.rx_dropped++;
-		goto out;
+		dev_kfree_skb_any(skb);
+		return -1;
 	}
-
-	skb = dev_alloc_skb(pktlen + CCINET_RESERVE_HDR_LEN);
-	if (!skb) {
-		pr_notice_ratelimited(
-			"ccinet_rx: low on mem - packet dropped\n");
-
-		netdev->stats.rx_dropped++;
-
-		goto out;
-
-	}
-	skb_reserve(skb, CCINET_RESERVE_HDR_LEN);
-	memcpy(skb_put(skb, pktlen), packet, pktlen);
 
 	/* Write metadata, and then pass to the receive level */
 
@@ -174,18 +160,15 @@ static int ccinet_rx(void *user_obj, const unsigned char *packet,
 		skb->ip_summed = CHECKSUM_UNNECESSARY;	/* don't check it */
 	if (netif_rx(skb) == NET_RX_SUCCESS) {
 		netdev->stats.rx_packets++;
-		netdev->stats.rx_bytes += pktlen;
+		netdev->stats.rx_bytes += skb->len;
 	} else {
 		netdev->stats.rx_dropped++;
 		pr_notice_ratelimited(
 			"ccinet_rx: packet dropped by netif_rx\n");
-		goto out;
+		return -1;
 	}
 
 	return 0;
-
-out:
-	return -1;
 }
 
 static int create_ccinet_netdev(unsigned char cid, bool locked)
@@ -218,6 +201,7 @@ static int create_ccinet_netdev(unsigned char cid, bool locked)
 	memset(priv, 0, sizeof(struct ccinet_priv));
 	spin_lock_init(&priv->lock);
 	priv->psd_user.priv = dev;
+	priv->psd_user.headroom = CCINET_RESERVE_HDR_LEN;
 	priv->psd_user.on_receive = ccinet_rx;
 	priv->psd_user.on_throttle = ccinet_fc_cb;
 	priv->cid = cid;

@@ -24,10 +24,11 @@ enum {
 	PSD_QUEUE_CNT
 };
 
+struct sk_buff;
 struct psd_user {
 	void *priv;
-	int (*on_receive)(void *priv, const unsigned char *packet,
-			unsigned int len);
+	size_t headroom;
+	int (*on_receive)(void *priv, struct sk_buff *skb);
 	void (*on_throttle)(void *priv, bool is_throttle);
 };
 
@@ -35,7 +36,6 @@ int psd_register(const struct psd_user *user, int cid);
 int psd_unregister(const struct psd_user *user, int cid);
 void set_embms_cid(int cid);
 
-struct sk_buff;
 unsigned short psd_select_queue(struct sk_buff *skb);
 int psd_data_tx(int cid, struct sk_buff *skb);
 

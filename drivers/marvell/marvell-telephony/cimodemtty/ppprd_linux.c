@@ -30,6 +30,7 @@
 #include <linux/spinlock.h>
 #include <linux/list.h>
 #include <linux/skbuff.h>
+#include <linux/netdevice.h>	/* dev_kfree_skb_any */
 #include "psdatastub.h"
 #include "ppprd_linux.h"
 
@@ -122,11 +123,9 @@ static struct miscdevice ppprd_miscdev = {
 #define DPRINT(fmt, args ...)	pr_info("PPPRD: " fmt, ## args)
 #endif
 
-int ppprd_relay_message_from_comm(void *userobj, const unsigned char *buf,
-				  unsigned int count)
+static int ppprd_relay_message_from_comm(void *userobj, struct sk_buff *skb)
 {
 	struct route_header *hdr;
-	struct sk_buff *skb;
 	unsigned long flags;
 
 	ENTER();
@@ -134,30 +133,24 @@ int ppprd_relay_message_from_comm(void *userobj, const unsigned char *buf,
 	/* means this packet with a wrong cid or we are in CONTROL MODE */
 	if (modem_current_cid == INVALID_CID) {
 		DBGMSG("modem_current_cid is %02x\n", modem_current_cid);
+		dev_kfree_skb_any(skb);
 		return 0; /* the packet is not for PPP */
 	} else if (skb_queue_len(&ppprd_dev->rx_q) > READQ_MAX_LEN) {
 		DBGMSG("rx_q is too long, drop this message\n");
+		dev_kfree_skb_any(skb);
 		return 1;
 	} else { /* means this packet should transfer to PPP router,
-		* alloc memory, copy data, then add to work list */
-		skb = alloc_skb(count+sizeof(struct route_header), GFP_ATOMIC);
-		if (skb) {
-			skb_reserve(skb, sizeof(struct route_header));
-			hdr = (struct route_header *)
-				skb_push(skb, sizeof(struct route_header));
-			hdr->length = count;
-			memcpy(skb_put(skb, count), buf, count);
-			skb_queue_tail(&ppprd_dev->rx_q, skb);
-			/* acknowledge read & select */
-			spin_lock_irqsave(&ppprd_dev->read_spin, flags);
-			/* increase the queued message number */
-			ppprd_dev->have_data++;
-			spin_unlock_irqrestore(&ppprd_dev->read_spin, flags);
-			wake_up_interruptible(&ppprd_dev->readq);
-		} else {
-			ERRMSG("%s: out of memory.\n", __func__);
-			return -ENOMEM;
-		}
+			  * add to work list */
+		hdr = (struct route_header *)
+			skb_push(skb, sizeof(struct route_header));
+		hdr->length = skb->len - sizeof(struct route_header);
+		skb_queue_tail(&ppprd_dev->rx_q, skb);
+		/* acknowledge read & select */
+		spin_lock_irqsave(&ppprd_dev->read_spin, flags);
+		/* increase the queued message number */
+		ppprd_dev->have_data++;
+		spin_unlock_irqrestore(&ppprd_dev->read_spin, flags);
+		wake_up_interruptible(&ppprd_dev->readq);
 	}
 	LEAVE();
 	return 1; /*the packet is for PPP */
@@ -211,6 +204,7 @@ static int ppprd_probe(struct platform_device *dev)
 	ppprd_dev->have_data = 0;
 	ppprd_dev->dev = (struct device *)dev;
 	ppprd_dev->psd_user.priv = ppprd_dev;
+	ppprd_dev->psd_user.headroom = sizeof(struct route_header);
 	ppprd_dev->psd_user.on_receive = ppprd_relay_message_from_comm;
 	ppprd_dev->psd_user.on_throttle = NULL;
 	ret = misc_register(&ppprd_miscdev);
