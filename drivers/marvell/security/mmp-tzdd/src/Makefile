@@ -14,7 +14,7 @@ TZDD_PERF_REC := N
 # sharedMem context checking
 TZDD_SHAREDMEM_CONTEXT_CHECKING := N
 
-obj-m := tzdd.o
+obj-y := tzdd.o
 tzdd-objs := \
 	osa/osa.o \
 	osa/osa_atomic.o \
