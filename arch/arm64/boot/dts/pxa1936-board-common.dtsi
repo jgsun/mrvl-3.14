@@ -1116,6 +1116,10 @@
 			cp-load {
 				status = "okay";
 			};
+
+			data-path {
+				status = "okay";
+			};
 		};
 
 		/*
