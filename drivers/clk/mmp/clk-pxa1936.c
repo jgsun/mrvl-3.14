@@ -1634,6 +1634,10 @@ static struct axi_rtcwtc axi_rtcwtc_tbl[] = {
 	{.max_aclk = 312, .xtc_val = 0xEE116656, },
 };
 
+static struct axi_rtcwtc axi_rtcwtc_tbl_pxa1956[] = {
+	{.max_aclk = 312, .xtc_val = 0x10, },
+};
+
 static const char * const axi_parent[] = {
 	"pll1_416", "pll1_624", "pll2", "pll2p",
 };
@@ -1682,8 +1686,7 @@ static struct axi_opt axi_op_array[] = {
 static struct axi_params axi_params = {
 	.parent_table = axi_parent_table,
 	.parent_table_size = ARRAY_SIZE(axi_parent_table),
-	.axi_rtcwtc_table = axi_rtcwtc_tbl,
-	.axi_rtcwtc_table_size = ARRAY_SIZE(axi_rtcwtc_tbl),
+
 	.dcstat_support = true,
 };
 
@@ -1801,6 +1804,14 @@ static void __init pxa1936_acpu_init(struct pxa1936_clk_unit *pxa_unit)
 	}
 	mmp_clk_parents_lookup(ddr_params.parent_table,
 		ddr_params.parent_table_size);
+
+	if (cpu_is_pxa1956()) {
+		axi_params.axi_rtcwtc_table = axi_rtcwtc_tbl_pxa1956;
+		axi_params.axi_rtcwtc_table_size = ARRAY_SIZE(axi_rtcwtc_tbl_pxa1956);
+	} else {
+		axi_params.axi_rtcwtc_table = axi_rtcwtc_tbl;
+		axi_params.axi_rtcwtc_table_size = ARRAY_SIZE(axi_rtcwtc_tbl);
+	}
 
 	axi_params.apmu_base = pxa_unit->apmu_base;
 	axi_params.mpmu_base = pxa_unit->mpmu_base;
