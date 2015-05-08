@@ -37,7 +37,7 @@ struct psd_driver {
 	/* set ring buffer address */
 	int (*set_addr)(void *priv, const struct cpload_cp_addr *addr);
 	/* transfer data */
-	int (*data_tx)(void *priv, int cid, int prio,
+	int (*data_tx)(void *priv, int cid, int simid, int prio,
 		struct sk_buff *skb, void *queue);
 	bool (*is_tx_stopped)(void *priv);
 	/* cp link status changed */

@@ -76,7 +76,7 @@ static long psdatastub_ioctl(struct file *filp,
 		}
 		memset(&psd_user, 0, sizeof(psd_user));
 		if (psd_register(&psd_user, gcfdata.cid) == 0) {
-			psd_data_tx(gcfdata.cid, gcfbuf);
+			psd_data_tx(gcfdata.cid, 0, gcfbuf);
 			psd_unregister(&psd_user, gcfdata.cid);
 		} else {
 			pr_err("%s: register cid %d failed\n",

@@ -152,7 +152,7 @@ unsigned short psd_select_queue(struct sk_buff *skb)
 }
 EXPORT_SYMBOL(psd_select_queue);
 
-int psd_data_tx(int cid, struct sk_buff *skb)
+int psd_data_tx(int cid, int simid, struct sk_buff *skb)
 {
 	int prio;
 	int ret;
@@ -195,8 +195,8 @@ int psd_data_tx(int cid, struct sk_buff *skb)
 
 	rcu_read_lock();
 	ret = psd_dev.driver->data_tx(psd_dev.driver->priv,
-		cid, prio, skb,
-		rcu_dereference(psd_contexts[cid & 0xff].queue));
+		cid, simid, prio, skb,
+		rcu_dereference(psd_contexts[cid].queue));
 	rcu_read_unlock();
 	return ret;
 drop:

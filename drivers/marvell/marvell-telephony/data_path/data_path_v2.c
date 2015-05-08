@@ -690,7 +690,7 @@ static void dp_exit(void *priv)
 	atomic_set(&dp->state, dp_state_idle);
 }
 
-static int dp_data_tx(void *priv, int cid, int prio,
+static int dp_data_tx(void *priv, int cid, int simid, int prio,
 	struct sk_buff *skb, void *queue)
 {
 	struct data_path *dp = (struct data_path *)priv;
@@ -767,8 +767,8 @@ static int dp_data_tx(void *priv, int cid, int prio,
 	desc.exhdr_length = 0;
 	desc.packet_offset = CP_UL_HEADROOM;
 	desc.packet_length = skb->len;
-	desc.simid = (unsigned)cid >> 31;
-	desc.cid = cid & 0xff;
+	desc.simid = simid;
+	desc.cid = cid;
 
 	slot = __shm_get_next_slot(ci->count, wptr);
 	memcpy_desc((void *)((struct ul_descriptor *)ci->desc + slot),

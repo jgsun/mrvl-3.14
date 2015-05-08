@@ -1112,7 +1112,7 @@ static void dp_exit(void *priv)
 	atomic_set(&dp->state, dp_state_idle);
 }
 
-static int dp_data_tx(void *priv, int cid, int prio,
+static int dp_data_tx(void *priv, int cid, int simid, int prio,
 	struct sk_buff *skb, void *queue __attribute__((__unused__)))
 {
 	struct data_path *dp = (struct data_path *)priv;
@@ -1167,8 +1167,8 @@ fill:
 	hdr = (void *)__skb_push(skb, sizeof(*hdr));
 	memset(hdr, 0, sizeof(*hdr));
 	hdr->length = cpu_to_be16(len);
-	hdr->cid = cid & 0x7fffffff;
-	hdr->simid = (unsigned)cid >> 31;
+	hdr->cid = cid;
+	hdr->simid = simid;
 	memset(skb_put(skb, tailpad), 0, tailpad);
 
 	data_path_xmit(dp, skb, prio);
@@ -1176,7 +1176,6 @@ fill:
 drop:
 	dev_kfree_skb_any(skb);
 	return PSD_DATA_SEND_DROP;
-
 }
 
 static void dp_link_status_changed(void *priv, int status)
