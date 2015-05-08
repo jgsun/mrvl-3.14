@@ -29,6 +29,7 @@
 #include <linux/pxa9xx_acipc.h>
 #include <linux/interrupt.h>
 #include <linux/skbuff.h>
+#include <asm/byteorder.h>
 #include "shm.h"
 #include "tel_trace.h"
 #include "debugfs.h"
@@ -105,7 +106,15 @@ struct pduhdr {
 	__be16 length;
 	__u8 offset;
 	__u8 reserved;
-	int cid;
+#if defined(__LITTLE_ENDIAN_BITFIELD)
+	u32 cid:31;
+	u32 simid:1;
+#elif defined(__BIG_ENDIAN_BITFIELD)
+	u32 simid:1;
+	u32 cid:31;
+#else
+#error "incorrect endian"
+#endif
 } __packed;
 
 enum data_path_state {
@@ -338,7 +347,6 @@ static int dp_data_rx(unsigned char *data, unsigned int length)
 		u32				iplen, offset_len;
 		u32				tailpad;
 		u32				total_len;
-		int				sim_id;
 		struct			sk_buff *skb;
 		size_t			headroom;
 
@@ -353,8 +361,6 @@ static int dp_data_rx(unsigned char *data, unsigned int length)
 		iplen = total_len - offset_len;
 		tailpad = padding_size(sizeof(*hdr) + iplen + offset_len,
 			DATA_ALIGN_SIZE);
-		sim_id = (hdr->cid >> 31) & 1;
-		hdr->cid &= ~(1 << 31);
 
 		if (unlikely(remains < (iplen + offset_len
 					+ sizeof(*hdr) + tailpad))) {
@@ -1164,7 +1170,8 @@ fill:
 	hdr = (void *)__skb_push(skb, sizeof(*hdr));
 	memset(hdr, 0, sizeof(*hdr));
 	hdr->length = cpu_to_be16(len);
-	hdr->cid = cid;
+	hdr->cid = cid & 0x7fffffff;
+	hdr->simid = (unsigned)cid >> 31;
 	memset(skb_put(skb, tailpad), 0, tailpad);
 
 	data_path_xmit(dp, skb, prio);
