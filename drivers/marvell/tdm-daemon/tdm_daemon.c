@@ -28,6 +28,7 @@ enum action_type {
 	TDM_CRASH_ACTION_CLAIM_USB
 };
 
+static int tdm_enable;
 static int tdm_expire_time = TDM_DEFAULT_EXPIRE_TIME;
 static struct workqueue_struct *tdm_wq;
 static struct delayed_work tdm_work;
@@ -153,6 +154,43 @@ cleanup1:
 	return result;
 }
 
+static ssize_t tdm_enable_read(struct file *file, char __user *buffer,
+		size_t count, loff_t *ppos)
+{
+	pr_info("%d\n", tdm_enable);
+
+	return 0;
+}
+
+static ssize_t tdm_enable_write(struct file *file,
+		const char __user *buff,
+		size_t len, loff_t *ppos)
+{
+	int val;
+
+	sscanf(buff, "%d\n", &val);
+	if (val < 0)
+		return -EINVAL;
+	val = !!val;
+
+	if (val == tdm_enable)
+		return len;
+
+	tdm_enable = val;
+	if (tdm_enable)
+		TDMKickWatchDog(tdm_expire_time * MSEC_PER_SEC, tdm_action);
+	else
+		TDMStopWatchDog();
+
+	return len;
+}
+
+static const struct file_operations tdm_enable_ops = {
+	.read		= tdm_enable_read,
+	.write		= tdm_enable_write,
+};
+
+
 static ssize_t tdm_action_read(struct file *file, char __user *buffer,
 		size_t count, loff_t *ppos)
 {
@@ -224,7 +262,12 @@ static const struct file_operations tdm_expire_time_ops = {
 
 static inline void tdm_debugfs_init(void)
 {
-	struct dentry *tdm_action_dentry, *tdm_expire_time_dentry;
+	struct dentry *tdm_action_dentry, *tdm_expire_time_dentry, *tdm_enable_dentry;
+
+	tdm_enable_dentry = debugfs_create_file("tdm_enable", S_IRUGO | S_IFREG,
+			NULL, NULL, &tdm_enable_ops);
+	if (!tdm_enable_dentry || (tdm_enable_dentry == ERR_PTR(-ENODEV)))
+		pr_err("TDM: create enable debugfs failed\n.");
 
 	tdm_action_dentry = debugfs_create_file("tdm_action", S_IRUGO | S_IFREG,
 			NULL, NULL, &tdm_action_ops);
@@ -241,6 +284,9 @@ static inline void tdm_debugfs_init(void)
 
 static void tdm_kick_work_func(struct work_struct *work)
 {
+	if (!tdm_enable)
+		return;
+
 	pr_debug("TDM work daemon kick tdm watchdog\n");
 	TDMKickWatchDog(tdm_expire_time * MSEC_PER_SEC, tdm_action);
 	/*
@@ -316,13 +362,11 @@ static int tdm_probe(struct platform_device *pdev)
 	}
 
 	tdm_set_dump_format(pdev);
-	TDMKickWatchDog(tdm_expire_time * MSEC_PER_SEC, tdm_action); /* default 30s */
 
 	INIT_DELAYED_WORK(&tdm_work, tdm_kick_work_func);
-
 	tdm_wq = alloc_workqueue("tdm_workqueue", WQ_HIGHPRI |
 			WQ_UNBOUND | WQ_MEM_RECLAIM, 1);
-	if (tdm_wq == NULL) {
+	if (!tdm_wq) {
 		dev_err(&pdev->dev, "tdm alloc_workqueue failed\n");
 		ret = -ENOMEM;
 		goto err;
@@ -330,6 +374,10 @@ static int tdm_probe(struct platform_device *pdev)
 	queue_delayed_work(tdm_wq, &tdm_work, TDM_DAEMON_SCHED_TIME * HZ);
 
 	tdm_debugfs_init();
+
+	if (tdm_enable)
+		TDMKickWatchDog(tdm_expire_time * MSEC_PER_SEC, tdm_action); /* default 30s */
+
 	return 0;
 
 err:
@@ -338,7 +386,8 @@ err:
 
 static int tdm_remove(struct platform_device *pdev)
 {
-	TDMStopWatchDog();
+	if (tdm_enable)
+		TDMStopWatchDog();
 	TEEC_CloseSession(&g_tdm_tee_ss);
 	TEEC_FinalizeContext(&g_tdm_tee_cntx);
 
@@ -347,7 +396,8 @@ static int tdm_remove(struct platform_device *pdev)
 
 static void tdm_shutdown(struct platform_device *pdev)
 {
-	TDMStopWatchDog();
+	if (tdm_enable)
+		TDMStopWatchDog();
 	TEEC_CloseSession(&g_tdm_tee_ss);
 	TEEC_FinalizeContext(&g_tdm_tee_cntx);
 
@@ -357,16 +407,19 @@ static void tdm_shutdown(struct platform_device *pdev)
 #ifdef CONFIG_PM
 static int tdm_suspend(struct platform_device *pdev, pm_message_t state)
 {
-	TDMStopWatchDog();
-	cancel_delayed_work_sync(&tdm_work);
-
+	if (tdm_enable) {
+		TDMStopWatchDog();
+		cancel_delayed_work_sync(&tdm_work);
+	}
 	return 0;
 }
 
 static int tdm_resume(struct platform_device *pdev)
 {
-	TDMKickWatchDog(tdm_expire_time * MSEC_PER_SEC, tdm_action);
-	queue_delayed_work(tdm_wq, &tdm_work, TDM_DAEMON_SCHED_TIME * HZ);
+	if (tdm_enable) {
+		TDMKickWatchDog(tdm_expire_time * MSEC_PER_SEC, tdm_action);
+		queue_delayed_work(tdm_wq, &tdm_work, TDM_DAEMON_SCHED_TIME * HZ);
+	}
 
 	return 0;
 }
