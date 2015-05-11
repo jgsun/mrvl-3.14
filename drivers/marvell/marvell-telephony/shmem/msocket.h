@@ -128,6 +128,13 @@ struct cp_keysection {
 	volatile unsigned int cp_freq[MAX_CPDVC_NUM];
 	volatile unsigned int cp_vol[MAX_CPDVC_NUM];
 	volatile unsigned int msa_dvc_vol;
+
+#define DFC_MAGIC_FLAG 0x4446434C
+	volatile unsigned int dfc_magic;
+#define MAX_DFCLVL_NUM 5
+	/* dfc level */
+	/* 0 - idle, 1 - active, 2 - high, 3, 4 reserve */
+	volatile unsigned int dfc_lvl[MAX_DFCLVL_NUM];
 };
 
 extern struct cp_keysection *cpks;

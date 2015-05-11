@@ -1348,6 +1348,23 @@ static void get_dvc_info(void)
 	cpks->msa_dvc_vol = dvc_vol_info.msadvcvl[0].cpvl;
 }
 
+enum ddr_dfc_level {
+	idle,
+	active,
+	high,
+};
+
+static void get_dfc_info(void)
+{
+	struct ddr_dfc_info dfc_info;
+
+	getddrdfcinfo(&dfc_info);
+	cpks->dfc_magic = DFC_MAGIC_FLAG;
+	cpks->dfc_lvl[idle] = dfc_info.ddr_idle;
+	cpks->dfc_lvl[active] = dfc_info.ddr_active;
+	cpks->dfc_lvl[high] = dfc_info.ddr_high;
+}
+
 static int cpks_debugfs_init(struct dentry *parent)
 {
 	cpks_rootdir = debugfs_create_dir("cpks", parent);
@@ -1495,6 +1512,7 @@ static int cp_shm_init(const struct cpload_cp_addr *addr)
 	cp_keysection_data_init();
 	set_version_numb();
 	get_dvc_info();
+	get_dfc_info();
 
 	return 0;
 
