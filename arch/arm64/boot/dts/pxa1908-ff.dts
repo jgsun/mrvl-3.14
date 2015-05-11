@@ -32,7 +32,7 @@
 				status = "okay";
 			};
 
-			udc: udc@d4208100 {
+			udc: udc@d4208000 {
 				status = "okay";
 			};
 
