@@ -43,6 +43,9 @@
 
 #include <asm/irq.h>
 
+#define CREATE_TRACE_POINTS
+#include <trace/events/i2c-pxa.h>
+
 struct pxa_reg_layout {
 	u32 ibmr;
 	u32 idbr;
@@ -1327,6 +1330,90 @@ static irqreturn_t i2c_pxa_handler(int this_irq, void *dev_id)
 
 	return IRQ_HANDLED;
 }
+#define MAX_READ_SIZE 1024
+/*
+ * Collect the data for the ftrace and emit the event
+ */
+static int event_trace_i2c_xfer(struct pxa_i2c *adap, struct i2c_msg msgs[], int num)
+{
+#ifdef CONFIG_TRACE_EVENT_I2C_PXA
+	int i;
+	/* collect all information */
+	unsigned int is_write;
+	int len;
+	char data[MAX_READ_SIZE];	/* max number of bytes written to i2c */
+	unsigned int addr;
+
+	for (i = 0; i < num; i++) {
+		addr = msgs[i].addr;
+		len = msgs[i].len;
+		is_write = !(msgs[i].flags & 0x1);
+		data[0] = 0;
+		if (is_write) {
+			int j;
+			char *d;
+			const char *hex = "0123456789ABCDEF";
+			d = data;
+			for (j = 0; j < len; j++) {
+				*d++ = hex[(msgs[i].buf[j]>>4) & 0xF];
+				*d++ = hex[msgs[i].buf[j] & 0xF];
+				*d++ = ':';
+			}
+			if (j > 0)
+				*(d-1) = 0;
+		}
+		trace_i2c_pxa_xfer(is_write, dev_name(&adap->adap.dev), addr, len, data);
+	}
+#endif
+	return 0;
+}
+
+/**
+ * emit the fail trace event
+ */
+static int event_trace_i2c_bus_fail(struct i2c_msg msgs[], int num)
+{
+#ifdef CONFIG_TRACE_EVENT_I2C_PXA
+	int i;
+	unsigned int is_read = 0;
+	for (i = 0; i < num; i++)
+		is_read |= (msgs[i].flags & 0x1);
+	trace_i2c_pxa_xfer_fail(!is_read);
+#endif
+	return 0;
+}
+
+/**
+ * find the read, and print the data
+ */
+static int event_trace_i2c_bus_read(struct i2c_msg msgs[], int num)
+{
+#ifdef CONFIG_TRACE_EVENT_I2C_PXA
+	int i;
+	char data[MAX_READ_SIZE];	/* max number of bytes read from i2c */
+	for (i = 0; i < num; i++) {
+		if (msgs[i].flags & 0x1) {
+			int j;
+			char *d;
+			const char *hex = "0123456789ABCDEF";
+			d = data;
+			for (j = 0; j < msgs[i].len; j++) {
+				*d++ = hex[(msgs[i].buf[j]>>4) & 0xF];
+				*d++ = hex[msgs[i].buf[j] & 0xF];
+				*d++ = ':';
+			}
+			if (j > 0)
+				*(d-1) = 0;
+			else
+				*data = 0;
+			trace_i2c_pxa_xfer_read_data(msgs[i].addr, data);
+		}
+	}
+#endif
+	return 0;
+}
+
+
 
 
 static int i2c_pxa_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
@@ -1350,6 +1437,7 @@ static int i2c_pxa_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num
 		i2c_pxa_enable(i2c, true);
 
 	enable_irq(i2c->irq);
+	event_trace_i2c_xfer(i2c, msgs, num);
 	for (i = adap->retries; i >= 0; i--) {
 		ret = i2c_pxa_do_xfer(i2c, msgs, num);
 		if (ret != I2C_RETRY)
@@ -1361,7 +1449,12 @@ static int i2c_pxa_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num
 	}
 	i2c_pxa_scream_blue_murder(i2c, "exhausted retries");
 	ret = -EREMOTEIO;
+	event_trace_i2c_bus_fail(msgs, num);
  out:
+
+	if (ret > 0)
+		event_trace_i2c_bus_read(msgs, num);
+
 	i2c_pxa_set_slave(i2c, ret);
 	disable_irq(i2c->irq);
 

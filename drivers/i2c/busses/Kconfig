@@ -649,6 +649,13 @@ config I2C_PXA_SLAVE
 	  is necessary for systems where the PXA may be a target on the
 	  I2C bus.
 
+config TRACE_EVENT_I2C_PXA
+	bool "Enable trace event on I2C PXA"
+	depends on I2C_PXA
+	help
+	  Enable event trace for the I2C bus.
+	  Enabling this has a performance effect on the driver.
+
 config I2C_RIIC
 	tristate "Renesas RIIC adapter"
 	depends on ARCH_SHMOBILE || COMPILE_TEST
