@@ -1044,9 +1044,6 @@ static int dp_init(void *priv)
 	}
 
 	tx_q_init(dp);
-	dp->tx_wm[PSD_QUEUE_HIGH] = 0;
-	dp->tx_wm[PSD_QUEUE_DEFAULT]
-		= dp->rbctl->tx_skbuf_num / 10;
 
 	memset(&dp->stat, 0, sizeof(dp->stat));
 
@@ -1222,6 +1219,13 @@ static int shm_param_init(struct shm_rbctl *rbctl,
 	return 0;
 }
 
+static inline void dp_init_wm(struct data_path *dp)
+{
+	dp->tx_wm[PSD_QUEUE_HIGH] = 0;
+	dp->tx_wm[PSD_QUEUE_DEFAULT]
+		= dp->rbctl->tx_skbuf_num / 10;
+}
+
 static int dp_set_addr(void *priv, const struct cpload_cp_addr *addr)
 {
 	struct data_path *dp = (struct data_path *)priv;
@@ -1230,6 +1234,7 @@ static int dp_set_addr(void *priv, const struct cpload_cp_addr *addr)
 		shm_rb_exit(dp->rbctl);
 
 	shm_param_init(dp->rbctl, addr);
+	dp_init_wm(dp);
 	if (shm_rb_init(dp->rbctl, psd_debugfs_root_dir) < 0)
 		pr_err("%s: init psd rbctl failed\n", __func__);
 
