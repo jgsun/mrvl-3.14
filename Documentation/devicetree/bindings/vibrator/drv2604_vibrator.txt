@@ -2,14 +2,33 @@ Device tree bindings for Texas-Instruments drv2604 vibrator driver
 
 Required properties:
 
- - compatible:          Should be "ti,drv2604-vibrator".
- - reg:                 I2C client number (0x5a as defined in drv2604 datasheet).
- - vibrator-supply:     Regulator that supplies the vibrator driver.
+ - compatible:		Should be "ti,drv2604-vibrator".
+ - reg:		I2C client number (0x5a as defined in drv2604 datasheet).
+ - vibrator-supply:	Regulator that supplies the vibrator driver.
+ - average-voltage-mv:	The average voltage from motor spec. Needed to calculate
+			the rated voltage.
+ - average-overdrive-voltage-mv:
+ 			The average overdrive voltage. Needed to calculate the
+			overdrive clamp voltage.
 
 Optional properties:
- - trig_gpio:		used to trigger the vibrator using GPIO instead of I2C writes.
+ - trig_gpio:		Used to trigger the vibrator using GPIO instead of I2C writes.
 			Note that if this property is not defined the driver
 			will configure with I2C writes by default.
+ - actuator-type:	Sets the actuator type (ERM or LRA). by default it is ERM.
+ - bemf-gain:		Analog gain of back-EMF amplifier. By default sets to 0
+			(x0.33 for ERM or x5 for LRA).
+ - loop-response:	loop gain for the feedback control. By default sets to 1 (Medium).
+ - brake-factor:	feedback gain ratio between braking gain and driving gain.
+			By default sets to 2 (x3).
+ - drive-time-usec:	ERM only, used to calculate overdrive clamp voltage.
+			By default sets to 4800[usec].
+ - current-dissipation-time-usec:
+			ERM only, used to calculate overdrive clamp voltage.
+			By default sets to 75[usec].
+ - blanking-time-usec:	ERM only, used to calculate overdrive clamp voltage.
+			By default sets to 75[usec].
+
 
 Example:
 
@@ -18,4 +37,7 @@ Example:
 		reg = <0x5a>;
 		vibrator-supply = <&ldo10>;
 		rst_gpio = <&gpio 78 0>;
+		actuator-type = <0>; //ERM
+		average-voltage-mv = <2582>;
+		average-overdrive-voltage-mv = <3600>;
 	};
