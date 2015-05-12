@@ -380,7 +380,7 @@ static void dp_rx_func(unsigned long arg)
 
 		/* double check the ring buffer */
 		wptr = skctl->ds.wptr;
-		if (psd_is_link_up() && __shm_is_empty(wptr, rptr))
+		if (!__shm_is_empty(wptr, rptr))
 			dp_schedule_rx(dp);
 	}
 }
