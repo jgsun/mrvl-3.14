@@ -42,6 +42,7 @@
 	MODULE_PARM_DESC(host_addr, "Host Ethernet Address")
 
 struct eth_dev;
+struct aggr_ctx;
 
 /*
  * This represents the USB side of an "ethernet" link, managed by a USB
@@ -76,10 +77,9 @@ struct gether {
 	u32				fixed_in_len;
 
 	unsigned			ul_max_pkts_per_xfer;
-	unsigned			dl_max_pkts_per_xfer;
-	bool				multi_pkt_xfer;
 	struct sk_buff			*(*wrap)(struct gether *port,
-						struct sk_buff *skb);
+						struct sk_buff *skb,
+						struct aggr_ctx *aggr_ctx);
 	int				(*unwrap)(struct gether *port,
 						struct sk_buff *skb,
 						struct sk_buff_head *list);
@@ -87,9 +87,15 @@ struct gether {
 	/* called on network open/close */
 	void				(*open)(struct gether *);
 	void				(*close)(struct gether *);
-	struct rndis_packet_msg_type	*header;
-
 };
+
+struct aggr_ctx {
+	struct sk_buff_head	skb_list;
+	struct sk_buff		*pending_skb;
+	unsigned			total_size;
+};
+
+#define AGGRCTX(x)		((struct aggr_ctx *)((x)->context))
 
 #define	DEFAULT_FILTER	(USB_CDC_PACKET_TYPE_BROADCAST \
 			|USB_CDC_PACKET_TYPE_ALL_MULTICAST \

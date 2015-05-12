@@ -69,11 +69,7 @@
  *   - MS-Windows drivers sometimes emit undocumented requests.
  */
 
-static unsigned int rndis_dl_max_pkt_per_xfer = 8;
-module_param(rndis_dl_max_pkt_per_xfer, uint, S_IRUGO | S_IWUSR);
-MODULE_PARM_DESC(rndis_dl_max_pkt_per_xfer,
-	"Maximum packets per transfer for DL aggregation");
-
+static unsigned int rndis_dl_max_xfer;
 static unsigned int rndis_ul_max_pkt_per_xfer = 8;
 module_param(rndis_ul_max_pkt_per_xfer, uint, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(rndis_ul_max_pkt_per_xfer,
@@ -379,39 +375,79 @@ static struct usb_gadget_strings *rndis_strings[] = {
 /*-------------------------------------------------------------------------*/
 
 static struct sk_buff *rndis_add_header(struct gether *port,
-					struct sk_buff *skb)
+				 struct sk_buff *skb, struct aggr_ctx *aggr_ctx)
 {
 	struct sk_buff *skb2;
-	struct rndis_packet_msg_type *header = NULL;
-	struct f_rndis *rndis = func_to_rndis(&port->func);
 
-	if (rndis->port.multi_pkt_xfer) {
-		if (port->header) {
-			header = port->header;
-			memset(header, 0, sizeof(*header));
-			header->MessageType = cpu_to_le32(RNDIS_MSG_PACKET);
-			header->MessageLength = cpu_to_le32(skb->len +
-							sizeof(*header));
-			header->DataOffset = cpu_to_le32(36);
-			header->DataLength = cpu_to_le32(skb->len);
-			pr_debug("MessageLength:%d DataLength:%d\n",
-						header->MessageLength,
-						header->DataLength);
-			return skb;
-		} else {
-			pr_err("RNDIS header is NULL.\n");
-			return NULL;
-		}
-	} else {
-		skb2 = skb_realloc_headroom(skb,
-				sizeof(struct rndis_packet_msg_type));
-		if (skb2)
-			rndis_add_hdr(skb2);
-
-		dev_kfree_skb_any(skb);
-		return skb2;
+	if (!skb->cloned && skb_headroom(skb) >=
+		sizeof(struct rndis_packet_msg_type)) {
+		rndis_add_hdr(skb);
+		return skb;
 	}
+	skb2 = skb_realloc_headroom(skb,
+			sizeof(struct rndis_packet_msg_type));
+	if (skb2)
+		rndis_add_hdr(skb2);
+
+	dev_kfree_skb_any(skb);
+	return skb2;
 }
+
+#ifdef CONFIG_USB_G_RNDIS_MULT_PKT_SUPPORT
+#define MAX_MULT_PADDING 64
+
+static struct sk_buff *rndis_multpkt_add_header(struct gether *port,
+				 struct sk_buff *skb, struct aggr_ctx *aggr_ctx)
+{
+	struct	rndis_packet_msg_type *header;
+	long padding, aggregate_length;
+	struct sk_buff *prev_skb, *first_skb;
+
+	BUG_ON(!aggr_ctx);
+	BUG_ON(!skb);
+
+	if (skb_queue_empty(&aggr_ctx->skb_list)) {
+		/*first packet in the usb request*/
+		skb = rndis_add_header(port, skb, aggr_ctx);
+		if (likely(skb)) {
+			aggr_ctx->total_size = skb->len;
+			skb_queue_tail(&aggr_ctx->skb_list, skb);
+		}
+		return skb;
+	}
+
+	first_skb = skb_peek(&aggr_ctx->skb_list);
+	prev_skb = skb_peek_tail(&aggr_ctx->skb_list);
+
+	BUG_ON(!first_skb);
+	BUG_ON(!prev_skb);
+	BUG_ON(!aggr_ctx->total_size);
+
+	padding = (unsigned long)skb->data -
+		(unsigned long)skb_tail_pointer(prev_skb)
+		- sizeof(struct rndis_packet_msg_type);
+	aggregate_length = skb_tail_pointer(skb) - first_skb->data;
+
+	/*rndis aggregation condition*/
+	if (skb->cloned ||
+		   skb_headroom(skb) < sizeof(struct rndis_packet_msg_type) ||
+		   aggregate_length > rndis_dl_max_xfer ||
+		   padding > MAX_MULT_PADDING ||
+		   padding < 0) {
+		aggr_ctx->pending_skb = skb;
+		return first_skb;
+	}
+
+	/*new skb aggregation:*/
+	rndis_add_hdr(skb);
+	header = (struct rndis_packet_msg_type *)prev_skb->data;
+	header->MessageLength = cpu_to_le32(skb->data - prev_skb->data);
+	skb_queue_tail(&aggr_ctx->skb_list, skb);
+	aggr_ctx->total_size = skb_tail_pointer(skb) - first_skb->data;
+
+	return first_skb;
+}
+#endif
 
 static void rndis_response_available(void *_rndis)
 {
@@ -499,15 +535,10 @@ static void rndis_command_complete(struct usb_ep *ep, struct usb_request *req)
 	buf = (rndis_init_msg_type *)req->buf;
 
 	if (buf->MessageType == RNDIS_MSG_INIT) {
-		if (buf->MaxTransferSize > 2048)
-			rndis->port.multi_pkt_xfer = true;
-		else
-			rndis->port.multi_pkt_xfer = false;
-		pr_debug("%s: MaxTransferSize: %d : multi_pkt_xfer: %s\n",
+		rndis_dl_max_xfer = buf->MaxTransferSize;
+		pr_info("%s: MaxTransferSize: %d : max_pkt_per_xfer: %d\n",
 			__func__, buf->MaxTransferSize,
-			rndis->port.multi_pkt_xfer ? "enabled" : "disabled");
-		if (rndis_dl_max_pkt_per_xfer <= 1)
-			rndis->port.multi_pkt_xfer = false;
+			buf->MaxTransferSize >> 11);
 	}
 //	spin_unlock(&dev->lock);
 }
@@ -895,7 +926,6 @@ rndis_old_unbind(struct usb_configuration *c, struct usb_function *f)
 
 	kfree(rndis->notify_req->buf);
 	usb_ep_free_request(rndis->notify, rndis->notify_req);
-
 	kfree(rndis);
 }
 
@@ -922,10 +952,14 @@ rndis_bind_config_vendor(struct usb_configuration *c, u8 ethaddr[ETH_ALEN],
 
 	/* RNDIS has special (and complex) framing */
 	rndis->port.header_len = sizeof(struct rndis_packet_msg_type);
+
+#ifdef CONFIG_USB_G_RNDIS_MULT_PKT_SUPPORT
+	rndis->port.wrap = rndis_multpkt_add_header;
+#else
 	rndis->port.wrap = rndis_add_header;
+#endif
 	rndis->port.unwrap = rndis_rm_hdr;
 	rndis->port.ul_max_pkts_per_xfer = rndis_ul_max_pkt_per_xfer;
-	rndis->port.dl_max_pkts_per_xfer = rndis_dl_max_pkt_per_xfer;
 
 	rndis->port.func.name = "rndis";
 	/* descriptors are per-instance copies */

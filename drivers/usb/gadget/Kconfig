@@ -1066,6 +1066,12 @@ config USB_ANDROID_RNDIS_DWORD_ALIGNED
 	help
 		Provides dword aligned for DMA controller.
 
+config USB_G_RNDIS_MULT_PKT_SUPPORT
+	boolean "enable rndis multi packets mode"
+	depends on USB_G_ANDROID
+	help
+		enable rndis multi packets mode.
+
 if TTY
 
 config USB_CDC_COMPOSITE
