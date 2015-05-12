@@ -83,20 +83,23 @@
 #define FBCTRL_LOOP_RESPONSE(x)	(((x) & 0x3) << 2)
 #define FBCTRL_BRAKE_FACTOR(x)		(((x) & 0x7) << 4)
 #define FBCTRL_N_ERM_LRA(x)		(((x) & 0x1) << 7)
-#define DEFAULT_BEMF_GAIN_ERM		0x0
-#define DEFAULT_LR4ERM			0x1
-#define DEFAULT_BF4ERM			0x2
+#define DEFAULT_BEMF_GAIN		0x0
+#define DEFAULT_LOOP_RESPONSE		0x1
+#define DEFAULT_BRAKE_FACTOR		0x2
 #define SET_ERM			0x0
+#define SET_LRA			0x1
 
 /* WAVEFORMSEQ */
 #define WAVEFORMSEQ_TERMINATE	0
 
 /* definitions */
-#define WAIT_FOR_CAL_MSEC		50 /* waste up to 50ms after done */
-#define CHECK_CAL_PROCESS_RETRIES	50
-#define VIBRA_OFF_VALUE	0
-#define VIBRA_ON_VALUE		1
-#define LDO_VOLTAGE_3p3V	3300000
+#define VIBRA_OFF_VALUE		0
+#define VIBRA_ON_VALUE			1
+#define LDO_VOLTAGE_3p3V		3300000
+#define DRV2604_DRIVE_TIME_USEC_DEFAULT		4800
+#define DRV2604_CURRENT_DISSIPATION_TIME_USEC_DEFAULT	75
+#define DRV2604_BLANKING_TIME_USEC_DEFAULT		75
+
 
 const unsigned char ram_table_header[] = {
 0x00,		/* RAM Library Revision Byte (to track library revisions) */
@@ -117,8 +120,20 @@ struct drv2604_vibrator_info {
 	struct work_struct vibrator_off_work;
 	struct mutex vib_mutex;
 	struct regulator *vib_regulator;
-	int enable;
 	int trig_gpio;
+	unsigned char (*calc_rated_voltage)(struct drv2604_vibrator_info *info);
+	unsigned char (*calc_od_clamp_voltage)(
+				struct drv2604_vibrator_info *info);
+	unsigned int average_vol_mv;
+	unsigned int average_od_vol_mv;
+	unsigned int actuator_type;
+	unsigned int brake_factor;
+	unsigned int loop_response;
+	unsigned int bemf_gain;
+	unsigned int drive_time_usec;
+	unsigned int current_dis_time_usec;
+	unsigned int blanking_time_usec;
+	int enable;
 	int probe_called;
 	unsigned long start_cal_time;
 };
@@ -420,6 +435,60 @@ end:
 	return ret;
 }
 
+static unsigned char drv2604_calc_erm_rated_voltage(
+					struct drv2604_vibrator_info *info)
+{
+	/*
+	 * the formula to obtain the rated voltage from averge voltage is:
+	 * RatedVoltage = (Vaverage[mV] * 255) / 5440[mV]
+	 */
+	return (info->average_vol_mv * 255) / 5440;
+}
+
+static unsigned char drv2604_calc_lra_rated_voltage(
+					struct drv2604_vibrator_info *info)
+{
+	/*
+	 * the formula to obtain the rated voltage from averge (RMS) voltage is:
+	 * RatedVoltage = (Vabs[mV] * 255) / 5280[mV]
+	 */
+	return (info->average_vol_mv * 255) / 5280;
+}
+
+static unsigned char drv2604_calc_erm_od_clamp_voltage(
+					struct drv2604_vibrator_info *info)
+{
+	unsigned int vpeak;
+	/*
+	 * the formula to obtain the overdrive clamp voltage from averge
+	 * clamp vaoltge (Vav) is:
+	 * OverdriveClampVoltage = Vpeak[mV] * 255 / 5440[mV]
+	 * where
+	 * Vpeak[mV] =
+	 * (Vav[mV] * (DriveTime[usec] + IDissTime[usec] + BlankingTime[usec]))
+	 *	/
+	 * (DriveTime[usec] - 300[usec])
+	 */
+	vpeak = (info->average_od_vol_mv *
+			(info->drive_time_usec +
+				info->current_dis_time_usec +
+				info->blanking_time_usec))
+			/ (info->drive_time_usec - 300);
+
+	return (vpeak * 255) / 5440;
+}
+
+static unsigned char drv2604_calc_lra_od_clamp_voltage(
+					struct drv2604_vibrator_info *info)
+{
+	/*
+	 * the formula to obtain the overdrive clamp voltage from averge
+	 * clamp vaoltge (Vav) is:
+	 * OverdriveClampVoltage = Vod[mV] * 255 / 5600[mV]
+	 */
+	return (info->average_od_vol_mv * 255) / 5600;
+}
+
 static int drv2604_auto_calibration_trigger(struct drv2604_vibrator_info *info)
 {
 	int ret;
@@ -432,7 +501,8 @@ static int drv2604_auto_calibration_trigger(struct drv2604_vibrator_info *info)
 
 	/* set rated-voltage register */
 	ret = drv2604_i2c_write_single_byte(i2c,
-				DRV2604_RATED_VOLTAGE, ERM_RV_2p6);
+				DRV2604_RATED_VOLTAGE,
+				info->calc_rated_voltage(info));
 	if (ret) {
 		VIB_ERR_MSG("I2C write failed\n");
 		goto end;
@@ -440,7 +510,8 @@ static int drv2604_auto_calibration_trigger(struct drv2604_vibrator_info *info)
 
 	/* set overdrive-clamp-voltage register */
 	ret = drv2604_i2c_write_single_byte(i2c,
-				DRV2604_OVERDRIVE_CLAMP_VOLTAGE, ERM_ODV_3p6);
+				DRV2604_OVERDRIVE_CLAMP_VOLTAGE,
+				info->calc_od_clamp_voltage(info));
 	if (ret) {
 		VIB_ERR_MSG("I2C write failed\n");
 		goto end;
@@ -448,10 +519,10 @@ static int drv2604_auto_calibration_trigger(struct drv2604_vibrator_info *info)
 
 	/* set feedback control register */
 	ret = drv2604_i2c_write_single_byte(i2c, DRV2604_FBCTRL,
-				FBCTRL_N_ERM_LRA(SET_ERM) |
-				FBCTRL_BRAKE_FACTOR(DEFAULT_BF4ERM) |
-				FBCTRL_LOOP_RESPONSE(DEFAULT_LR4ERM) |
-				FBCTRL_BEMF_GAIN(DEFAULT_BEMF_GAIN_ERM));
+				FBCTRL_N_ERM_LRA(info->actuator_type) |
+				FBCTRL_BRAKE_FACTOR(info->brake_factor) |
+				FBCTRL_LOOP_RESPONSE(info->loop_response) |
+				FBCTRL_BEMF_GAIN(info->bemf_gain));
 	if (ret) {
 		VIB_ERR_MSG("I2C write failed\n");
 		goto end;
@@ -595,20 +666,94 @@ static int drv2604_trigger_method(struct drv2604_vibrator_info *info)
 }
 
 #ifdef CONFIG_OF
-static void of_vibrator_probe(struct device_node *np,
+static void of_vibrator_probe_erm(struct device_node *np,
 				struct drv2604_vibrator_info *info)
 {
+	if (of_property_read_u32(np, "drive-time-usec",
+					&info->drive_time_usec)) {
+		VIB_INFO_MSG("failed to get drive-time-usec property, use default\n");
+		info->drive_time_usec = DRV2604_DRIVE_TIME_USEC_DEFAULT;
+	}
+
+	if (of_property_read_u32(np, "current-dissipation-time-usec",
+					&info->current_dis_time_usec)) {
+		VIB_INFO_MSG("failed to get current-dissipation-time-usec, use default\n");
+		info->current_dis_time_usec =
+				DRV2604_CURRENT_DISSIPATION_TIME_USEC_DEFAULT;
+	}
+
+	if (of_property_read_u32(np, "blanking-time-usec",
+					&info->blanking_time_usec)) {
+		VIB_INFO_MSG("failed to get blanking-time-usec, use default\n");
+		info->blanking_time_usec = DRV2604_BLANKING_TIME_USEC_DEFAULT;
+	}
+}
+
+static int of_vibrator_probe(struct device_node *np,
+				struct drv2604_vibrator_info *info)
+{
+	int ret;
+
 	info->trig_gpio =
 		of_get_named_gpio(np, "trig_gpio", 0);
 	if (info->trig_gpio < 0)
 		VIB_INFO_MSG("No GPIO trigger defined, work with I2C writes\n");
 
-	return;
+	if (of_property_read_u32(np, "actuator-type",
+					&info->actuator_type)) {
+		VIB_INFO_MSG("failed to get actuator-type, use default\n");
+		info->actuator_type = SET_ERM;
+	}
+
+	ret = of_property_read_u32(np, "average-voltage-mv",
+					&info->average_vol_mv);
+	if (ret) {
+		VIB_ERR_MSG("failed to get average-voltage-mv property\n");
+		return ret;
+	}
+
+	ret = of_property_read_u32(np, "average-overdrive-voltage-mv",
+					&info->average_od_vol_mv);
+	if (ret) {
+		VIB_ERR_MSG("failed to get average-overdrive-voltage-mv property\n");
+		return ret;
+	}
+
+	if (of_property_read_u32(np, "bemf-gain",
+					&info->bemf_gain)) {
+		VIB_INFO_MSG("failed to get bemf-gain, use default\n");
+		info->bemf_gain = DEFAULT_BEMF_GAIN;
+	}
+
+	if (of_property_read_u32(np, "loop-response",
+					&info->loop_response)) {
+		VIB_INFO_MSG("failed to get loop-response, use default\n");
+		info->loop_response = DEFAULT_LOOP_RESPONSE;
+	}
+
+	if (of_property_read_u32(np, "brake-factor",
+					&info->brake_factor)) {
+		VIB_INFO_MSG("failed to get brake-factor, use default\n");
+		info->brake_factor = DEFAULT_BRAKE_FACTOR;
+	}
+
+	if (info->actuator_type == SET_ERM) {
+		of_vibrator_probe_erm(np, info);
+		info->calc_rated_voltage = drv2604_calc_erm_rated_voltage;
+		info->calc_od_clamp_voltage = drv2604_calc_erm_od_clamp_voltage;
+	} else {
+		info->calc_rated_voltage = drv2604_calc_lra_rated_voltage;
+		info->calc_od_clamp_voltage = drv2604_calc_lra_od_clamp_voltage;
+	}
+
+
+	return 0;
 }
 #else
-static void of_vibrator_probe(struct device_node *np,
+static int of_vibrator_probe(struct device_node *np,
 				struct drv2604_vibrator_info *info)
 {
+	return 0;
 }
 #endif
 
@@ -650,7 +795,9 @@ static int vibrator_probe(struct i2c_client *client,
 	}
 
 	/* get of parameters */
-	of_vibrator_probe(client->dev.of_node, info);
+	ret = of_vibrator_probe(client->dev.of_node, info);
+	if (ret)
+		goto err;
 
 	/* handle vibrator trigger method */
 	ret = drv2604_trigger_method(info);
