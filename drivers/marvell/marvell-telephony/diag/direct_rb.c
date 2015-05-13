@@ -36,8 +36,8 @@
 #include "shm.h"
 #include "shm_share.h"
 #include "tel_trace.h"
-#include "acipcd.h"
 #include "pxa_cp_load.h"
+#include "pxa_cp_load_ioctl.h"
 
 #define RX_ENQUEUE_RATELIMIT (8192)
 /* max diag rx queue length, in byte */

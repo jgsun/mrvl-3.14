@@ -36,114 +36,35 @@
 #include <linux/compat.h>
 #endif
 #include <linux/debugfs.h>
-#include "acipcd.h"
-#include "amipcd.h"
 #include "shm.h"
+#include "shm_share.h"
 #include "portqueue.h"
 #include "msocket.h"
-#include "shm_share.h"
-#include "common_regs.h"
-#include "pxa_m3_rm.h"
 #include "pxa_cp_load.h"
 #include "debugfs.h"
 #include "shm_map.h"
-#include "lib.h"
 
 #define CMSOCKDEV_NR_DEVS PORTQ_NUM_MAX
 
-static int cp_shm_ch_inited;
-static int m3_shm_ch_inited;
-
-struct cp_keysection *cpks;
-DEFINE_MUTEX(cpks_lock);
-struct dentry *cpks_rootdir;
 
 static struct dentry *tel_debugfs_root_dir;
 struct dentry *msocket_debugfs_root_dir;
 
-int cmsockdev_major;
-int cmsockdev_minor;
-int cmsockdev_nr_devs = CMSOCKDEV_NR_DEVS;
+static int cmsockdev_major;
+static int cmsockdev_minor;
+static int cmsockdev_nr_devs = CMSOCKDEV_NR_DEVS;
+
 struct cmsockdev_dev {
 	struct cdev cdev;	/* Char device structure */
 };
 
-static unsigned dump_flag;
 struct cmsockdev_dev *cmsockdev_devices;
 static struct class *cmsockdev_class;
 
-/* forward msocket sync related static function prototype */
-static void cp_sync_worker(struct work_struct *work);
-static void msocket_connect(enum portq_grp_type grp_type);
-static void msocket_disconnect(enum portq_grp_type grp_type);
-
-static DECLARE_WORK(sync_work, cp_sync_worker);
-static volatile bool cp_is_sync_canceled;
-static spinlock_t cp_sync_lock;
-bool cp_is_synced;
-EXPORT_SYMBOL(cp_is_synced);
-bool cp_recv_up_ioc;
-DECLARE_COMPLETION(cp_peer_sync);
-
-bool m3_is_synced;
-DECLARE_COMPLETION(m3_peer_sync);
-
-static BLOCKING_NOTIFIER_HEAD(cp_sync_notifier_list);
-
-int register_first_cp_synced(struct notifier_block *nb)
-{
-	return blocking_notifier_chain_register(&cp_sync_notifier_list, nb);
-}
-EXPORT_SYMBOL(register_first_cp_synced);
-
-void notify_first_cp_synced(void)
-{
-	blocking_notifier_call_chain(&cp_sync_notifier_list,
-			1, NULL);
-}
-
-DEFINE_BLOCKING_NOTIFIER(cp_link_status);
-
-static void dump(const unsigned char *data, unsigned int len)
-{
-	int i;
-	char *buf = NULL;
-	char *tmp_buf = NULL;
-	buf = kmalloc(2 * len + 1, GFP_ATOMIC);
-	if (buf == NULL) {
-		pr_err("msocket: %s: malloc error\n", __func__);
-		return;
-	}
-	tmp_buf = buf;
-	for (i = 0; i < len; i++)
-		tmp_buf += sprintf(tmp_buf, "%02x", data[i]);
-	pr_info("%s\n", buf);
-	kfree(buf);
-	return;
-}
-
-void data_dump(const unsigned char *data, unsigned int len, int port,
-	       int direction)
-{
-	if (direction == DATA_TX) {
-		if ((dump_flag & DUMP_TX) && (dump_flag & DUMP_PORT(port))) {
-			pr_info(
-			     " Msocket TX: DUMP BEGIN port :%d, Length:%d --\n",
-			     port, len);
-			if (!(dump_flag & DUMP_TX_SP))
-				dump(data, len);
-		}
-	} else if (direction == DATA_RX) {
-		if ((dump_flag & DUMP_RX) && (dump_flag & DUMP_PORT(port))) {
-			pr_info(
-			     " Msocket RX: DUMP BEGIN port :%d, Length:%d --\n",
-			     port, len);
-			if (!(dump_flag & DUMP_RX_SP))
-				dump(data, len);
-		}
-	}
-	return;
-}
+static struct portq_group *portq_grp[portq_grp_cnt] = {
+	[portq_grp_cp_main] = &pgrp_cp,
+	[portq_grp_m3] = &pgrp_m3
+};
 
 /* open a msocket in kernel */
 int msocket(int port)
@@ -190,7 +111,6 @@ EXPORT_SYMBOL(mclose);
 int msend(int sock, const void *buf, int len, int flags)
 {
 	struct portq *portq;
-	struct portq_group *pgrp;
 	struct sk_buff *skb;
 	struct shm_skhdr *hdr;
 	bool block = flags == MSOCKET_KERNEL;
@@ -202,10 +122,8 @@ int msend(int sock, const void *buf, int len, int flags)
 		return -1;
 	}
 
-	pgrp = portq_get_group(portq);
-
 	/* check the len first */
-	if (len > (pgrp->rbctl->tx_skbuf_size - sizeof(*hdr))) {
+	if (len > (portq->grp->rbctl->tx_skbuf_size - sizeof(*hdr))) {
 		pr_err("MSOCK: %s: port %d, len is %d!!\n",
 		       __func__, portq->port, len);
 		portq->stat_tx_drop++;
@@ -234,7 +152,7 @@ int msend(int sock, const void *buf, int len, int flags)
 	hdr->checksum = 0;
 	hdr->length = len;
 
-	if (!portq_is_synced(portq) || portq_xmit(portq, skb, block) < 0) {
+	if (!portq->grp->ops->is_synced() || portq_xmit(portq, skb, block) < 0) {
 		kfree_skb(skb);
 		pr_err("MSOCK: %s: port %d xmit error.\n",
 		       __func__, portq->port);
@@ -249,7 +167,6 @@ EXPORT_SYMBOL(msend);
 int msendskb(int sock, struct sk_buff *skb, int len, int flags)
 {
 	struct portq *portq;
-	struct portq_group *pgrp;
 	struct shm_skhdr *hdr;
 	int length;
 	bool block = flags == MSOCKET_KERNEL;
@@ -265,10 +182,8 @@ int msendskb(int sock, struct sk_buff *skb, int len, int flags)
 		return -1;
 	}
 
-	pgrp = portq_get_group(portq);
-
 	length = skb->len;
-	if (length > (pgrp->rbctl->tx_skbuf_size - sizeof(*hdr))) {
+	if (length > (portq->grp->rbctl->tx_skbuf_size - sizeof(*hdr))) {
 		pr_err(
 		       "MSOCK: %s: port %d, len is %d larger than tx_skbuf_size\n",
 		       __func__, portq->port, len);
@@ -283,7 +198,7 @@ int msendskb(int sock, struct sk_buff *skb, int len, int flags)
 	hdr->checksum = 0;
 	hdr->length = len;
 
-	if (!portq_is_synced(portq) || portq_xmit(portq, skb, block) < 0) {
+	if (!portq->grp->ops->is_synced() || portq_xmit(portq, skb, block) < 0) {
 		kfree_skb(skb);
 		pr_err("MSOCK: %s: port %d xmit error.\n",
 		       __func__, portq->port);
@@ -372,53 +287,6 @@ struct sk_buff *mrecvskb(int sock, int len, int flags)
 }
 EXPORT_SYMBOL(mrecvskb);
 
-static void cp_sync_worker(struct work_struct *work)
-{
-	bool cb_notify = false, link_notify = false;
-
-	/* acquire lock first */
-	spin_lock(&cp_sync_lock);
-
-	while (!cp_is_sync_canceled) {
-		/* send peer sync notify */
-		acipc_notify_peer_sync();
-
-		/* unlock before wait completion */
-		spin_unlock(&cp_sync_lock);
-
-		if (wait_for_completion_timeout(&cp_peer_sync, HZ)) {
-			/* we get CP sync response here */
-			pr_info("msocket connection sync with CP O.K.!\n");
-			/* acquire lock again */
-			spin_lock(&cp_sync_lock);
-
-			if (!cp_is_sync_canceled) {
-				/* if no one cancel me */
-				cp_is_synced = true;
-				/* only when we have received linkup ioctl
-				 * can we report the linkup message */
-				if (cp_recv_up_ioc) {
-					cp_recv_up_ioc = false;
-					link_notify = true;
-				} else
-					cb_notify  = true;
-			}
-			break;
-		}
-		/* acquire lock again */
-		spin_lock(&cp_sync_lock);
-	}
-
-	/* unlock before return */
-	spin_unlock(&cp_sync_lock);
-
-	if (cb_notify)
-		notify_first_cp_synced();
-	else if (link_notify)
-		notify_cp_link_status(MsocketLinkupProcId, NULL);
-}
-
-/* thottle portq receive by msocket */
 void msocket_recv_throttled(int sock)
 {
 	struct portq *portq;
@@ -429,11 +297,11 @@ void msocket_recv_throttled(int sock)
 		return;
 	}
 
-	portq_recv_throttled(portq);
+	portq_recv_throttle(portq);
 }
 EXPORT_SYMBOL(msocket_recv_throttled);
 
-/* unthottle portq receive by msocket */
+/* unthrottle portq receive by msocket */
 void msocket_recv_unthrottled(int sock)
 {
 	struct portq *portq;
@@ -444,86 +312,17 @@ void msocket_recv_unthrottled(int sock)
 		return;
 	}
 
-	portq_recv_unthrottled(portq);
+	portq_recv_unthrottle(portq);
 }
 EXPORT_SYMBOL(msocket_recv_unthrottled);
 
-/* start msocket sync */
-static void msocket_connect(enum portq_grp_type grp_type)
-{
-	if (grp_type == portq_grp_cp_main) {
-		spin_lock(&cp_sync_lock);
-		cp_is_sync_canceled = false;
-		spin_unlock(&cp_sync_lock);
-
-		portq_schedule_sync(&portq_grp[portq_grp_cp_main], &sync_work);
-	}
-}
-
-/* stop msocket sync */
-static void msocket_disconnect(enum portq_grp_type grp_type)
-{
-	if (grp_type == portq_grp_cp_main) {
-		spin_lock(&cp_sync_lock);
-
-		/* flag used to cancel any new packet activity */
-		cp_is_synced = false;
-
-		/* flag used to cancel potential peer sync worker */
-		cp_is_sync_canceled = true;
-
-		spin_unlock(&cp_sync_lock);
-	} else if (grp_type == portq_grp_m3) {
-		m3_is_synced = false;
-	}
-
-	/* ensure that any scheduled work has run to completion */
-	portq_flush_workqueue(grp_type);
-
-	/*
-	 * and now no work is active or will be schedule, so we can
-	 * cleanup any packet queued and initialize some key data
-	 * structure to the beginning state
-	 */
-	shm_rb_data_init(portq_grp[grp_type].rbctl);
-	portq_flush_init(grp_type);
-
-}
 
 /*
  * msocket device driver <-------------------------------------->
  */
 
-enum seq_dump_item {
-	/* 0 ~ portq_grp_cnt - 1 */
-	seq_dump_dummy = portq_grp_cnt,
-	seq_dump_end,
-};
-
-static inline int pos2seq(int pos)
-{
-	struct portq_group *pgrp = portq_grp;
-	struct portq_group *pgrp_end = portq_grp + portq_grp_cnt;
-	int max_port = (pgrp_end - 1)->port_offset +
-		(pgrp_end - 1)->port_cnt;
-
-	for (; pgrp != pgrp_end; pgrp++) {
-		if (pos < pgrp->port_offset + pgrp->port_cnt &&
-			pos >= pgrp->port_offset)
-			return pgrp - portq_grp;
-	}
-	/*
-	 * ugly workaround
-	 * TODO: rewrite them
-	 */
-
-	if (pos < max_port)
-		return seq_dump_dummy;
-
-	return pos - max_port + 1 + seq_dump_dummy;
-}
-
-#define PROC_FILE_NAME		"driver/msocket"
+#define PROC_CP_FILE_NAME		"driver/msocket_cp"
+#define PROC_M3_FILE_NAME		"driver/msocket_m3"
 
 /*
  * This function is called at the beginning of a sequence.
@@ -531,10 +330,12 @@ static inline int pos2seq(int pos)
 static void *msocket_seq_start(struct seq_file *s, loff_t *pos)
 {
 	void *v;
-	int seq = pos2seq((int)*pos);
+	struct portq_group *pgrp = (struct portq_group *)s->private;
 
-	if (seq < portq_grp_cnt)
-		spin_lock_irq(&portq_grp[seq].list_lock);
+	if (pgrp)
+		spin_lock_irq(&pgrp->list_lock);
+	else
+		return NULL;
 
 	v = (void *)(*pos + SEQ_START_TOKEN);
 
@@ -548,20 +349,12 @@ static void *msocket_seq_start(struct seq_file *s, loff_t *pos)
  */
 static void *msocket_seq_next(struct seq_file *s, void *v, loff_t *pos)
 {
-	int old_seq = pos2seq((int)*pos);
-	int new_seq = pos2seq((int)*pos + 1);
+	struct portq_group *pgrp = (struct portq_group *)s->private;
 
-	if (old_seq != new_seq) {
-		if (old_seq < portq_grp_cnt)
-			spin_unlock_irq(&portq_grp[old_seq].list_lock);
-		if (new_seq < portq_grp_cnt)
-			spin_lock_irq(&portq_grp[new_seq].list_lock);
-	}
-
-	if (new_seq >= seq_dump_end)
+	if (*pos < pgrp->port_cnt)
+		++*pos;
+	else
 		return NULL;
-
-	++*pos;
 
 	v = (void *)(*pos + SEQ_START_TOKEN);
 
@@ -574,13 +367,9 @@ static void *msocket_seq_next(struct seq_file *s, void *v, loff_t *pos)
  */
 static void msocket_seq_stop(struct seq_file *s, void *v)
 {
-	if (v) {
-		long pos = (long)v - (long)SEQ_START_TOKEN;
-		int seq = pos2seq(pos);
-
-		if (seq < portq_grp_cnt)
-			spin_unlock_irq(&portq_grp[seq].list_lock);
-	}
+	struct portq_group *pgrp = (struct portq_group *)s->private;
+	if (pgrp)
+		spin_unlock_irq(&pgrp->list_lock);
 }
 
 /*
@@ -589,32 +378,31 @@ static void msocket_seq_stop(struct seq_file *s, void *v)
 static int msocket_seq_show(struct seq_file *s, void *v)
 {
 	long pos = (long)v - (long)SEQ_START_TOKEN;
-	int seq = pos2seq(pos);
+	struct portq_group *pgrp = (struct portq_group *)s->private;
 
-	if (seq < portq_grp_cnt) {
-		struct portq_group *pgrp = &portq_grp[seq];
-		int idx = pos - pgrp->port_offset;
+	if (pgrp) {
 		struct portq *portq;
 
-		if (!pgrp->is_inited || idx > pgrp->port_cnt)
+		if (!pgrp->is_open || pos >= pgrp->port_cnt)
 			return 0;
 
-		portq = pgrp->port_list[idx];
+		portq = pgrp->port_list[pos];
 
-		if (!idx) {
+		if (!pos) {
 			struct shm_rbctl *rbctl = pgrp->rbctl;
 
-			seq_printf(s, "shm_is_ap_xmit_stopped: %d\n",
+			seq_printf(s, "group name: %s\n", pgrp->name);
+			seq_printf(s, "shm_is_local_xmit_stopped: %d\n",
 				rbctl->is_ap_xmit_stopped);
-			seq_printf(s, "shm_is_cp_xmit_stopped: %d\n",
+			seq_printf(s, "shm_is_remote_xmit_stopped: %d\n",
 				rbctl->is_cp_xmit_stopped);
-			seq_printf(s, "acipc_ap_stopped_num:   %ld\n",
+			seq_printf(s, "acipc_local_stopped_num:   %ld\n",
 				rbctl->ap_stopped_num);
-			seq_printf(s, "acipc_ap_resumed_num:   %ld\n",
+			seq_printf(s, "acipc_local_resumed_num:   %ld\n",
 				rbctl->ap_resumed_num);
-			seq_printf(s, "acipc_cp_stopped_num:   %ld\n",
+			seq_printf(s, "acipc_remote_stopped_num:   %ld\n",
 				rbctl->cp_stopped_num);
-			seq_printf(s, "acipc_cp_resumed_num:   %ld\n",
+			seq_printf(s, "acipc_remote_resumed_num:   %ld\n",
 				rbctl->cp_resumed_num);
 			seq_printf(s, "tx_socket_total:        %d\n",
 				rbctl->tx_skbuf_num);
@@ -625,7 +413,7 @@ static int msocket_seq_show(struct seq_file *s, void *v)
 			seq_printf(s, "rx_socket_free:         %d\n",
 				shm_free_rx_skbuf_safe(rbctl));
 
-			seq_printf(s, "rx_workq_sched_num:   %d\n",
+			seq_printf(s, "rx_workq_sched_num:   %u\n",
 				pgrp->rx_workq_sched_num);
 
 			seq_puts(s, "\nport  ");
@@ -634,8 +422,8 @@ static int msocket_seq_show(struct seq_file *s, void *v)
 				"  tx_sent  tx_drop  tx_queue_max"
 				"  rx_current  rx_indicate "
 				"  rx_got  rx_queue_max"
-				"  ap_throttle_cp  ap_unthrottle_cp"
-				"  cp_throttle_ap  cp_unthrottle_ap\n");
+				"  local_throttle  local_unthrottle"
+				"  remote_throttle  remote_unthrottle\n");
 		}
 
 		if (portq) {
@@ -662,57 +450,6 @@ static int msocket_seq_show(struct seq_file *s, void *v)
 	return 0;
 }
 
-static void msocket_dump_port(enum portq_grp_type grp_type)
-{
-	struct portq_group *pgrp = &portq_grp[grp_type];
-	struct shm_rbctl *rbctl = pgrp->rbctl;
-	struct portq *portq;
-	int i;
-
-	pr_err("shm_is_ap_xmit_stopped: %d\n",
-	       rbctl->is_ap_xmit_stopped);
-	pr_err("shm_is_cp_xmit_stopped: %d\n",
-	       rbctl->is_cp_xmit_stopped);
-	pr_err("acipc_ap_stopped_num:   %ld\n",
-	       rbctl->ap_stopped_num);
-	pr_err("acipc_ap_resumed_num:   %ld\n",
-	       rbctl->ap_resumed_num);
-	pr_err("acipc_cp_stopped_num:   %ld\n",
-	       rbctl->cp_stopped_num);
-	pr_err("acipc_cp_resumed_num:   %ld\n",
-	       rbctl->cp_resumed_num);
-	pr_err("tx_socket_total:        %d\n",
-	       rbctl->tx_skbuf_num);
-	pr_err("tx_socket_free:         %d\n",
-	       shm_free_tx_skbuf(rbctl));
-	pr_err("rx_socket_total:        %d\n",
-	       rbctl->rx_skbuf_num);
-	pr_err("rx_socket_free:         %d\n",
-	       shm_free_rx_skbuf(rbctl));
-
-	pr_err("\nport  tx_current  tx_request  tx_sent  tx_drop"
-	       "  tx_queue_max"
-	       "  rx_current  rx_indicate   rx_got  rx_queue_max"
-	       "  ap_throttle_cp  ap_unthrottle_cp"
-	       "  cp_throttle_ap  cp_unthrottle_ap\n");
-	for (i = 0; i < pgrp->port_cnt; i++) {
-		portq = pgrp->port_list[i];
-		if (!portq)
-			continue;
-		pr_err("%4d %12d %12ld %9ld %9ld %14ld %12d %13ld "
-		       "%9ld %14ld %16ld %18ld %16ld %18ld\n",
-		       portq->port, skb_queue_len(&portq->tx_q),
-		       portq->stat_tx_request, portq->stat_tx_sent,
-		       portq->stat_tx_drop, portq->stat_tx_queue_max,
-		       skb_queue_len(&portq->rx_q), portq->stat_rx_indicate,
-		       portq->stat_rx_got, portq->stat_rx_queue_max,
-		       portq->stat_fc_ap_throttle_cp,
-		       portq->stat_fc_ap_unthrottle_cp,
-		       portq->stat_fc_cp_throttle_ap,
-		       portq->stat_fc_cp_unthrottle_ap);
-	}
-}
-
 /**
  * This structure gather "function" to manage the sequence
  *
@@ -728,18 +465,37 @@ static const struct seq_operations msocket_seq_ops = {
  * This function is called when the /proc file is open.
  *
  */
-static int msocket_seq_open(struct inode *inode, struct file *file)
+static int msocket_cp_seq_open(struct inode *inode, struct file *file)
 {
-	return seq_open(file, &msocket_seq_ops);
+	int ret = seq_open(file, &msocket_seq_ops);
+	if (!ret)
+		((struct seq_file *)file->private_data)->private = &pgrp_cp;
+	return ret;
+};
+
+static int msocket_m3_seq_open(struct inode *inode, struct file *file)
+{
+	int ret = seq_open(file, &msocket_seq_ops);
+	if (!ret)
+		((struct seq_file *)file->private_data)->private = &pgrp_m3;
+	return ret;
 };
 
 /**
  * This structure gather "function" that manage the /proc file
  *
  */
-static const struct file_operations msocket_proc_fops = {
+static const struct file_operations msocket_cp_proc_fops = {
 	.owner = THIS_MODULE,
-	.open = msocket_seq_open,
+	.open = msocket_cp_seq_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = seq_release
+};
+
+static const struct file_operations msocket_m3_proc_fops = {
+	.owner = THIS_MODULE,
+	.open = msocket_m3_seq_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
 	.release = seq_release
@@ -864,7 +620,6 @@ msocket_write(struct file *filp, const char __user *buf, size_t len,
 	      loff_t *f_pos)
 {
 	struct portq *portq;
-	struct portq_group *pgrp;
 	struct sk_buff *skb;
 	struct shm_skhdr *hdr;
 	int rc = -EFAULT;
@@ -875,9 +630,7 @@ msocket_write(struct file *filp, const char __user *buf, size_t len,
 		return rc;
 	}
 
-	pgrp = portq_get_group(portq);
-
-	if (len > (pgrp->rbctl->tx_skbuf_size - sizeof(*hdr))) {
+	if (len > (portq->grp->rbctl->tx_skbuf_size - sizeof(*hdr))) {
 		pr_err("MSOCK: %s: port %d, len is %d!!\n",
 		       __func__, portq->port, (int)len);
 		return rc;
@@ -904,7 +657,7 @@ msocket_write(struct file *filp, const char __user *buf, size_t len,
 	hdr->checksum = 0;
 	hdr->length = len;
 
-	if (!portq_is_synced(portq) || portq_xmit(portq, skb, true) < 0) {
+	if (!portq->grp->ops->is_synced() || portq_xmit(portq, skb, true) < 0) {
 		kfree_skb(skb);
 		pr_err("MSOCK: %s: portq xmit error.\n", __func__);
 		return -1;
@@ -918,8 +671,7 @@ static long msocket_ioctl(struct file *filp,
 			  unsigned int cmd, unsigned long arg)
 {
 	struct portq *portq;
-	int port, status, network_mode;
-	struct shm_rbctl *portq_rbctl = portq_grp[portq_grp_cp_main].rbctl;
+	int port;
 
 	/*
 	 * extract the type and number bitfields, and don't decode
@@ -951,85 +703,19 @@ static long msocket_ioctl(struct file *filp,
 			       port, current->tgid, current->comm);
 			return 0;
 		}
-
+		break;
 	case MSOCKET_IOC_UP:
-		pr_info("MSOCK: MSOCKET_UP is received!\n");
-		/*
-		 * in the case AP initiative reset CP, AP will first
-		 * make msocket linkdown then hold, so CP still can
-		 * send packet to share memory in this interval
-		 * cleanup share memory one more time in msocket linkup
-		 */
-		shm_rb_data_init(portq_rbctl);
-		spin_lock(&cp_sync_lock);
-		cp_recv_up_ioc = true;
-		spin_unlock(&cp_sync_lock);
-		/* ensure completion cleared before start */
-		reinit_completion(&cp_peer_sync);
-		msocket_connect(portq_grp_cp_main);
-		if (wait_for_completion_timeout(&cp_peer_sync, 5 * HZ) ==
-		    0) {
-			pr_info("MSOCK: sync with CP FAIL\n");
-			return -1;
-		}
-		return 0;
-
 	case MSOCKET_IOC_DOWN:
-		pr_info("MSOCK: MSOCKET_DOWN is received!\n");
-		msocket_dump_port(portq_grp_cp_main);
-		msocket_disconnect(portq_grp_cp_main);
-		/* ok! the world's silent then notify the upper layer */
-		notify_cp_link_status(MsocketLinkdownProcId, NULL);
-		return 0;
-
 	case MSOCKET_IOC_PMIC_QUERY:
-		pr_info("MSOCK: MSOCKET_PMIC_QUERY is received!\n");
-		status = shm_is_cp_pmic_master(portq_rbctl) ? 1 : 0;
-		if (copy_to_user((void *)arg, &status, sizeof(int)))
-			return -1;
-		else
-			return 0;
-
 	case MSOCKET_IOC_CONNECT:
-		pr_info("MSOCK: MSOCKET_IOC_CONNECT is received!\n");
-		msocket_connect(portq_grp_cp_main);
-		return 0;
-
 	case MSOCKET_IOC_RESET_CP_REQUEST:
-		pr_info("MSOCK: MSOCKET_IOC_RESET_CP_REQUEST is received!\n");
-		acipc_reset_cp_request();
-		return 0;
-
-	case MSOCKET_IOC_ERRTO: /* m3 timeout */
-		pr_info("MSOCK: MSOCKET_IOC_ERRTO is received!\n");
-		amipc_dump_debug_info();
-		msocket_disconnect(portq_grp_m3);
-		portq_broadcast_msg(portq_grp_m3, MsocketLinkdownProcId);
-		return 0;
-
-	case MSOCKET_IOC_RECOVERY: /* m3 recovery */
-		reinit_completion(&m3_peer_sync);
-		msocket_connect(portq_grp_m3);
-		pr_info("MSOCK: MSOCKET_IOC_RECOVERY is received!\n");
-		if (wait_for_completion_timeout(&m3_peer_sync, 5 * HZ) ==
-			0) {
-			pr_info("MSOCK: sync with M3 FAIL\n");
-			return -1;
-		}
-		portq_broadcast_msg(portq_grp_m3, MsocketLinkupProcId);
-		return 0;
-	case MSOCKET_IOC_NETWORK_MODE_CP_NOTIFY: /*notify CP network mode*/
-		network_mode = (int)arg;
-		mutex_lock(&cpks_lock);
-		if (cpks) {
-			cpks->network_mode = network_mode;
-			pr_info("MSOCK: network mode:%d\n",
-				network_mode);
-		}
-		mutex_unlock(&cpks_lock);
-		return 0;
+	case MSOCKET_IOC_NETWORK_MODE_CP_NOTIFY:
+		return cp_ioctl_handler(cmd, arg);
+	case MSOCKET_IOC_ERRTO:
+	case MSOCKET_IOC_RECOVERY:
+		return m3_ioctl_handler(cmd, arg);
 	default:
-		return -ENOTTY;
+		return -ENOIOCTLCMD;
 	}
 }
 
@@ -1069,7 +755,6 @@ static struct miscdevice msocket_dev = {
 
 static int msocketDump_open(struct inode *inode, struct file *filp)
 {
-	filp->private_data = (void *)(long)dump_flag;
 	return 0;
 }
 
@@ -1082,7 +767,7 @@ static ssize_t msocketDump_read(struct file *filp, char __user *buf,
 				size_t len, loff_t *f_pos)
 {
 	char temp[256];
-	unsigned flag = dump_flag;
+	unsigned flag = pgrp_cp.dump_flag;
 
 	sprintf(temp, "0x%08x", flag);
 	if (copy_to_user(buf, (void *)&temp, strlen(temp) + 1)) {
@@ -1091,7 +776,6 @@ static ssize_t msocketDump_read(struct file *filp, char __user *buf,
 		return -EFAULT;
 	}
 	pr_info("msocketDump:get flag :%s\n", temp);
-	/* return strlen(temp)+1; */
 	return 0;
 }
 
@@ -1106,7 +790,7 @@ static ssize_t msocketDump_write(struct file *filp, const char __user *buf,
 		return -EFAULT;
 	}
 	pr_info("msocketDump:set flag :%08x\n", flag);
-	dump_flag = flag;
+	pgrp_cp.dump_flag = flag;
 	return len;
 }
 
@@ -1225,470 +909,6 @@ fail:
 	return result;
 }
 
-static int reboot_notifier_func(struct notifier_block *this,
-	unsigned long code, void *cmd)
-{
-	pr_info("reboot notifier, notify CP\n");
-	pr_info("%s: APMU_DEBUG byte3 %02x\n", __func__,
-	       __raw_readb(APMU_DEBUG + 3));
-	if (cp_is_synced)
-		acipc_reset_cp_request();
-	return 0;
-}
-
-static struct notifier_block reboot_notifier = {
-	.notifier_call = reboot_notifier_func,
-};
-
-#define SHM_SKBUF_SIZE		2048	/* maximum packet size */
-static int cp_shm_param_init(const struct cpload_cp_addr *addr)
-{
-	if (!addr)
-		return -1;
-
-	/* main ring buffer */
-	portq_cp_rbctl.skctl_pa = addr->main_skctl_pa;
-
-	portq_cp_rbctl.tx_skbuf_size = SHM_SKBUF_SIZE;
-	portq_cp_rbctl.rx_skbuf_size = SHM_SKBUF_SIZE;
-
-	portq_cp_rbctl.tx_pa = addr->main_tx_pa;
-	portq_cp_rbctl.rx_pa = addr->main_rx_pa;
-
-	portq_cp_rbctl.tx_total_size = addr->main_tx_total_size;
-	portq_cp_rbctl.rx_total_size = addr->main_rx_total_size;
-
-	portq_cp_rbctl.tx_skbuf_num =
-		portq_cp_rbctl.tx_total_size /
-		portq_cp_rbctl.tx_skbuf_size;
-	portq_cp_rbctl.rx_skbuf_num =
-		portq_cp_rbctl.rx_total_size /
-		portq_cp_rbctl.rx_skbuf_size;
-
-	portq_cp_rbctl.tx_skbuf_low_wm =
-		(portq_cp_rbctl.tx_skbuf_num + 1) / 4;
-	portq_cp_rbctl.rx_skbuf_low_wm =
-		(portq_cp_rbctl.rx_skbuf_num + 1) / 4;
-
-	return 0;
-}
-
-static void set_version_numb(void)
-{
-	cpks->version_magic = VERSION_MAGIC_FLAG;
-	cpks->version_number = VERSION_NUMBER_FLAG;
-	return;
-}
-
-static void get_dvc_info(void)
-{
-	struct cpmsa_dvc_info dvc_vol_info;
-	int i = 0;
-	int sz_tel, sz_ap, sz;
-
-	getcpdvcinfo(&dvc_vol_info);
-	for (i = 0; i < MAX_CPDVC_NUM; i++) {
-		cpks->cp_freq[i] = dvc_vol_info.cpdvcinfo[i].cpfreq;
-		cpks->cp_vol[i] = dvc_vol_info.cpdvcinfo[i].cpvl;
-	}
-	cpks->msa_dvc_vol = dvc_vol_info.msadvcvl[0].cpvl;
-
-	cpks->dvc_info.dvc_magic = DVC_MAGIC_V1;
-	sz_tel = sizeof(cpks->dvc_info.cp_freq)/sizeof(cpks->dvc_info.cp_freq[0]);
-	sz_ap = sizeof(dvc_vol_info.cpdvcinfo)/sizeof(dvc_vol_info.cpdvcinfo[0]);
-	sz = sz_tel < sz_ap ? sz_tel : sz_ap;
-	/* get new cp msa dvc info */
-	for (i = 0; i < sz; i++) {
-		cpks->dvc_info.cp_freq[i] = dvc_vol_info.cpdvcinfo[i].cpfreq;
-		cpks->dvc_info.cp_vol[i] = dvc_vol_info.cpdvcinfo[i].cpvl;
-
-		cpks->dvc_info.cpaxi_freq[i] = dvc_vol_info.cpaxidvcinfo[i].cpfreq;
-		cpks->dvc_info.cpaxi_vol[i] = dvc_vol_info.cpaxidvcinfo[i].cpvl;
-
-		cpks->dvc_info.lteaxi_freq[i] = dvc_vol_info.lteaxidvcinfo[i].cpfreq;
-		cpks->dvc_info.lteaxi_vol[i] = dvc_vol_info.lteaxidvcinfo[i].cpvl;
-
-		cpks->dvc_info.msa_freq[i] = dvc_vol_info.msadvcvl[i].cpfreq;
-		cpks->dvc_info.msa_vol[i] = dvc_vol_info.msadvcvl[i].cpvl;
-	}
-}
-
-enum ddr_dfc_level {
-	idle,
-	active,
-	high,
-};
-
-static void get_dfc_info(void)
-{
-	struct ddr_dfc_info dfc_info;
-
-	getddrdfcinfo(&dfc_info);
-	cpks->dfc_magic = DFC_MAGIC_FLAG;
-	cpks->dfc_lvl[idle] = dfc_info.ddr_idle;
-	cpks->dfc_lvl[active] = dfc_info.ddr_active;
-	cpks->dfc_lvl[high] = dfc_info.ddr_high;
-}
-
-static int cpks_debugfs_init(struct dentry *parent)
-{
-	cpks_rootdir = debugfs_create_dir("cpks", parent);
-	if (IS_ERR_OR_NULL(cpks_rootdir))
-		return -ENOMEM;
-
-	if (IS_ERR_OR_NULL(debugfs_create_uint(
-				"ap_pcm_master", S_IRUGO | S_IWUSR,
-				cpks_rootdir,
-				(unsigned int *)
-				&cpks->ap_pcm_master)))
-		goto error;
-
-	if (IS_ERR_OR_NULL(debugfs_create_uint(
-				"cp_pcm_master", S_IRUGO | S_IWUSR,
-				cpks_rootdir,
-				(unsigned int *)
-				&cpks->cp_pcm_master)))
-		goto error;
-
-	if (IS_ERR_OR_NULL(debugfs_create_uint(
-				"modem_ddrfreq", S_IRUGO | S_IWUSR,
-				cpks_rootdir,
-				(unsigned int *)
-				&cpks->modem_ddrfreq)))
-		goto error;
-
-	if (IS_ERR_OR_NULL(debugfs_create_uint(
-				"reset_request", S_IRUGO | S_IWUSR,
-				cpks_rootdir,
-				(unsigned int *)
-				&cpks->reset_request)))
-		goto error;
-
-	if (IS_ERR_OR_NULL(debugfs_create_uint(
-				"diag_header_ptr", S_IRUGO | S_IWUSR,
-				cpks_rootdir,
-				(unsigned int *)
-				&cpks->diag_header_ptr)))
-		goto error;
-
-	if (IS_ERR_OR_NULL(debugfs_create_uint(
-				"diag_cp_db_ver", S_IRUGO | S_IWUSR,
-				cpks_rootdir,
-				(unsigned int *)
-				&cpks->diag_cp_db_ver)))
-		goto error;
-
-	if (IS_ERR_OR_NULL(debugfs_create_uint(
-				"diag_ap_db_ver", S_IRUGO | S_IWUSR,
-				cpks_rootdir,
-				(unsigned int *)
-				&cpks->diag_ap_db_ver)))
-		goto error;
-
-	return 0;
-
-error:
-	debugfs_remove_recursive(cpks_rootdir);
-	cpks_rootdir = NULL;
-	return -1;
-}
-
-static int cpks_debugfs_exit(void)
-{
-	debugfs_remove_recursive(cpks_rootdir);
-	cpks_rootdir = NULL;
-	return 0;
-}
-
-static void cp_keysection_data_init(void)
-{
-	unsigned int network_mode;
-
-	mutex_lock(&cpks_lock);
-	if (cpks) {
-		network_mode = cpks->network_mode;
-		memset_aligned(cpks, 0, sizeof(*cpks));
-		cpks->network_mode = network_mode;
-		cpks->ap_pcm_master = PMIC_MASTER_FLAG;
-	}
-	mutex_unlock(&cpks_lock);
-}
-
-static int cp_keysection_init(const struct cpload_cp_addr *addr)
-{
-	mutex_lock(&cpks_lock);
-	cpks = shm_map(addr->main_skctl_pa +
-		sizeof(struct shm_skctl),
-		sizeof(struct cp_keysection));
-	mutex_unlock(&cpks_lock);
-	if (!cpks)
-		return -1;
-
-	if (cpks_debugfs_init(msocket_debugfs_root_dir) < 0)
-		goto exit;
-
-	return 0;
-
-exit:
-	mutex_lock(&cpks_lock);
-	if (cpks)
-		shm_unmap(addr->main_skctl_pa +
-			sizeof(struct shm_skctl),
-			cpks);
-	cpks = NULL;
-	mutex_unlock(&cpks_lock);
-	return -1;
-}
-
-void cp_keysection_exit(const struct cpload_cp_addr *addr)
-{
-	cpks_debugfs_exit();
-	mutex_lock(&cpks_lock);
-	if (cpks)
-		shm_unmap(addr->main_skctl_pa +
-			sizeof(struct shm_skctl),
-			cpks);
-	cpks = NULL;
-	mutex_unlock(&cpks_lock);
-}
-
-static int cp_shm_init(const struct cpload_cp_addr *addr)
-{
-	int ret;
-
-	ret = cp_shm_param_init(addr);
-	if (ret < 0) {
-		pr_err("%s: init cp portq shm param failed\n", __func__);
-		return -1;
-	}
-
-	if (cp_keysection_init(addr) < 0) {
-		pr_err("%s: init cp key section failed\n", __func__);
-		return -1;
-	}
-
-	if (shm_rb_init(&portq_cp_rbctl,
-			msocket_debugfs_root_dir) < 0) {
-		pr_err("%s: init cp portq ring buffer failed\n",
-			__func__);
-		goto rb_exit;
-	}
-
-	cp_keysection_data_init();
-	set_version_numb();
-	get_dvc_info();
-	get_dfc_info();
-
-	return 0;
-
-rb_exit:
-	cp_keysection_exit(addr);
-
-	return -1;
-}
-
-static void cp_shm_exit(const struct cpload_cp_addr *addr)
-{
-	shm_rb_exit(&portq_cp_rbctl);
-	cp_keysection_exit(addr);
-}
-
-static int cp_shm_ch_init(const struct cpload_cp_addr *addr, u32 lpm_qos)
-{
-	int rc;
-
-	if (cp_shm_ch_inited) {
-		pr_info("%s: channel is already inited\n",
-			__func__);
-		return 0;
-	}
-
-	/* share memory area init */
-	rc = cp_shm_init(addr);
-	if (rc < 0) {
-		pr_err("%s: shm init failed %d\n",
-			__func__, rc);
-		return rc;
-	}
-
-	/* port queue group init */
-	rc = portq_grp_init(&portq_grp[portq_grp_cp_main]);
-	if (rc < 0) {
-		pr_err("%s: portq group init failed %d\n",
-			__func__, rc);
-		goto portq_err;
-	}
-
-	/* acipc init */
-	rc = acipc_init(lpm_qos);
-	if (rc < 0) {
-		pr_err("%s: acipcd init failed %d\n",
-			__func__, rc);
-		goto acipc_err;
-	}
-
-	/* start msocket peer sync */
-	msocket_connect(portq_grp_cp_main);
-
-	cp_shm_ch_inited = 1;
-
-	pr_info("%s: shm channel init success\n", __func__);
-
-	return 0;
-
-acipc_err:
-	portq_grp_exit(&portq_grp[portq_grp_cp_main]);
-portq_err:
-	cp_shm_exit(addr);
-
-	return rc;
-}
-
-static void cp_shm_ch_deinit(const struct cpload_cp_addr *addr)
-{
-	if (!cp_shm_ch_inited)
-		return;
-	cp_shm_ch_inited = 0;
-
-	/* reverse order of initialization */
-	msocket_disconnect(portq_grp_cp_main);
-	acipc_exit();
-	portq_grp_exit(&portq_grp[portq_grp_cp_main]);
-	cp_shm_exit(addr);
-}
-
-static int m3_shm_param_init(const struct rm_m3_addr *addr)
-{
-	if (!addr)
-		return -1;
-
-	portq_m3_rbctl.skctl_pa = addr->m3_rb_ctrl_start_addr;
-
-	pr_info("M3 RB PA: 0x%08lx\n", portq_m3_rbctl.skctl_pa);
-
-	portq_m3_rbctl.tx_skbuf_size = M3_SHM_SKBUF_SIZE;
-	portq_m3_rbctl.rx_skbuf_size = M3_SHM_SKBUF_SIZE;
-
-	pr_info("M3 RB PACKET TX SIZE: %d, RX SIZE: %d\n",
-		portq_m3_rbctl.tx_skbuf_size,
-		portq_m3_rbctl.rx_skbuf_size);
-
-	portq_m3_rbctl.tx_pa = addr->m3_ddr_mb_start_addr;
-	portq_m3_rbctl.tx_skbuf_num = M3_SHM_AP_TX_MAX_NUM;
-	portq_m3_rbctl.tx_total_size =
-		portq_m3_rbctl.tx_skbuf_num *
-		portq_m3_rbctl.tx_skbuf_size;
-
-
-	portq_m3_rbctl.rx_pa = portq_m3_rbctl.tx_pa +
-		portq_m3_rbctl.tx_total_size;
-	portq_m3_rbctl.rx_skbuf_num = M3_SHM_AP_RX_MAX_NUM;
-	portq_m3_rbctl.rx_total_size =
-		portq_m3_rbctl.rx_skbuf_num *
-		portq_m3_rbctl.rx_skbuf_size;
-
-	portq_m3_rbctl.tx_skbuf_low_wm =
-		(portq_m3_rbctl.tx_skbuf_num + 1) / 4;
-	portq_m3_rbctl.rx_skbuf_low_wm =
-		(portq_m3_rbctl.rx_skbuf_num + 1) / 4;
-
-	return 0;
-}
-
-
-int m3_shm_ch_init(const struct rm_m3_addr *addr)
-{
-	int rc;
-
-	if (m3_shm_ch_inited) {
-		pr_info("%s: channel is already inited\n",
-			__func__);
-		return 0;
-	}
-
-	/* share memory area init */
-	m3_shm_param_init(addr);
-	rc = shm_rb_init(&portq_m3_rbctl,
-		msocket_debugfs_root_dir);
-	if (rc < 0) {
-		pr_err("%s: shm init failed %d\n",
-			__func__, rc);
-		return rc;
-	}
-
-	/* port queue group init */
-	rc = portq_grp_init(&portq_grp[portq_grp_m3]);
-	if (rc < 0) {
-		pr_err("%s: portq group init failed %d\n",
-			__func__, rc);
-		goto portq_err;
-	}
-
-	/* amipc init */
-	rc = amipc_init();
-	if (rc < 0) {
-		pr_err("%s: acipcd init failed %d\n",
-			__func__, rc);
-		goto amipc_err;
-	}
-
-	/* start msocket peer sync */
-	msocket_connect(portq_grp_m3);
-
-	m3_shm_ch_inited = 1;
-
-	pr_info("%s: shm channel init success\n", __func__);
-
-	return 0;
-
-amipc_err:
-	portq_grp_exit(&portq_grp[portq_grp_m3]);
-portq_err:
-	shm_rb_exit(&portq_m3_rbctl);
-
-	return rc;
-}
-EXPORT_SYMBOL(m3_shm_ch_init);
-
-void m3_shm_ch_deinit(void)
-{
-	if (!m3_shm_ch_inited)
-		return;
-	m3_shm_ch_inited = 0;
-
-	/* reverse order of initialization */
-	msocket_disconnect(portq_grp_m3);
-	amipc_exit();
-	portq_grp_exit(&portq_grp[portq_grp_m3]);
-	shm_rb_exit(&portq_m3_rbctl);
-}
-EXPORT_SYMBOL(m3_shm_ch_deinit);
-
-static const struct cpload_cp_addr *cp_addr;
-
-static int cp_mem_set_notifier_func(struct notifier_block *this,
-	unsigned long code, void *cmd)
-{
-	struct cpload_cp_addr *addr = (struct cpload_cp_addr *)cmd;
-	u32 lpm_qos = (u32)code;
-
-	cp_addr = addr;
-
-	if (addr->first_boot) {
-		cp_shm_ch_init(addr, lpm_qos);
-	}
-	else {
-		cp_shm_exit(addr);
-		cp_shm_init(addr);
-	}
-
-	return 0;
-}
-
-static struct notifier_block cp_mem_set_notifier = {
-	.notifier_call = cp_mem_set_notifier_func,
-};
-
 static int msocket_debugfs_init(void)
 {
 	tel_debugfs_root_dir = tel_debugfs_get();
@@ -1718,47 +938,33 @@ static void msocket_debugfs_exit(void)
 }
 
 
-#define APMU_DEBUG_BUS_PROTECTION (1 << 4)
 /* module initialization */
 static int __init msocket_init(void)
 {
 	int rc;
-	u8 apmu_debug_byte3;
-
-	/* map common register base address */
-	if (!map_apmu_base_va()) {
-		pr_err("error to ioremap APMU_BASE_ADDR\n");
-		return -ENOENT;
-	}
-
-	/* init lock */
-	spin_lock_init(&cp_sync_lock);
 
 	rc = msocket_debugfs_init();
 	if (rc < 0) {
 		pr_err("%s: msocket debugfs init failed\n", __func__);
-		goto unmap_apmu;
+		goto exit;
 	}
 
 	/* create proc file */
-	if (!proc_create(PROC_FILE_NAME, 0666, NULL, &msocket_proc_fops)) {
+	if (!proc_create(PROC_CP_FILE_NAME, 0666, NULL, &msocket_cp_proc_fops)) {
 		pr_err("%s: create proc failed\n", __func__);
 		rc = -1;
 		goto proc_err;
 	}
 
-	cp_shm_ch_inited = 0;
-	m3_shm_ch_inited = 0;
-
-	/*enable bus protection*/
-	apmu_debug_byte3 = __raw_readb(APMU_DEBUG + 3);
-	apmu_debug_byte3 |= APMU_DEBUG_BUS_PROTECTION;
-	__raw_writeb(apmu_debug_byte3, APMU_DEBUG + 3);
-	register_reboot_notifier(&reboot_notifier);
-	register_cp_mem_set_notifier(&cp_mem_set_notifier);
+	if (!proc_create(PROC_M3_FILE_NAME, 0666, NULL, &msocket_m3_proc_fops)) {
+		pr_err("%s: create proc failed\n", __func__);
+		rc = -1;
+		remove_proc_entry(PROC_CP_FILE_NAME, NULL);
+		goto proc_err;
+	}
 
 	/* port queue init */
-	rc = portq_init();
+	rc = portq_init(portq_grp, ARRAY_SIZE(portq_grp));
 	if (rc < 0) {
 		pr_err("%s: portq init failed %d\n",
 			__func__, rc);
@@ -1796,13 +1002,11 @@ msocketDump_err:
 misc_err:
 	portq_exit();
 portq_err:
-	unregister_cp_mem_set_notifier(&cp_mem_set_notifier);
-	unregister_reboot_notifier(&reboot_notifier);
-	remove_proc_entry(PROC_FILE_NAME, NULL);
+	remove_proc_entry(PROC_CP_FILE_NAME, NULL);
+	remove_proc_entry(PROC_M3_FILE_NAME, NULL);
 proc_err:
 	msocket_debugfs_exit();
-unmap_apmu:
-	unmap_apmu_base_va();
+exit:
 	return rc;
 }
 
@@ -1813,19 +1017,9 @@ static void __exit msocket_exit(void)
 	cmsockdev_cleanup_module(cmsockdev_nr_devs);
 	misc_deregister(&msocketDump_dev);
 	misc_deregister(&msocket_dev);
-	unregister_cp_mem_set_notifier(&cp_mem_set_notifier);
-	unregister_reboot_notifier(&reboot_notifier);
-	remove_proc_entry(PROC_FILE_NAME, NULL);
+	remove_proc_entry(PROC_CP_FILE_NAME, NULL);
+	remove_proc_entry(PROC_M3_FILE_NAME, NULL);
 	msocket_debugfs_exit();
-	if (cp_shm_ch_inited)
-		cp_shm_ch_deinit(cp_addr);
-	cp_shm_ch_inited = 0;
-	if (m3_shm_ch_inited)
-		m3_shm_ch_deinit();
-	m3_shm_ch_inited = 0;
-
-	/* unmap common registers */
-	unmap_apmu_base_va();
 }
 
 module_init(msocket_init);

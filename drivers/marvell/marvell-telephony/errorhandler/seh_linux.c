@@ -63,7 +63,7 @@
 #include "watchdog.h"
 #include "pxa_cp_load.h"
 #include "common_regs.h"
-#include "acipcd.h"
+#include "portq_cp.h"
 
 #ifdef CONFIG_PXA_RAMDUMP
 #include <linux/ptrace.h>		/*pt_regs */

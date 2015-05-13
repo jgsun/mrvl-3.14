@@ -25,8 +25,6 @@
 #include <linux/mutex.h>
 #include <linux/workqueue.h>
 #include <linux/poll.h>
-#include <linux/pxa9xx_acipc.h>
-#include "msocket.h"
 
 /* some queue size constant define, you may need fine-tune these carefully */
 #define PORTQ_TX_MSG_NUM		16
@@ -62,7 +60,7 @@ struct portq {
 	int refcounts;
 	spinlock_t lock;	/* exclusive lock */
 
-	int grp_type;	/* portq group */
+	struct portq_group *grp;	/* portq group */
 
 	/* statistics data for debug */
 	unsigned long stat_tx_request;
@@ -80,18 +78,10 @@ struct portq {
 	void *recv_arg;
 };
 
-enum portq_grp_type {
-	portq_grp_cp_main,
-	portq_grp_m3,
-
-	portq_grp_cnt
-};
-
 struct portq_group {
 	const char *name;
-	enum portq_grp_type grp_type;
-
-	bool is_inited;
+	u8 grp_type;
+	bool is_open;
 
 	/* portq work queue and work */
 	struct workqueue_struct *wq;
@@ -102,103 +92,90 @@ struct portq_group {
 	struct shm_rbctl *rbctl;
 
 	/* port queue list and lock */
-	int port_cnt;
-	int port_offset;
+	u16 port_cnt;
+	u16 port_offset;
 	struct portq **port_list;
 	struct list_head tx_head;	/* tx port list header */
 	spinlock_t list_lock;	/* queue lock */
 
 	const int *priority;
 
-	/* rx work queue state and lock */
 	bool is_rx_work_running;
-	spinlock_t rx_work_lock;
-
-	/* tx work queue state and lock */
 	bool is_tx_work_running;
+	spinlock_t rx_work_lock;
 	spinlock_t tx_work_lock;
 
 	struct wakeup_source *ipc_ws;
 
 	/* stat */
-	int rx_workq_sched_num;
+	unsigned int rx_workq_sched_num;
+	u32 dump_flag;
+
+	/*
+	 * reflected variable of remote flow control state.
+	 * since it is only remote write, local read, no lock is needed
+	 */
+	u32 portq_remote_port_fc;
+
+	/*
+	 * reflected variable of AP port flow control state.
+	 * need lock carefully.
+	 */
+	u32 portq_local_port_fc;
+	spinlock_t portq_local_port_fc_lock;
+
+	struct portq_op *ops;
 };
 
-/* share memory socket header structure */
-struct shm_skhdr {
-	unsigned int address;	/* not used */
-	int port;				/* queue port */
-	unsigned int checksum;	/* not used */
-	int length;				/* payload length */
+struct portq_op {
+	void (*connect)(void);
+	void (*disconnect)(void);
+	int (*init)(void);
+	int (*exit)(void);
+	int (*open)(void);
+	int (*close)(void);
+	void (*notify_sent)(void);
+	void (*notify_fc_change)(void);
+	void (*tx_resume)(void);
+	void (*tx_stop)(void);
+	bool (*is_synced)(void);
 };
 
-extern struct portq_group portq_grp[];
-extern struct shm_rbctl portq_cp_rbctl;
-extern struct shm_rbctl portq_m3_rbctl;
+extern int portq_grp_open(u8 grp_type);
+extern void portq_grp_close(u8 grp_type);
+extern void portq_grp_connect(u8 grp_type);
+extern void portq_grp_disconnect(u8 grp_type);
+extern struct portq_group *portq_grp_get(u8 grp_type);
+extern void portq_grp_dump(u8 grp_type);
+extern struct portq_group *portq_grp_by_port(int port);
 
-extern int portq_init(void);
+extern int portq_init(struct portq_group **group_list, unsigned num);
 extern void portq_exit(void);
-
-extern int portq_grp_init(struct portq_group *pgrp);
-extern void portq_grp_exit(struct portq_group *pgrp);
 
 extern struct portq *portq_open(int port);
 extern struct portq *portq_open_with_cb(int port,
 		void (*clbk)(struct sk_buff *, void *), void *arg);
 extern void portq_close(struct portq *portq);
 
+extern void portq_packet_recv_cb(struct portq_group *pgrp);
+extern void portq_port_fc_cb(struct portq_group *pgrp);
+extern void portq_rb_stop_cb(struct portq_group *pgrp);
+extern void portq_rb_resume_cb(struct portq_group *pgrp);
+
 extern struct portq *portq_get(int port);
 
 extern int portq_xmit(struct portq *portq, struct sk_buff *skb, bool block);
 extern struct sk_buff *portq_recv(struct portq *portq, bool block);
-extern void portq_broadcast_msg(enum portq_grp_type grp_type, int proc);
-extern void portq_flush_init(enum portq_grp_type grp_type);
-
-extern void portq_schedule_tx(struct portq_group *pgrp);
-extern void portq_schedule_rx(struct portq_group *pgrp);
-extern void portq_schedule_sync(struct portq_group *pgrp,
-	struct work_struct *work);
-extern void portq_flush_workqueue(enum portq_grp_type grp_type);
-extern void portq_set_dumpflag(int flag);
-extern int portq_get_dumpflag(void);
+extern void portq_broadcast_msg(u8 grp_type, int proc);
 extern unsigned int portq_poll(struct portq *portq, struct file *filp,
 			       poll_table *wait);
 
-static inline bool __portq_is_synced(enum portq_grp_type grp_type)
-{
-	if (grp_type == portq_grp_cp_main)
-		return cp_is_synced;
-	else if (grp_type == portq_grp_m3)
-		return m3_is_synced;
-
-	return false;
-}
-
-static inline bool portq_is_synced(struct portq *portq)
-{
-	return __portq_is_synced(portq->grp_type);
-}
-
-static inline struct portq_group *portq_get_group(struct portq *portq)
-{
-	return &portq_grp[portq->grp_type];
-}
-
-extern void portq_recv_throttled(struct portq *portq);
-extern void portq_recv_unthrottled(struct portq *portq);
+extern void portq_recv_throttle(struct portq *portq);
+extern void portq_recv_unthrottle(struct portq *portq);
 
 /* some arbitrary definitions */
 #define ACIPC_MUDP_KEY	ACIPC_SHM_PACKET_NOTIFY
 #define PACKET_SENT		0x11
 #define PEER_SYNC		0x5
 
-/*
- * the following acipc_notify_* inline functions are used to generate
- * interrupt from AP to CP.
- */
-/* generate peer sync interrupt */
-static inline void acipc_notify_peer_sync(void)
-{
-	acipc_data_send(ACIPC_MUDP_KEY, PEER_SYNC << 8);
-}
 #endif /* _PORTQUEUE_H_ */

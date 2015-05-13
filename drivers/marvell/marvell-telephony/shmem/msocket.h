@@ -21,13 +21,8 @@
 #define MSOCKET_H_
 
 #include <linux/skbuff.h>
-#include <linux/clk/mmpcpdvc.h>
-#include "pxa_cp_load_ioctl.h"
-#include "shm.h"
-#include "util.h"
-
-/* the magic is 8-bit byte, should not use 300 */
-/* #define MSOCKET_MAJOR         300   */  /* The major number of the devices */
+#include "portq_cp.h"
+#include "portq_m3.h"
 
 #define MSOCKET_IOC_MAGIC       0xD0
 #define MSOCKET_IOC_BIND	_IO(MSOCKET_IOC_MAGIC, 1)
@@ -46,27 +41,12 @@
 #define MSOCKET_KERNEL		0	/* can be blocked in kernel context */
 #define MSOCKET_ATOMIC		1	/* should be atomic in interrupt */
 
-#define DUMP_PORT(x)	(1<<((x)+3))
-#define DUMP_TX		(1<<0)
-#define DUMP_RX		(1<<1)
-#define DUMP_TX_SP (1<<2)
-#define DUMP_RX_SP (1<<3)
+enum portq_grp_type {
+	portq_grp_cp_main,
+	portq_grp_m3,
 
-#define DATA_TX		0
-#define DATA_RX		1
-
-extern bool cp_is_synced;
-extern struct completion cp_peer_sync;
-
-extern bool m3_is_synced;
-extern struct completion m3_peer_sync;
-
-struct rm_m3_addr;
-extern int m3_shm_ch_init(const struct rm_m3_addr *addr);
-extern void m3_shm_ch_deinit(void);
-
-extern int register_first_cp_synced(struct notifier_block *nb);
-
+	portq_grp_cnt
+};
 
 extern int msocket(int port);
 extern int msocket_with_cb(int port,
@@ -76,8 +56,6 @@ extern int msend(int sock, const void *buf, int len, int flags);
 extern int mrecv(int sock, void *buf, int len, int flags);
 extern int msendskb(int sock, struct sk_buff *skb, int len, int flags);
 extern struct sk_buff *mrecvskb(int sock, int len, int flags);
-extern void data_dump(const unsigned char *data, unsigned int len, int port,
-		      int direction);
 extern void msocket_recv_throttled(int sock);
 extern void msocket_recv_unthrottled(int sock);
 /* designed for future use, not used here */
@@ -86,88 +64,7 @@ extern void msocket_recv_unthrottled(int sock);
  * extern int msend_skb(int sock, struct sk_buff *skb, int flags);
  * extern int mrecv_skb(int sock, struct sk_buff **pskb, int flags);
 */
-DECLARE_BLOCKING_NOTIFIER(cp_link_status);
-
-struct cpmsa_dvc_info_v1 {
-/* D: 0x44, V: 0x56, C: 0x43, the last byte represent the version: 01 */
-#define DVC_MAGIC_V1 0x44564301
-	volatile unsigned int dvc_magic;
-#define MAX_CPDVC_NUM_V1 5
-	volatile unsigned int cp_freq[MAX_CPDVC_NUM_V1];
-	volatile unsigned int cp_vol[MAX_CPDVC_NUM_V1];
-
-	volatile unsigned int cpaxi_freq[MAX_CPDVC_NUM_V1];
-	volatile unsigned int cpaxi_vol[MAX_CPDVC_NUM_V1];
-
-	volatile unsigned int lteaxi_freq[MAX_CPDVC_NUM_V1];
-	volatile unsigned int lteaxi_vol[MAX_CPDVC_NUM_V1];
-
-	volatile unsigned int msa_freq[MAX_CPDVC_NUM_V1];
-	volatile unsigned int msa_vol[MAX_CPDVC_NUM_V1];
-};
-
-struct cp_keysection {
-#define PMIC_MASTER_FLAG	0x4D415354
-	/* PMIC SSP master status setting query */
-	volatile unsigned int ap_pcm_master;
-	volatile unsigned int cp_pcm_master;
-	volatile unsigned int modem_ddrfreq;
-
-	/* DIAG specific info */
-	volatile unsigned int diag_header_ptr;
-	volatile unsigned int diag_cp_db_ver;
-	volatile unsigned int diag_ap_db_ver;
-
-	volatile unsigned int reset_request;
-	volatile unsigned int ap_pm_status_request;
-	volatile unsigned int profile_number;
-
-	/* dvc voltage table number */
-	volatile unsigned int dvc_vol_tbl_num;
-	volatile unsigned int dvc_vol_tbl[16];
-
-#define VERSION_MAGIC_FLAG 0x56455253
-#define VERSION_NUMBER_FLAG 0x1
-	volatile unsigned int version_magic;
-	volatile unsigned int version_number;
-
-	volatile unsigned int dfc_dclk_num;
-	volatile unsigned int dfc_dclk[16];
-
-	/*L+G or G+L*/
-	volatile unsigned int network_mode;
-
-	/* uuid reserved for SSIPC solution */
-	volatile unsigned int uuid_high;
-	volatile unsigned int uuid_low;
-
-#define MAX_CPDVC_NUM 4
-	/* dvc voltage and frequency */
-	volatile unsigned int cp_freq[MAX_CPDVC_NUM];
-	volatile unsigned int cp_vol[MAX_CPDVC_NUM];
-	volatile unsigned int msa_dvc_vol;
-
-#define DFC_MAGIC_FLAG 0x4446434C
-	volatile unsigned int dfc_magic;
-#define MAX_DFCLVL_NUM 5
-	/* dfc level */
-	/* 0 - idle, 1 - active, 2 - high, 3, 4 reserve */
-	volatile unsigned int dfc_lvl[MAX_DFCLVL_NUM];
-
-	/* new cp msa dvc information */
-	struct cpmsa_dvc_info_v1 dvc_info;
-};
-
-extern struct cp_keysection *cpks;
-extern struct mutex cpks_lock;
-extern struct dentry *cpks_rootdir;
 
 extern struct dentry *msocket_debugfs_root_dir;
-
-/* check if cp pmic is in master mode */
-static inline bool shm_is_cp_pmic_master(struct shm_rbctl *rbctl)
-{
-	return cpks->cp_pcm_master == PMIC_MASTER_FLAG;
-}
 
 #endif /* MSOCKET_H_ */

@@ -19,7 +19,6 @@
 
 #include <linux/spinlock.h>
 #include <linux/list.h>
-#include <linux/slab.h>
 #include <linux/skbuff.h>
 #include <linux/wait.h>
 #include <linux/sched.h>
@@ -27,11 +26,8 @@
 #include <linux/pm_wakeup.h>
 #include <linux/pxa9xx_acipc.h>
 #include "shm_share.h"
-#include "acipcd.h"
-#include "amipcd.h"
 #include "shm.h"
 #include "portqueue.h"
-#include "msocket.h"
 #include "tel_trace.h"
 
 static struct wakeup_source port_tx_wakeup;
@@ -41,77 +37,40 @@ static struct wakeup_source port_rx_wakeup;
 static void portq_tx_worker(struct work_struct *work);
 static void portq_rx_worker(struct work_struct *work);
 
-/* port queue priority definition */
-static const int portq_cp_priority[PORTQ_CP_NUM_MAX] = {
-	0,			/* 0: NOT USED */
-	10,			/* 1: CISTUB_PORT */
-	10,			/* 2: NVMSRV_PORT */
-	50,			/* 3: CIDATASTUB_PORT */
-	0,			/* 4: NOT USED */
-	30,			/* 5: AUDIOSTUB_PORT */
-	40,			/* 6: CICSDSTUB_PORT */
-#ifdef CONFIG_SSIPC_SUPPORT
-	70,			/* 7: RAW_AT_PORT */
-#else
-	0,			/* 7: NOT USED */
-#endif
-	70,			/* 8: TEST_PORT */
-	40,			/* 9: CIIMSSTUB_PORT */
-#ifdef CONFIG_SSIPC_SUPPORT
-	70,			/*10: RAW_AT_DUN_PORT */
-	70,			/*11: RAW_AT_PROD_PORT */
-	70,			/*12: RAW_AT_SIMAL_PORT */
-	70,			/*13: RAW_AT_CLIENT_SOL_PORT */
-	70,			/*14: RAW_AT_CLIENT_UNSOL_PORT */
-	70,			/*15: RAW_AT_RESERVERED_PORT */
-	70,			/*16: RAW_AT_GPS_PORT */
-	70,			/*17: RAW_AT_RESERVERED2_PORT */
-	70,			/*20: TEST_PORT2 */
-	70,			/*21: RAW_AT_DUN_PORT2 */
-	70,			/*22: RAW_AT_PROD_PORT2 */
-	70,			/*23: RAW_AT_SIMAL_PORT2 */
-	70,			/*24: RAW_AT_CLIENT_SOL_PORT2 */
-	70,			/*25: RAW_AT_CLIENT_UNSOL_PORT2 */
-	70,			/*26: RAW_AT_RESERVERED_PORT2 */
-	70,			/*27: RAW_AT_RESERVERED2_PORT2 */
-	70,			/*28: RAW_AT_GPS_PORT2 */
-#endif
-};
+static struct portq_group **portq_grp;
+static unsigned portq_group_num;
 
-/* port queue priority definition */
-static const int portq_m3_priority[PORTQ_M3_NUM_MAX] = {
-	10,			/* 0: GPS_COMM_PORT */
-	10,			/* 1: SENSOR_HUB_PORT */
-	40,			/* 2: M3_TEST_PORT */
-};
+#define DUMP_PORT(x)	(1<<((x)+3))
+#define DUMP_TX		(1<<0)
+#define DUMP_RX		(1<<1)
+#define DUMP_TX_SP (1<<2)
+#define DUMP_RX_SP (1<<3)
 
-struct portq_group portq_grp[portq_grp_cnt] = {
-	[portq_grp_cp_main] = {
-		.name = "cp_main",
-		.port_cnt = PORTQ_CP_NUM_MAX,
-		.port_offset = 0,
-		.priority = portq_cp_priority,
-	},
-	[portq_grp_m3] = {
-		.name = "m3",
-		.port_cnt = PORTQ_M3_NUM_MAX,
-		.port_offset = PORTQ_M3_PORT_OFFSET,
-		.priority = portq_m3_priority,
-	},
-};
+#define DATA_TX		0
+#define DATA_RX		1
 
-/*
- * reflected variable of CP port flow control state.
- * since it is only CP write, AP read, no lock is needed
- */
-static unsigned int portq_cp_port_fc;
-
-/*
- * reflected variable of CP port flow control state.
- * need lock carefully.
- */
-static unsigned int portq_ap_port_fc;
-static spinlock_t portq_ap_port_fc_lock;
+static void data_dump(const unsigned char *data, unsigned int len, int port,
+	       int direction, u32 dump_flag)
+{
+	if (direction == DATA_TX) {
+		if ((dump_flag & DUMP_TX) && (dump_flag & DUMP_PORT(port))) {
+			pr_info("portq TX: DUMP BEGIN port :%d, Length:%u --\n",
+			     port, len);
+			if (!(dump_flag & DUMP_TX_SP))
+				print_hex_dump(KERN_INFO, "", DUMP_PREFIX_NONE, 16, 1,
+						data, len, 0);
+		}
+	} else if (direction == DATA_RX) {
+		if ((dump_flag & DUMP_RX) && (dump_flag & DUMP_PORT(port))) {
+			pr_info("portq RX: DUMP BEGIN port :%d, Length:%u --\n",
+			     port, len);
+			if (!(dump_flag & DUMP_RX_SP))
+				print_hex_dump(KERN_INFO, "", DUMP_PREFIX_NONE, 16, 1,
+						data, len, 0);
+		}
+	}
+	return;
+}
 
 /* check if tx queue is full */
 static inline bool portq_is_tx_full(struct portq *portq)
@@ -140,94 +99,62 @@ static inline bool portq_is_rx_above_hi_wm(struct portq *portq)
 /* check if cp xmit has been throttled by ap */
 static inline bool portq_is_cp_xmit_throttled(struct portq *portq)
 {
-	if (portq->grp_type == portq_grp_cp_main)
-		return (1 << portq->port) & portq_ap_port_fc;
-	else
-		return false;
+	return (1 << portq->port) & portq->grp->portq_local_port_fc;
 }
 
 /* check if ap xmit has been throttled by cp */
 static inline bool portq_is_ap_xmit_throttled(struct portq *portq)
 {
-	if (portq->grp_type == portq_grp_cp_main)
-		return (1 << portq->port) & portq_cp_port_fc;
-	else
-		return false;
+	return (1 << portq->port) & portq->grp->portq_remote_port_fc;
 }
 
-/* notify cp that new packet available in the socket buffer */
-static inline void acipc_notify_packet_sent(void)
+/* schedule portq tx_work */
+static inline void portq_schedule_tx(struct portq_group *pgrp)
 {
-	acipc_data_send(ACIPC_MUDP_KEY, PACKET_SENT << 8);
+	queue_work(pgrp->wq, &pgrp->tx_work);
 }
 
-/* notify cp that flow control state has been changed */
-static inline void acipc_notify_port_fc(void)
+/* schedule portq rx_work */
+static inline void portq_schedule_rx(struct portq_group *pgrp)
 {
-	acipc_event_set(ACIPC_PORT_FLOWCONTROL);
+	queue_work(pgrp->wq, &pgrp->rx_work.work);
 }
 
-/* notify cp that cp can continue transmission */
-static inline void acipc_notify_cp_tx_resume(void)
+void portq_recv_throttle(struct portq *portq)
 {
-	pr_warn("MSOCK: acipc_notify_cp_tx_resume!!!\n");
-	acipc_event_set(ACIPC_RINGBUF_TX_RESUME);
-}
-
-/*notify cp that ap transmission is stopped, please resume me later */
-static inline void acipc_notify_ap_tx_stopped(void)
-{
-	pr_warn("MSOCK: acipc_notify_ap_tx_stopped!!!\n");
-	acipc_event_set(ACIPC_RINGBUF_TX_STOP);
-}
-
-/* check whether need throttle port according receive buffer comsumed.
- * receive buffer can be portq itself or external buffer list
- * for callback mode
- * */
-void portq_recv_throttled(struct portq *portq)
-{
-	struct portq_group *pgrp = portq_get_group(portq);
+	struct portq_group *pgrp = portq->grp;
 	if (!portq_is_cp_xmit_throttled(portq)) {
-		spin_lock(&portq_ap_port_fc_lock);
-		portq_ap_port_fc |= (1 << portq->port);
-		pgrp->rbctl->skctl_va->ap_port_fc = portq_ap_port_fc;
+		spin_lock(&pgrp->portq_local_port_fc_lock);
+		pgrp->portq_local_port_fc |= (1 << portq->port);
+		pgrp->rbctl->skctl_va->ap_port_fc = pgrp->portq_local_port_fc;
 		portq->stat_fc_ap_throttle_cp++;
-		if (pgrp->grp_type == portq_grp_cp_main)
-			acipc_notify_port_fc();
+		pgrp->ops->notify_fc_change();
 		pr_warn(
 			   "MSOCK: port %d AP throttle CP!!!\n",
 			   portq->port);
-		spin_unlock(&portq_ap_port_fc_lock);
+		spin_unlock(&pgrp->portq_local_port_fc_lock);
 	}
 }
 
-/* unthrottle port according receive buffer comsumed.
- * receive buffer can be portq itself or external buffer list
- * for callback mode
- * */
-void portq_recv_unthrottled(struct portq *portq)
+void portq_recv_unthrottle(struct portq *portq)
 {
-	struct portq_group *pgrp = portq_get_group(portq);
-	if (portq_is_synced(portq) &&
+	struct portq_group *pgrp = portq->grp;
+	if (pgrp->ops->is_synced() &&
 	    portq_is_cp_xmit_throttled(portq)) {
 		unsigned long flags;
-		spin_lock_irqsave(&portq_ap_port_fc_lock, flags);
-		portq_ap_port_fc &= ~(1 << portq->port);
-		pgrp->rbctl->skctl_va->ap_port_fc = portq_ap_port_fc;
+		spin_lock_irqsave(&pgrp->portq_local_port_fc_lock, flags);
+		pgrp->portq_local_port_fc &= ~(1 << portq->port);
+		pgrp->rbctl->skctl_va->ap_port_fc = pgrp->portq_local_port_fc;
 		portq->stat_fc_ap_unthrottle_cp++;
-		if (pgrp->grp_type == portq_grp_cp_main)
-			acipc_notify_port_fc();
+		pgrp->ops->notify_fc_change();
 		pr_warn("MSOCK: port %d AP unthrottle CP!!!\n",
 		       portq->port);
-		spin_unlock_irqrestore(&portq_ap_port_fc_lock, flags);
+		spin_unlock_irqrestore(&pgrp->portq_local_port_fc_lock, flags);
 	}
 }
 
-void portq_packet_send_cb(struct shm_rbctl *rbctl)
+void portq_packet_recv_cb(struct portq_group *pgrp)
 {
-	struct portq_group *pgrp = (struct portq_group *)rbctl->priv;
-
 	__pm_wakeup_event(pgrp->ipc_ws, 5000);
 	spin_lock(&pgrp->rx_work_lock);
 	if (!pgrp->is_rx_work_running) {
@@ -237,18 +164,12 @@ void portq_packet_send_cb(struct shm_rbctl *rbctl)
 	spin_unlock(&pgrp->rx_work_lock);
 }
 
-void portq_peer_sync_cb(struct shm_rbctl *rbctl)
+void portq_port_fc_cb(struct portq_group *pgrp)
 {
-	complete_all(&cp_peer_sync);
-}
-
-void portq_port_fc_cb(struct shm_rbctl *rbctl)
-{
-	unsigned int temp_cp_port_fc = rbctl->skctl_va->cp_port_fc;
-	unsigned int changed = portq_cp_port_fc ^ temp_cp_port_fc;
 	int port = 0;
 	struct portq *portq;
-	struct portq_group *pgrp = (struct portq_group *)rbctl->priv;
+	unsigned int temp_cp_port_fc = pgrp->rbctl->skctl_va->cp_port_fc;
+	unsigned int changed = pgrp->portq_remote_port_fc ^ temp_cp_port_fc;
 
 	__pm_wakeup_event(pgrp->ipc_ws, 2000);
 	spin_lock(&pgrp->list_lock);
@@ -278,17 +199,16 @@ void portq_port_fc_cb(struct shm_rbctl *rbctl)
 
 	spin_unlock(&pgrp->list_lock);
 
-	portq_cp_port_fc = temp_cp_port_fc;
+	pgrp->portq_remote_port_fc = temp_cp_port_fc;
 
 	/* schedule portq tx_worker to try potential transmission */
 	portq_schedule_tx(pgrp);
 }
 
-void portq_rb_stop_cb(struct shm_rbctl *rbctl)
+void portq_rb_stop_cb(struct portq_group *pgrp)
 {
-	struct portq_group *pgrp = (struct portq_group *)rbctl->priv;
 
-	shm_rb_stop(rbctl);
+	shm_rb_stop(pgrp->rbctl);
 
 	__pm_wakeup_event(pgrp->ipc_ws, 5000);
 
@@ -300,11 +220,9 @@ void portq_rb_stop_cb(struct shm_rbctl *rbctl)
 	portq_schedule_rx(pgrp);
 }
 
-void portq_rb_resume_cb(struct shm_rbctl *rbctl)
+void portq_rb_resume_cb(struct portq_group *pgrp)
 {
-	struct portq_group *pgrp = (struct portq_group *)rbctl->priv;
-
-	shm_rb_resume(rbctl);
+	shm_rb_resume(pgrp->rbctl);
 
 	__pm_wakeup_event(pgrp->ipc_ws, 2000);
 
@@ -313,190 +231,32 @@ void portq_rb_resume_cb(struct shm_rbctl *rbctl)
 	portq_schedule_tx(pgrp);
 }
 
-void portq_m3_peer_sync_cb(struct shm_rbctl *rbctl)
-{
-	amipc_notify_peer_sync();
-	m3_is_synced = true;
-	pr_info("msocket connection sync with M3 O.K.!\n");
-	complete_all(&m3_peer_sync);
-}
-
-static size_t portq_get_packet_length(const unsigned char *hdr)
-{
-	struct shm_skhdr *skhdr = (struct shm_skhdr *)hdr;
-	return skhdr->length + sizeof(*skhdr);
-}
-
-struct shm_callback portq_cp_shm_cb = {
-	.get_packet_length = portq_get_packet_length,
-};
-
-struct shm_rbctl portq_cp_rbctl = {
-	.name = "cp-portq",
-	.cbs = &portq_cp_shm_cb,
-	.priv = &portq_grp[portq_grp_cp_main],
-	.va_lock = __MUTEX_INITIALIZER(portq_cp_rbctl.va_lock),
-};
-
-struct shm_callback portq_m3_shm_cb = {
-	.get_packet_length = portq_get_packet_length,
-};
-
-struct shm_rbctl portq_m3_rbctl = {
-	.name = "m3-portq",
-	.cbs = &portq_m3_shm_cb,
-	.priv = &portq_grp[portq_grp_m3],
-	.va_lock = __MUTEX_INITIALIZER(portq_m3_rbctl.va_lock),
-};
-
-static int cp_link_status_notifier_func(struct notifier_block *this,
-	unsigned long code, void *cmd)
-{
-	portq_broadcast_msg(portq_grp_cp_main, (int)code);
-	return 0;
-}
-
-static struct notifier_block cp_link_status_notifier = {
-	.notifier_call = cp_link_status_notifier_func,
-};
-
-int portq_grp_init(struct portq_group *pgrp)
-{
-	enum portq_grp_type grp_type = pgrp - portq_grp;
-
-	pgrp->grp_type = grp_type;
-
-	if (grp_type == portq_grp_cp_main) {
-		pgrp->rbctl = &portq_cp_rbctl;
-		pgrp->ipc_ws = &acipc_wakeup;
-		register_cp_link_status_notifier(&cp_link_status_notifier);
-	} else if (grp_type == portq_grp_m3) {
-		pgrp->rbctl = &portq_m3_rbctl;
-		pgrp->ipc_ws = &amipc_wakeup;
-	}
-
-	INIT_LIST_HEAD(&pgrp->tx_head);
-	pgrp->wq =
-	    alloc_workqueue(pgrp->name, WQ_MEM_RECLAIM | WQ_HIGHPRI, 0);
-	if (!pgrp->wq) {
-		pr_err("%s: can't create workqueue\n", __func__);
-		return -1;
-	}
-
-	INIT_WORK(&pgrp->tx_work, portq_tx_worker);
-	INIT_DELAYED_WORK(&pgrp->rx_work, portq_rx_worker);
-
-	spin_lock_init(&pgrp->tx_work_lock);
-	spin_lock_init(&pgrp->rx_work_lock);
-
-	pgrp->port_list = kzalloc(sizeof(*pgrp->port_list) * pgrp->port_cnt,
-		GFP_KERNEL);
-
-	if (!pgrp->port_list) {
-		destroy_workqueue(pgrp->wq);
-		return -1;
-	}
-
-	pgrp->is_inited = true;
-
-	return 0;
-}
-
-void portq_grp_exit(struct portq_group *pgrp)
-{
-	if (pgrp->grp_type == portq_grp_cp_main)
-		unregister_cp_link_status_notifier(&cp_link_status_notifier);
-	destroy_workqueue(pgrp->wq);
-	kfree(pgrp->port_list);
-}
-
-/* cp xmit stopped notify interrupt */
-static u32 acipc_cb_rb_stop(u32 status)
-{
-	portq_rb_stop_cb(&portq_cp_rbctl);
-	return 0;
-}
-
-/* cp wakeup ap xmit interrupt */
-static u32 acipc_cb_rb_resume(u32 status)
-{
-	portq_rb_resume_cb(&portq_cp_rbctl);
-	return 0;
-}
-
-/* cp notify ap port flow control */
-static u32 acipc_cb_port_fc(u32 status)
-{
-	portq_port_fc_cb(&portq_cp_rbctl);
-	return 0;
-}
-
-/* new packet arrival interrupt */
-static u32 acipc_cb(u32 status)
-{
-	u32 data;
-	u16 event;
-
-	acipc_data_read(&data);
-	event = (data & 0xFF00) >> 8;
-
-	switch (event) {
-	case PACKET_SENT:
-		portq_packet_send_cb(&portq_cp_rbctl);
-		break;
-
-	case PEER_SYNC:
-		portq_peer_sync_cb(&portq_cp_rbctl);
-		break;
-
-	default:
-		break;
-	}
-
-	return 0;
-}
-
-/* acipc_init is used to register interrupt call-back function */
-static inline int portq_acipc_init(void)
-{
-	/* we do not check any return value */
-	acipc_event_bind(ACIPC_MUDP_KEY, acipc_cb, ACIPC_CB_NORMAL, NULL);
-	acipc_event_bind(ACIPC_RINGBUF_TX_STOP, acipc_cb_rb_stop,
-		       ACIPC_CB_NORMAL, NULL);
-	acipc_event_bind(ACIPC_RINGBUF_TX_RESUME, acipc_cb_rb_resume,
-		       ACIPC_CB_NORMAL, NULL);
-	acipc_event_bind(ACIPC_PORT_FLOWCONTROL, acipc_cb_port_fc,
-		       ACIPC_CB_NORMAL, NULL);
-
-	return 0;
-}
-
-/* acipc_exit used to unregister interrupt call-back function */
-static inline void portq_acipc_exit(void)
-{
-	acipc_event_unbind(ACIPC_PORT_FLOWCONTROL);
-	acipc_event_unbind(ACIPC_RINGBUF_TX_RESUME);
-	acipc_event_unbind(ACIPC_RINGBUF_TX_STOP);
-	acipc_event_unbind(ACIPC_MUDP_KEY);
-}
-
 /* portq_init */
-int portq_init(void)
+int portq_init(struct portq_group **group_list, unsigned num)
 {
-	struct portq_group *pgrp = portq_grp;
-	struct portq_group *pgrp_end = portq_grp + portq_grp_cnt;
-
-	if (portq_acipc_init() < 0)
-		return -1;
+	int i, ret;
 
 	wakeup_source_init(&port_tx_wakeup, "port_tx_wakeups");
 	wakeup_source_init(&port_rx_wakeup, "port_rx_wakeups");
+	for (i = 0; i < num; ++i) {
+		INIT_LIST_HEAD(&group_list[i]->tx_head);
+		INIT_WORK(&group_list[i]->tx_work, portq_tx_worker);
+		INIT_DELAYED_WORK(&group_list[i]->rx_work, portq_rx_worker);
+		spin_lock_init(&group_list[i]->tx_work_lock);
+		spin_lock_init(&group_list[i]->rx_work_lock);
+		spin_lock_init(&group_list[i]->list_lock);
+		spin_lock_init(&group_list[i]->portq_local_port_fc_lock);
 
-	spin_lock_init(&portq_ap_port_fc_lock);
+		ret = group_list[i]->ops->init();
+		if (ret) {
+			while (--i >= 0)
+				group_list[i]->ops->exit();
+			return ret;
+		}
+	}
 
-	/* list lock must be initialized here */
-	for (; pgrp != pgrp_end; pgrp++)
-		spin_lock_init(&pgrp->list_lock);
+	portq_grp = group_list;
+	portq_group_num = num;
 
 	return 0;
 }
@@ -504,27 +264,21 @@ int portq_init(void)
 /* portq_exit */
 void portq_exit(void)
 {
+	unsigned i;
+
 	wakeup_source_trash(&port_tx_wakeup);
 	wakeup_source_trash(&port_rx_wakeup);
-	portq_acipc_exit();
-}
 
-static inline struct portq_group *__portq_get_group(int port)
-{
-	struct portq_group *pgrp = portq_grp;
-	struct portq_group *pgrp_end = portq_grp + portq_grp_cnt;
+	for (i = 0; i < portq_group_num; ++i)
+		portq_grp[i]->ops->exit();
 
-	for (; pgrp != pgrp_end; pgrp++)
-		if (port < pgrp->port_offset + pgrp->port_cnt &&
-			port >= pgrp->port_offset)
-			return pgrp;
-
-	return NULL;
+	portq_grp = NULL;
+	portq_group_num = 0;
 }
 
 struct portq *portq_get(int port)
 {
-	struct portq_group *pgrp = __portq_get_group(port);
+	struct portq_group *pgrp = portq_grp_by_port(port);
 	struct portq *portq = NULL;
 
 	if (pgrp) {
@@ -550,9 +304,9 @@ struct portq *portq_open_with_cb(int port,
 	struct portq_group *pgrp;
 	struct shm_rbctl *rbctl;
 
-	pgrp = __portq_get_group(port);
+	pgrp = portq_grp_by_port(port);
 
-	if (!pgrp || !pgrp->is_inited)
+	if (!pgrp || !pgrp->is_open)
 		return ERR_PTR(-ENODEV);
 
 	rbctl = pgrp->rbctl;
@@ -579,7 +333,7 @@ struct portq *portq_open_with_cb(int port,
 	portq->port = port;
 	portq->priority = pgrp->priority[port - pgrp->port_offset];
 	portq->status = 0;
-	portq->grp_type = pgrp - portq_grp;
+	portq->grp = pgrp;
 	spin_lock_init(&portq->lock);
 
 	portq->tx_q_limit = PORTQ_TX_MSG_NUM;
@@ -625,7 +379,7 @@ struct portq *portq_open_with_cb(int port,
 /* portq_close */
 void portq_close(struct portq *portq)
 {
-	struct portq_group *pgrp = portq_get_group(portq);
+	struct portq_group *pgrp = portq->grp;
 	int port = portq->port - pgrp->port_offset;
 
 	spin_lock_irq(&pgrp->list_lock);
@@ -662,7 +416,7 @@ int portq_xmit(struct portq *portq, struct sk_buff *skb, bool block)
 {
 	struct list_head *list;
 	unsigned long flags;
-	struct portq_group *pgrp = portq_get_group(portq);
+	struct portq_group *pgrp = portq->grp;
 
 	spin_lock_irqsave(&portq->lock, flags);
 
@@ -693,7 +447,7 @@ int portq_xmit(struct portq *portq, struct sk_buff *skb, bool block)
 		}
 	}
 
-	if (!portq_is_synced(portq)) {
+	if (!pgrp->ops->is_synced()) {
 		spin_unlock_irqrestore(&portq->lock, flags);
 		return -1;
 	}
@@ -782,7 +536,7 @@ struct sk_buff *portq_recv(struct portq *portq, bool block)
 	portq->stat_rx_got++;
 
 	if (skb && portq_is_rx_below_lo_wm(portq))
-		portq_recv_unthrottled(portq);
+		portq_recv_unthrottle(portq);
 
 	/* release the lock */
 	spin_unlock_irqrestore(&portq->lock, flags);
@@ -822,9 +576,9 @@ unsigned int portq_poll(struct portq *portq, struct file *filp,
 }
 
 /* broadcast the linkdown/linkup messages to all the port */
-void portq_broadcast_msg(enum portq_grp_type grp_type, int proc)
+void portq_broadcast_msg(u8 grp_type, int proc)
 {
-	struct portq_group *pgrp = &portq_grp[grp_type];
+	struct portq_group *pgrp = portq_grp[grp_type];
 	struct portq *portq;
 	struct shm_skhdr *hdr;
 	int i;
@@ -903,9 +657,8 @@ void portq_broadcast_msg(enum portq_grp_type grp_type, int proc)
 }
 
 /* flush queue and init */
-void portq_flush_init(enum portq_grp_type grp_type)
+static void portq_flush_init(struct portq_group *pgrp)
 {
-	struct portq_group *pgrp = &portq_grp[grp_type];
 	struct portq *portq;
 	unsigned long flags;
 	int i;
@@ -959,36 +712,8 @@ void portq_flush_init(enum portq_grp_type grp_type)
 	pgrp->is_rx_work_running = false;
 	pgrp->is_tx_work_running = false;
 	pgrp->rx_workq_sched_num = 0;
-
-	if (grp_type == portq_grp_cp_main) {
-		portq_cp_port_fc = 0;
-		portq_ap_port_fc = 0;
-	}
-}
-
-/* schedule portq tx_work */
-void portq_schedule_tx(struct portq_group *pgrp)
-{
-	queue_work(pgrp->wq, &pgrp->tx_work);
-}
-
-/* schedule portq rx_work */
-void portq_schedule_rx(struct portq_group *pgrp)
-{
-	queue_work(pgrp->wq, &pgrp->rx_work.work);
-}
-
-/* schedule msocket peer sync */
-void portq_schedule_sync(struct portq_group *pgrp, struct work_struct *work)
-{
-	queue_work(pgrp->wq, work);
-}
-
-/* ensure that any scheduled work has run to completion */
-void portq_flush_workqueue(enum portq_grp_type grp_type)
-{
-	struct portq_group *pgrp = &portq_grp[grp_type];
-	flush_workqueue(pgrp->wq);
+	pgrp->portq_local_port_fc = 0;
+	pgrp->portq_remote_port_fc = 0;
 }
 
 /*
@@ -1013,10 +738,7 @@ static void portq_tx_worker(struct work_struct *work)
 		if (rbctl->is_ap_xmit_stopped) {
 			/* if any packet sent, notify cp */
 			if (total > 0) {
-				if (pgrp->grp_type == portq_grp_cp_main)
-					acipc_notify_packet_sent();
-				else if (pgrp->grp_type == portq_grp_m3)
-					amipc_notify_packet_sent();
+				pgrp->ops->notify_sent();
 			}
 			__pm_relax(&port_tx_wakeup);
 			spin_unlock_irq(&pgrp->list_lock);
@@ -1037,7 +759,7 @@ static void portq_tx_worker(struct work_struct *work)
 		 */
 		list_for_each_entry_safe(portq, next, &pgrp->tx_head, tx_list) {
 
-			if (!__portq_is_synced(pgrp->grp_type)) {
+			if (!pgrp->ops->is_synced()) {
 				/* if not sync, just return */
 				__pm_relax(&port_tx_wakeup);
 				spin_unlock_irq(&pgrp->list_lock);
@@ -1063,20 +785,14 @@ static void portq_tx_worker(struct work_struct *work)
 				 * enough ring buffers free
 				 */
 				shm_notify_ap_tx_stopped(rbctl);
-				if (pgrp->grp_type == portq_grp_cp_main)
-					acipc_notify_ap_tx_stopped();
-				else if (pgrp->grp_type == portq_grp_m3)
-					amipc_notify_ap_tx_stopped();
+				pgrp->ops->tx_stop();
 
 				/* release portq lock */
 				spin_unlock(&portq->lock);
 
 				/* if any packet sent, notify cp */
 				if (total > 0) {
-					if (pgrp->grp_type == portq_grp_cp_main)
-						acipc_notify_packet_sent();
-					else if (pgrp->grp_type == portq_grp_m3)
-						amipc_notify_packet_sent();
+					pgrp->ops->notify_sent();
 				}
 
 				__pm_relax(&port_tx_wakeup);
@@ -1108,7 +824,7 @@ static void portq_tx_worker(struct work_struct *work)
 				list_del(&portq->tx_list);
 			}
 			shm_xmit(rbctl, skb);	/* write to rb */
-			data_dump(skb->data, skb->len, portq->port, DATA_TX);
+			data_dump(skb->data, skb->len, portq->port, DATA_TX, pgrp->dump_flag);
 			trace_portq_xmit(pgrp->grp_type, portq->port, skb->len);
 			kfree_skb(skb);	/* free skb memory */
 			num++, total++;	/* count */
@@ -1133,10 +849,7 @@ static void portq_tx_worker(struct work_struct *work)
 
 			/* if any packet sent, notify cp */
 			if (total > 0) {
-				if (pgrp->grp_type == portq_grp_cp_main)
-					acipc_notify_packet_sent();
-				else if (pgrp->grp_type == portq_grp_m3)
-					amipc_notify_packet_sent();
+				pgrp->ops->notify_sent();
 			}
 			/* unlock and return */
 			__pm_relax(&port_tx_wakeup);
@@ -1154,12 +867,7 @@ static void portq_tx_worker(struct work_struct *work)
 		if (total >= rbctl->tx_skbuf_num) {
 			/* reschedule self again */
 			portq_schedule_tx(pgrp);
-
-			/* notify CP */
-			if (pgrp->grp_type == portq_grp_cp_main)
-				acipc_notify_packet_sent();
-			else if (pgrp->grp_type == portq_grp_m3)
-				amipc_notify_packet_sent();
+			pgrp->ops->notify_sent();
 
 			/* unlock and return */
 			__pm_relax(&port_tx_wakeup);
@@ -1186,7 +894,7 @@ static void portq_rx_worker(struct work_struct *work)
 	pgrp->rx_workq_sched_num++;
 	for (i = 0; i < rbctl->rx_skbuf_num; i++) {
 
-		if (!__portq_is_synced(pgrp->grp_type)) {
+		if (!pgrp->ops->is_synced()) {
 			/* if not sync, just return */
 			spin_lock_irq(&pgrp->rx_work_lock);
 			pgrp->is_rx_work_running = false;
@@ -1204,10 +912,7 @@ static void portq_rx_worker(struct work_struct *work)
 		if (rbctl->is_cp_xmit_stopped
 		    && shm_has_enough_free_rx_skbuf(rbctl)) {
 			shm_notify_cp_tx_resume(rbctl);
-			if (pgrp->grp_type == portq_grp_cp_main)
-				acipc_notify_cp_tx_resume();
-			else if (pgrp->grp_type == portq_grp_m3)
-				amipc_notify_m3_tx_resume();
+			pgrp->ops->tx_resume();
 		}
 
 		/* be carefull and careful again, lock must be here */
@@ -1258,7 +963,7 @@ static void portq_rx_worker(struct work_struct *work)
 			continue;
 		}
 		__pm_wakeup_event(&port_rx_wakeup, 2000);
-		data_dump(skb->data, skb->len, portq->port, DATA_RX);
+		data_dump(skb->data, skb->len, portq->port, DATA_RX, pgrp->dump_flag);
 
 		trace_portq_recv(pgrp->grp_type, portq->port, skb->len);
 
@@ -1283,7 +988,7 @@ static void portq_rx_worker(struct work_struct *work)
 
 		/* process port flow control */
 		if (portq_is_rx_above_hi_wm(portq))
-			portq_recv_throttled(portq);
+			portq_recv_throttle(portq);
 
 		/* notify upper layer that packet available */
 		if (portq->status & PORTQ_STATUS_RECV_EMPTY) {
@@ -1301,4 +1006,135 @@ static void portq_rx_worker(struct work_struct *work)
 	 * so we reschedule it
 	 */
 	portq_schedule_rx(pgrp);
+}
+
+/************** portqueue group *********************/
+void portq_grp_connect(u8 grp_type)
+{
+	portq_grp[grp_type]->ops->connect();
+}
+
+/* stop sync */
+void portq_grp_disconnect(u8 grp_type)
+{
+	struct portq_group *pgrp = portq_grp[grp_type];
+
+	pgrp->ops->disconnect();
+	/* ensure that any scheduled work has run to completion */
+	flush_workqueue(pgrp->wq);
+
+	/*
+	 * and now no work is active or will be schedule, so we can
+	 * cleanup any packet queued and initialize some key data
+	 * structure to the beginning state
+	 */
+	shm_rb_data_init(pgrp->rbctl);
+	portq_flush_init(pgrp);
+}
+
+int portq_grp_open(u8 grp_type)
+{
+	struct portq_group *pgrp = portq_grp[grp_type];
+
+	pgrp->wq =
+	    alloc_workqueue(pgrp->name, WQ_MEM_RECLAIM | WQ_HIGHPRI, 0);
+	if (!pgrp->wq) {
+		pr_err("%s: can't create workqueue\n", __func__);
+		return -1;
+	}
+
+	pgrp->port_list = kzalloc(sizeof(*pgrp->port_list) * pgrp->port_cnt,
+		GFP_KERNEL);
+
+	if (!pgrp->port_list) {
+		destroy_workqueue(pgrp->wq);
+		return -1;
+	}
+	pgrp->ops->open();
+	pgrp->is_open = true;
+
+	return 0;
+}
+
+void portq_grp_close(u8 grp_type)
+{
+	struct portq_group *pgrp = portq_grp[grp_type];
+
+	if (pgrp->is_open) {
+		pgrp->is_open = false;
+		pgrp->ops->close();
+		destroy_workqueue(pgrp->wq);
+		kfree(pgrp->port_list);
+	}
+}
+
+struct portq_group *portq_grp_get(u8 grp_type)
+{
+	if (grp_type < portq_group_num)
+		return portq_grp[grp_type];
+	else
+		return NULL;
+}
+
+struct portq_group *portq_grp_by_port(int port)
+{
+	int i;
+
+	for (i = 0; i < portq_group_num; i++) {
+		if (port < portq_grp[i]->port_offset + portq_grp[i]->port_cnt &&
+			port >= portq_grp[i]->port_offset)
+			return portq_grp[i];
+	}
+
+	return NULL;
+}
+
+void portq_grp_dump(u8 grp_type)
+{
+	struct portq_group *pgrp = portq_grp[grp_type];
+	struct shm_rbctl *rbctl = pgrp->rbctl;
+	struct portq *portq;
+	int i;
+
+	pr_err("shm_is_ap_xmit_stopped: %d\n",
+	       rbctl->is_ap_xmit_stopped);
+	pr_err("shm_is_cp_xmit_stopped: %d\n",
+	       rbctl->is_cp_xmit_stopped);
+	pr_err("acipc_ap_stopped_num:   %ld\n",
+	       rbctl->ap_stopped_num);
+	pr_err("acipc_ap_resumed_num:   %ld\n",
+	       rbctl->ap_resumed_num);
+	pr_err("acipc_cp_stopped_num:   %ld\n",
+	       rbctl->cp_stopped_num);
+	pr_err("acipc_cp_resumed_num:   %ld\n",
+	       rbctl->cp_resumed_num);
+	pr_err("tx_socket_total:        %d\n",
+	       rbctl->tx_skbuf_num);
+	pr_err("tx_socket_free:         %d\n",
+	       shm_free_tx_skbuf(rbctl));
+	pr_err("rx_socket_total:        %d\n",
+	       rbctl->rx_skbuf_num);
+	pr_err("rx_socket_free:         %d\n",
+	       shm_free_rx_skbuf(rbctl));
+
+	pr_err("\nport  tx_current  tx_request  tx_sent  tx_drop  tx_queue_max"
+	       "  rx_current  rx_indicate   rx_got  rx_queue_max"
+	       "  local_throttle  local_unthrottle"
+	       "  remote_throttle  remote_unthrottle\n");
+	for (i = 0; i < pgrp->port_cnt; i++) {
+		portq = pgrp->port_list[i];
+		if (!portq)
+			continue;
+		pr_err("%4d %12d %12ld %9ld %9ld %14ld %12d %13ld "
+		       "%9ld %14ld %16ld %18ld %16ld %18ld\n",
+		       portq->port, skb_queue_len(&portq->tx_q),
+		       portq->stat_tx_request, portq->stat_tx_sent,
+		       portq->stat_tx_drop, portq->stat_tx_queue_max,
+		       skb_queue_len(&portq->rx_q), portq->stat_rx_indicate,
+		       portq->stat_rx_got, portq->stat_rx_queue_max,
+		       portq->stat_fc_ap_throttle_cp,
+		       portq->stat_fc_ap_unthrottle_cp,
+		       portq->stat_fc_cp_throttle_ap,
+		       portq->stat_fc_cp_unthrottle_ap);
+	}
 }
