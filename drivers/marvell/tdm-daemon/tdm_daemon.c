@@ -177,11 +177,13 @@ static ssize_t tdm_enable_write(struct file *file,
 		return len;
 
 	tdm_enable = val;
-	if (tdm_enable)
+	if (tdm_enable) {
 		TDMKickWatchDog(tdm_expire_time * MSEC_PER_SEC, tdm_action);
-	else
+		queue_delayed_work(tdm_wq, &tdm_work, TDM_DAEMON_SCHED_TIME * HZ);
+	} else {
 		TDMStopWatchDog();
-
+		cancel_delayed_work_sync(&tdm_work);
+	}
 	return len;
 }
 
@@ -371,13 +373,13 @@ static int tdm_probe(struct platform_device *pdev)
 		ret = -ENOMEM;
 		goto err;
 	}
-	queue_delayed_work(tdm_wq, &tdm_work, TDM_DAEMON_SCHED_TIME * HZ);
 
 	tdm_debugfs_init();
 
-	if (tdm_enable)
+	if (tdm_enable) {
 		TDMKickWatchDog(tdm_expire_time * MSEC_PER_SEC, tdm_action); /* default 30s */
-
+		queue_delayed_work(tdm_wq, &tdm_work, TDM_DAEMON_SCHED_TIME * HZ);
+	}
 	return 0;
 
 err:
