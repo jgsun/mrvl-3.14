@@ -1,6 +1,7 @@
 subdir-ccflags-y += -Idrivers/marvell/marvell-telephony/include
 subdir-ccflags-y += -DEXPORT_SYMTAB
 subdir-ccflags-y += -fno-pic
+subdir-ccflags-y += -Werror
 
 #follow dependency sequence
 obj-$(CONFIG_MRVL_MMP_MODEM) += common/
