@@ -93,7 +93,9 @@ static spinlock_t m3init_sync_lock;
 static spinlock_t m3open_lock;
 static int m3_init_done;
 static u32 m3_ip_ver;
+static int cpuid;
 static u32 pmic_ver;
+static u32 hw_mode;
 static struct pm_qos_request ddr_qos_min;
 
 static void ldo_sleep_control(int ua_load, const char *ldo_name)
@@ -197,13 +199,59 @@ int gnss_config(void)
 {
 	u32 pmu_reg_v, ciu_reg_v, apb_reg_v;
 	int retry_times, ret = 0;
-
 	pr_info("%s enters\n", __func__);
 
 	/* force anagrp power always on for GNSS power on */
 	apb_reg_v = REG_READ(APB_SPARE9_REG);
 	apb_reg_v |= (0x1 << APB_ANAGRP_PWR_ON_OFFSET);
 	REG_WRITE(apb_reg_v, APB_SPARE9_REG);
+
+	if (hw_mode == 0x1) {
+		/* hw mode */
+#ifdef FPGA
+		pmu_reg_v = (0x1 << GNSS_HW_MODE_OFFSET) |
+			    (0x1 << GNSS_FUSE_LOAD_DONE_MASK_OFFSET);
+		REG_WRITE(pmu_reg_v, PMUA_GNSS_PWR_CTRL);
+#else
+		pmu_reg_v = (0x1 << GNSS_HW_MODE_OFFSET);
+		REG_WRITE(pmu_reg_v, PMUA_GNSS_PWR_CTRL);
+#endif
+		pmu_reg_v = REG_READ(PMUA_PWR_CTRL_REG);
+		pmu_reg_v |= (0x1 << GNSS_AUTO_PWR_ON_OFFSET);
+		REG_WRITE(pmu_reg_v, PMUA_PWR_CTRL_REG);
+		/* wait for gnss_pwr_state */
+		/* Per DE, After gnss auto power on,
+		   gnss_pwr_stat will be set after about
+		   ((PWR_ON1_TIMER+ PWR_ON2_TIMER+27)*26Mhz +
+		   repair fuse time(about 128*26Mhz)) <= 2.54ms */
+		retry_times = 10;
+		do {
+			mdelay(3);
+			pmu_reg_v = REG_READ(PMUA_PWR_STATUS_REG);
+			pmu_reg_v &= (0x1 << GNSS_PWR_STAT_OFFSET);
+		} while (!pmu_reg_v && --retry_times);
+		if (retry_times == 0) {
+			pr_err("gnss power on status update failed\n");
+			ret = -1;
+		}
+		goto gnss_config_exit;
+	}
+
+	/* software mode */
+	if (3 == m3_ip_ver) {
+		/* per DE's request, clear bit1,2,3,4 before clear hw mode */
+		pmu_reg_v = REG_READ(PMUA_GNSS_PWR_CTRL);
+		pmu_reg_v &= ~((0x1 << GNSS_RESET_OFFSET) |
+			    (0x1 << GNSS_ISOB_OFFSET)     |
+			    (0x1 << GNSS_PWR_ON1_OFFSET)  |
+			    (0x1 << GNSS_PWR_ON2_OFFSET));
+		REG_WRITE(pmu_reg_v, PMUA_GNSS_PWR_CTRL);
+
+		/* clear hw mode */
+		pmu_reg_v = REG_READ(PMUA_GNSS_PWR_CTRL);
+		pmu_reg_v &= ~(0x1 << GNSS_HW_MODE_OFFSET);
+		REG_WRITE(pmu_reg_v, PMUA_GNSS_PWR_CTRL);
+	}
 
 	pmu_reg_v = (0x1 << GNSS_PWR_ON1_OFFSET);
 	pmu_reg_v |= (0x1 << GNSS_AXI_CLOCK_ENABLE);
@@ -277,6 +325,7 @@ gnss_config_exit:
 void gnss_power_off(void)
 {
 	u32 pmu_reg_v, apb_reg_v;
+	int retry_times;
 
 	pr_info("gnss_power_off\n");
 
@@ -285,23 +334,56 @@ void gnss_power_off(void)
 	apb_reg_v &= ~(0x1 << APB_ANAGRP_PWR_ON_OFFSET);
 	REG_WRITE(apb_reg_v, APB_SPARE9_REG);
 
-	pmu_reg_v = REG_READ(PMUA_GNSS_PWR_CTRL);
-	pmu_reg_v &= ~(0x1 << GNSS_HW_MODE_OFFSET);
-	REG_WRITE(pmu_reg_v, PMUA_GNSS_PWR_CTRL);
+	if (hw_mode == 0x1) {
+		pmu_reg_v = (0x1 << GNSS_HW_MODE_OFFSET);
+		REG_WRITE(pmu_reg_v, PMUA_GNSS_PWR_CTRL);
 
-	pmu_reg_v = REG_READ(PMUA_GNSS_PWR_CTRL);
-	pmu_reg_v &= ~(0x1 << GNSS_ISOB_OFFSET);
-	REG_WRITE(pmu_reg_v, PMUA_GNSS_PWR_CTRL);
+		pmu_reg_v = REG_READ(PMUA_PWR_CTRL_REG);
+		pmu_reg_v &= ~(0x1 << GNSS_AUTO_PWR_ON_OFFSET);
+		REG_WRITE(pmu_reg_v, PMUA_PWR_CTRL_REG);
 
-	pmu_reg_v = REG_READ(PMUA_GNSS_PWR_CTRL);
-	pmu_reg_v &= ~(0x1 << GNSS_RESET_OFFSET);
-	REG_WRITE(pmu_reg_v, PMUA_GNSS_PWR_CTRL);
+		/* wait for gnss_pwr_state */
+		/* Per DE, After gnss auto power off,
+		   gnss_pwr_stat will be set after about
+		   ((11+ PWR_OFF_TIMER) *26MHz) <= 10.3 us*/
+		retry_times = 10;
+		do {
+			udelay(20);
+			pmu_reg_v = REG_READ(PMUA_PWR_STATUS_REG);
+			pmu_reg_v &= (0x1 << GNSS_PWR_STAT_OFFSET);
+		} while (pmu_reg_v && --retry_times);
+		if (retry_times == 0)
+			pr_err("gnss power off status update failed\n");
+	} else {
+		if (3 == m3_ip_ver) {
+			/* per DE's request, set bit1,2,3,4
+			   before clear hw mode */
+			pmu_reg_v = REG_READ(PMUA_GNSS_PWR_CTRL);
+			pmu_reg_v |= (0x1 << GNSS_RESET_OFFSET)   |
+				    (0x1 << GNSS_ISOB_OFFSET)    |
+				    (0x1 << GNSS_PWR_ON1_OFFSET) |
+				    (0x1 << GNSS_PWR_ON2_OFFSET);
+			REG_WRITE(pmu_reg_v, PMUA_GNSS_PWR_CTRL);
+		}
+		/* clear hw mode */
+		pmu_reg_v = REG_READ(PMUA_GNSS_PWR_CTRL);
+		pmu_reg_v &= ~(0x1 << GNSS_HW_MODE_OFFSET);
+		REG_WRITE(pmu_reg_v, PMUA_GNSS_PWR_CTRL);
 
-	pmu_reg_v = REG_READ(PMUA_GNSS_PWR_CTRL);
-	pmu_reg_v &= ~(0x1 << GNSS_PWR_ON1_OFFSET);
-	REG_WRITE(pmu_reg_v, PMUA_GNSS_PWR_CTRL);
+		pmu_reg_v = REG_READ(PMUA_GNSS_PWR_CTRL);
+		pmu_reg_v &= ~(0x1 << GNSS_ISOB_OFFSET);
+		REG_WRITE(pmu_reg_v, PMUA_GNSS_PWR_CTRL);
 
-	REG_WRITE(0, PMUA_GNSS_PWR_CTRL);
+		pmu_reg_v = REG_READ(PMUA_GNSS_PWR_CTRL);
+		pmu_reg_v &= ~(0x1 << GNSS_RESET_OFFSET);
+		REG_WRITE(pmu_reg_v, PMUA_GNSS_PWR_CTRL);
+
+		pmu_reg_v = REG_READ(PMUA_GNSS_PWR_CTRL);
+		pmu_reg_v &= ~(0x1 << GNSS_PWR_ON1_OFFSET);
+		REG_WRITE(pmu_reg_v, PMUA_GNSS_PWR_CTRL);
+
+		REG_WRITE(0, PMUA_GNSS_PWR_CTRL);
+	}
 }
 
 int gnss_power_on(void)
@@ -496,7 +578,7 @@ static long m3_ioctl(struct file *filp,
 		   unsigned int cmd, unsigned long arg)
 {
 	int flag, status = 0;
-	int len, is_pm2, cpuid;
+	int len, is_pm2;
 	int cons_on = 0;
 	int lna_on = 0;
 	phys_addr_t ipc_base;
@@ -640,13 +722,6 @@ static long m3_ioctl(struct file *filp,
 		}
 	break;
 	case RM_IOC_M3_QUERY_CPUID:
-		cpuid = CPUID_INVALID; /* set invalid CPU ID by default */
-		if (cpu_is_pxa1U88())
-			cpuid = CPUID_PXA1U88;
-		else if (cpu_is_pxa1908())
-			cpuid = CPUID_PXA1908;
-		else if (cpu_is_pxa1936())
-			cpuid = CPUID_PXA1936;
 		pr_info("RM M3: RM_IOC_M3_QUERY_CPUID: %d!\n", cpuid);
 		if (copy_to_user((void *)arg,
 				&cpuid, sizeof(int)))
@@ -928,11 +1003,36 @@ static int pxa_m3rm_probe(struct platform_device *pdev)
 		m3_regulator.reg_ant = NULL;
 	}
 
-	if (of_property_read_u32(np, "ipver", &m3_ip_ver))
+	if (cpu_is_pxa1U88()) {
+		cpuid = CPUID_PXA1U88;
 		m3_ip_ver = 1;
+		hw_mode = 0;
+	} else if (cpu_is_pxa1908()) {
+		cpuid = CPUID_PXA1908;
+		m3_ip_ver = 2;
+		hw_mode = 0;
+	} else if (cpu_is_pxa1936()) {
+		cpuid = CPUID_PXA1936;
+		m3_ip_ver = 2;
+		hw_mode = 0;
+	} else if (cpu_is_pxa1956()) {
+		cpuid = CPUID_PXA1956;
+		m3_ip_ver = 3;
+		hw_mode = 1;
+	} else if (cpu_is_pxa1918()) {
+		cpuid = CPUID_PXA1918;
+		m3_ip_ver = 3;
+		hw_mode = 1;
+	} else {
+		cpuid = CPUID_INVALID; /* set invalid CPU ID by default */
+		m3_ip_ver = 3;
+		hw_mode = 1;
+	}
+
 	if (of_property_read_u32(np, "pmicver", &pmic_ver))
 		pmic_ver = 1;
 
+	pr_info("cm3_ip_ver=%d, hw mode=%d\n", m3_ip_ver, hw_mode);
 	if (of_property_read_u32_index(np, "vccmain", 0, &vccm_vol.cm3_on))
 		vccm_vol.cm3_on = 950000;
 	if (of_property_read_u32_index(np, "vccmain", 1, &vccm_vol.cm3_off))

@@ -69,7 +69,8 @@ static void deinit_gnss_base_addr(void)
 #define CIU_SYS_SEC_CTRL      CIU_REG(0x5C)
 #define APB_SPARE9_REG        APBS_REG(0x120)
 
-#define PMUA_GNSS_PWR_STATUS  APMU_REG(0xf0)
+#define PMUA_PWR_CTRL_REG     APMU_REG(0xd8)
+#define PMUA_PWR_STATUS_REG   APMU_REG(0xf0)
 #define PMUA_GNSS_PWR_CTRL    APMU_REG(0xfc)
 
 #define APB_ANAGRP_PWR_ON_OFFSET                      0
@@ -200,7 +201,7 @@ static inline int is_gnss_in_pm2(void)
 	int ret;
 	u32 pmua_pwr_reg_v;
 
-	pmua_pwr_reg_v = REG_READ(PMUA_GNSS_PWR_STATUS);
+	pmua_pwr_reg_v = REG_READ(PMUA_PWR_STATUS_REG);
 	pmua_pwr_reg_v &= (0x1 << GNSS_SD_PWR_STAT_OFFSET);
 	if (!pmua_pwr_reg_v)
 		ret = 1;
