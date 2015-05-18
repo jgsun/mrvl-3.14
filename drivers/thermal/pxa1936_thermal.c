@@ -1005,7 +1005,8 @@ static int pxa1936_thermal_probe(struct platform_device *pdev)
 	int ret = 0;
 	u32 tmp;
 
-	if (!of_machine_is_compatible("marvell,pxa1936"))
+	if (!(of_machine_is_compatible("marvell,pxa1936") ||
+			of_machine_is_compatible("marvell,pxa1956")))
 		return -ENODEV;
 
 	memset(&thermal_dev, 0, sizeof(thermal_dev));

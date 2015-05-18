@@ -160,7 +160,8 @@ static int __init cpuidle_qos_init(void)
 {
 	int ret = 0;
 
-	if (!of_machine_is_compatible("marvell,pxa1936"))
+	if (!(of_machine_is_compatible("marvell,pxa1936") ||
+			of_machine_is_compatible("marvell,pxa1956")))
 		return -ENODEV;
 
 	pr_info("%s, cpuidle qos init function\n", __func__);

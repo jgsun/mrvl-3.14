@@ -649,7 +649,8 @@ static int __init pxa1936_suspend_init(void)
 {
 	int ret;
 
-	if (!of_machine_is_compatible("marvell,pxa1936"))
+	if (!(of_machine_is_compatible("marvell,pxa1936") ||
+			of_machine_is_compatible("marvell,pxa1956")))
 		return -ENODEV;
 	ret = mmp_platform_suspend_register(&pxa1936_suspend);
 

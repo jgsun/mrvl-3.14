@@ -198,7 +198,8 @@ static int __init check_platform(void)
 {
 	struct device_node *np;
 
-	if (!of_machine_is_compatible("marvell,pxa1936"))
+	if (!(of_machine_is_compatible("marvell,pxa1936") ||
+			of_machine_is_compatible("marvell,pxa1956")))
 		return -ENODEV;
 
 	np = of_find_matching_node(NULL, psci_of_match);

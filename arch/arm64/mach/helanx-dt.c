@@ -315,3 +315,16 @@ DT_MACHINE_START(PXA1936_DT, "PXA1936")
 	.dt_compat      = pxa1936_dt_board_compat,
 	.reserve        = helanx_reserve,
 MACHINE_END
+
+static const char * const pxa1956_dt_board_compat[] __initconst = {
+	"marvell,pxa1956",
+	NULL,
+};
+
+DT_MACHINE_START(PXA1956_DT, "PXA1956")
+	.init_time      = helanx_timer_init,
+	.init_irq	= helanx_irq_init,
+	.init_machine   = helanx_init_machine,
+	.dt_compat      = pxa1956_dt_board_compat,
+	.reserve        = helanx_reserve,
+MACHINE_END

@@ -416,7 +416,8 @@ static int __init pxa1936_lowpower_init(void)
 {
 	struct device_node *np;
 
-	if (!of_machine_is_compatible("marvell,pxa1936"))
+	if (!(of_machine_is_compatible("marvell,pxa1936") ||
+			of_machine_is_compatible("marvell,pxa1956")))
 		return -ENODEV;
 
 	np = of_find_matching_node(NULL, mcpm_of_match);
