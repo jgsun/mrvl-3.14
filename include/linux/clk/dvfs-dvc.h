@@ -101,6 +101,9 @@ struct dvc_plat_info {
 
 	/* regulator name for SWdvc */
 	const char *regname;
+
+	/* PMUcp is inaccessible on some silicons. */
+	unsigned int pmucp_inaccessible;
 };
 
 extern int dvfs_setup_dvcplatinfo(struct dvc_plat_info *platinfo);

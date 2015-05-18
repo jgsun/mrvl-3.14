@@ -19,6 +19,7 @@
 #include <linux/slab.h>
 #include <linux/debugfs.h>
 #include <linux/fs.h>
+#include <linux/cputype.h>
 #include <linux/cpufreq.h>
 #include <linux/devfreq.h>
 #include <linux/clk-private.h>
@@ -296,6 +297,12 @@ static struct pm_qos_request cci_qos_req_min[2] = {
 };
 
 static struct clk *clk_dclk;
+
+static void dump_dfc_cp(void __iomem *apmu_base)
+{
+	if (cpu_is_pxa1936())
+		pr_err("DFC_CP %x\n", readl(DFC_CP(apmu_base)));
+}
 
 /*
  * get_fc_lock is actually used to AP/CP/HWDFC FC mutual exclusion, it is
@@ -609,11 +616,12 @@ static void wait_for_fc_done(enum fc_type comp, void __iomem *apmu_base)
 		if (comp == DDR_FC) {
 			/* enhancement to check DFC related status */
 			pr_err
-			    ("APMU_ISR %x, CUR_DLV %d, DFC_AP %x, DFC_CP %x, DFC_STATUS %x\n",
+			    ("APMU_ISR %x, CUR_DLV %d, DFC_AP %x, DFC_STATUS %x\n",
 			     readl(APMU_ISR(apmu_base)),
 			     cur_ddr_op->ddr_freq_level,
-			     readl(DFC_AP(apmu_base)), readl(DFC_CP(apmu_base)),
+			     readl(DFC_AP(apmu_base)),
 			     readl(DFC_STATUS(apmu_base)));
+			dump_dfc_cp(apmu_base);
 		}
 		WARN(1, "AP frequency change timeout!\n");
 		pr_err("APMU_ISR %x, fc_type %u\n",
@@ -1381,9 +1389,9 @@ static int ddr_hwdfc_seq(struct clk_hw *hw, unsigned int level)
 	}
 	if (unlikely(max_delay <= 0)) {
 		WARN(1, "AP cannot start HWDFC as DFC is in progress!\n");
-		pr_err("DFCAP %x, DFCCP %x, DFCSTATUS %x,\n",
-		       readl(DFC_AP(apmu_base)),
-		       readl(DFC_CP(apmu_base)), readl(DFC_STATUS(apmu_base)));
+		pr_err("DFCAP %x, DFCSTATUS %x,\n",
+			readl(DFC_AP(apmu_base)), readl(DFC_STATUS(apmu_base)));
+		dump_dfc_cp(apmu_base);
 		return -EAGAIN;
 	}
 
@@ -1403,11 +1411,12 @@ static int ddr_hwdfc_seq(struct clk_hw *hw, unsigned int level)
 	else {
 		WARN(1, "HW-DFC failed! expect LV %d\n", level);
 		pr_err
-		    ("DFCAP %x, DFCCP %x, DFCSTATUS %x, PLLSEL %x, DMCCAP %x\n",
-		     readl(DFC_AP(apmu_base)), readl(DFC_CP(apmu_base)),
+		    ("DFCAP %x, DFCSTATUS %x, PLLSEL %x, DMCCAP %x\n",
+		     readl(DFC_AP(apmu_base)),
 		     readl(DFC_STATUS(apmu_base)),
 		     readl(APMU_PLL_SEL_STATUS(apmu_base)),
 		     get_dm_cc_ap(apmu_base));
+		dump_dfc_cp(apmu_base);
 	}
 	return 0;
 }
@@ -2281,11 +2290,13 @@ static ssize_t dfcstatus_read(struct file *filp,
 			"|DFC_AP:\t| Active: %u,\t\tReq: %u|\n", dfc_ap.b.fl,
 			dfc_ap.b.dfc_req);
 
-	dfc_cp.v = readl(DFC_CP(apmu_base));
-	len += snprintf(buf + len, size,
-			"|DFC_CP(E):%d\t| Active: %d,\t\tLpm(E): %d(%d) |\n",
-			!dfc_cp.b.dfc_disable, dfc_cp.b.freq_level,
-			dfc_cp.b.lpm_lvl, dfc_cp.b.lpm_en);
+	if (cpu_is_pxa1936()) {
+		dfc_cp.v = readl(DFC_CP(apmu_base));
+		len += snprintf(buf + len, size,
+				"|DFC_CP(E):%d\t| Active: %d,\t\tLpm(E): %d(%d) |\n",
+				!dfc_cp.b.dfc_disable, dfc_cp.b.freq_level,
+				dfc_cp.b.lpm_lvl, dfc_cp.b.lpm_en);
+	}
 
 	len += snprintf(buf + len, size,
 			"|PPidx\t|Freq\t|Src\t|div\t|Tbidx\t|VL\t|Mode\t\n");

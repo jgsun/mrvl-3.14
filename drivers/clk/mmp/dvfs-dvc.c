@@ -41,11 +41,20 @@ enum hwdvc_reg_off {
 	DVC_DVCR = 0x2000,
 	DVC_VL01STR = 0x2004,
 	DVC_AP = 0x2020,
+/*
+ * Attention:
+ * On pxa1956, DVC_CP/DP are moved to PMUcp
+ * and cannot access from AP side.
+ */
 	DVC_CP = 0x2024,
 	DVC_DP = 0x2028,
 	DVC_APSUB = 0x202c,
 	DVC_APCHIP = 0x2030,
 	DVC_STATUS = 0x2040,
+/*
+ * Attention:
+ * On pxa1956, there is no cp/dp related bits in DVC_IMR/ISR.
+ */
 	DVC_IMR = 0x2050,
 	DVC_ISR = 0x2054,
 	DVC_DEBUG = 0x2058,
@@ -346,6 +355,8 @@ static int __init hwdvc_enable_cpdp_dvc(void)
 		pr_err("dvc_info is NULL, nodvfs!\n");
 		return -EINVAL;
 	} else {
+		if (dvc_info->dvcplatinfo->pmucp_inaccessible)
+			return 0;
 		cp_pmudvc_lvl =
 			dvc_info->dvcplatinfo->cp_pmudvc_lvl;
 		dp_pmudvc_lvl =
@@ -1061,17 +1072,19 @@ static ssize_t voltage_read(struct file *filp,
 		pmudvc_xp.b.act_vl,  " ", "Lpm(E):",
 		pmudvc_xp.b.lpm_vl, pmudvc_xp.b.lpm_avc_en);
 
-	pmudvc_xp.v = DVC_REG_READ(DVC_CP);
-	len += snprintf(buf + len, size,
-		"|DVC_CP:\t| %-10s%d,%5s%-10s%d(%d) |\n", "Active:",
-		pmudvc_xp.b.act_vl,  " ", "Lpm(E):",
-		pmudvc_xp.b.lpm_vl, pmudvc_xp.b.lpm_avc_en);
+	if (dvc_info->dvcplatinfo->pmucp_inaccessible == 0) {
+		pmudvc_xp.v = DVC_REG_READ(DVC_CP);
+		len += snprintf(buf + len, size,
+			"|DVC_CP:\t| %-10s%d,%5s%-10s%d(%d) |\n", "Active:",
+			pmudvc_xp.b.act_vl,  " ", "Lpm(E):",
+			pmudvc_xp.b.lpm_vl, pmudvc_xp.b.lpm_avc_en);
 
-	pmudvc_xp.v = DVC_REG_READ(DVC_DP);
-	len += snprintf(buf + len, size,
-		"|DVC_DP:\t| %-10s%d,%5s%-10s%d(%d) |\n", "Active:",
-		pmudvc_xp.b.act_vl,  " ", "Lpm(E):",
-		pmudvc_xp.b.lpm_vl, pmudvc_xp.b.lpm_avc_en);
+		pmudvc_xp.v = DVC_REG_READ(DVC_DP);
+		len += snprintf(buf + len, size,
+			"|DVC_DP:\t| %-10s%d,%5s%-10s%d(%d) |\n", "Active:",
+			pmudvc_xp.b.act_vl,  " ", "Lpm(E):",
+			pmudvc_xp.b.lpm_vl, pmudvc_xp.b.lpm_avc_en);
+	}
 
 	pmudvc_apsub.v = DVC_REG_READ(DVC_APSUB);
 	len += snprintf(buf + len, size,
