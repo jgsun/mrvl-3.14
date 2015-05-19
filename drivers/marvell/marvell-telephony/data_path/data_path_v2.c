@@ -319,7 +319,8 @@ static inline void clean_free_list(struct data_path *dp)
 	llist_del_all(&dp->free_list);
 }
 
-static void rx_free_cb(void *p)
+static void rx_free_cb(void *p, void *ptr __maybe_unused,
+	size_t len __maybe_unused)
 {
 	struct free_entry *entry = p;
 
@@ -383,7 +384,7 @@ static inline int dp_data_rx(struct data_path *dp,
 			pr_err_ratelimited(
 				"low mem, packet dropped\n");
 			/* free rx memory */
-			rx_free_cb(entry);
+			rx_free_cb(entry, NULL, 0);
 		}
 	}
 
