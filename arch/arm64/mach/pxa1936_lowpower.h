@@ -56,8 +56,10 @@
 /* MPMU regs offset */
 #define CPCR			0x0
 #define CPSR			0x0004
-#define CWUCRS			0x0048
-#define CWUCRM			0x004c
+#define CWUCRS_MPMU_PXA1936	0x0048
+#define CWUCRM_MPMU_PXA1936	0x004c
+#define CWUCRS_MPMU_PXA1956	0x00d0
+#define CWUCRM_MPMU_PXA1956	0x00cc
 #define APSLPW			0x1000
 #define APCR_CLUSTER0		0x1080
 #define APCR_CLUSTER1		0x1084

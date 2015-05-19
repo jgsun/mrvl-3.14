@@ -658,31 +658,38 @@ static u32 wakeup_source_check(void)
 	int len_s = 0, len = 0;
 	void __iomem *mpmu = regs_addr_get_va(REGS_ADDR_MPMU);
 	void __iomem *apmu = regs_addr_get_va(REGS_ADDR_APMU);
-	u32 awucrm, cwucrm, awucrs, cwucrs;
-	u32 apcr_cluster0, apcr_cluster1, apcr_per, apslpw;
-	u32 cpcr, cpsr, pwrmode_status, core_status, pwr_status;
-	u32 sav_wucrs, sav_wucrm, sav_xpcr, sav_slpw, real_wus;
+	u32 awucrm, cwucrm = 0, awucrs, cwucrs = 0;
+	u32 apcr_cluster0 = 0, apcr_cluster1 = 0, apcr_per = 0, apslpw = 0;
+	u32 cpcr = 0, cpsr = 0, pwrmode_status = 0, core_status = 0, pwr_status = 0;
+	u32 sav_wucrs = 0, sav_wucrm = 0, sav_xpcr = 0, sav_slpw = 0, real_wus = 0;
 
 	awucrm = __raw_readl(mpmu + AWUCRM);
-	cwucrm = __raw_readl(mpmu + CWUCRM);
-
 	awucrs = __raw_readl(mpmu + AWUCRS);
-	cwucrs = __raw_readl(mpmu + CWUCRS);
+	if (cpu_is_pxa1936()) {
+		cwucrm = __raw_readl(mpmu + CWUCRM_MPMU_PXA1936);
+		cwucrs = __raw_readl(mpmu + CWUCRS_MPMU_PXA1936);
+		sav_wucrs |= cwucrs;
+		sav_wucrm |= cwucrm;
+	}
 
 	apcr_cluster0 = __raw_readl(mpmu + APCR_CLUSTER0);
 	apcr_cluster1 = __raw_readl(mpmu + APCR_CLUSTER1);
 	apcr_per = __raw_readl(mpmu + APCR_PER);
 	apslpw = __raw_readl(mpmu + APSLPW);
-	cpcr = __raw_readl(mpmu + CPCR);
+	if (cpu_is_pxa1936()) {
+		cpcr = __raw_readl(mpmu + CPCR);
+		sav_xpcr |= cpcr;
+		sav_slpw |= cpcr;
+	}
 	cpsr = __raw_readl(mpmu + CPSR);
 	pwrmode_status = __raw_readl(mpmu + PWRMODE_STATUS);
 	core_status = __raw_readl(apmu + CORE_STATUS);
 	pwr_status = __raw_readl(apmu + PWR_STATUS);
 
-	sav_wucrs = awucrs | cwucrs;
-	sav_wucrm = awucrm | cwucrm;
-	sav_xpcr = apcr_cluster0 | apcr_cluster1 | apcr_per | cpcr;
-	sav_slpw = apslpw | cpcr;
+	sav_wucrs |= awucrs;
+	sav_wucrm |= awucrm;
+	sav_xpcr |= apcr_cluster0 | apcr_cluster1 | apcr_per;
+	sav_slpw |= apslpw;
 	real_wus = sav_wucrs & sav_wucrm & PMUM_AP_WAKEUP_MASK;
 
 	pr_info("After SUSPEND");
@@ -695,14 +702,21 @@ static u32 wakeup_source_check(void)
 	check_cp_status(cpsr);
 	check_gps_status(pwr_status);
 
-	pr_info("AWUCRS:0x%x, CWUCRS:0x%x\n", awucrs, cwucrs);
+	if (cpu_is_pxa1936())
+		pr_info("AWUCRS:0x%x, CWUCRS:0x%x\n", awucrs, cwucrs);
+	else
+		pr_info("AWUCRS:0x%x\n", awucrs);
 	pr_info("General wakeup source status:0x%x\n", sav_wucrs);
-	pr_info("AWUCRM:0x%x, CWUCRM:0x%x\n", awucrm, cwucrm);
+	if (cpu_is_pxa1936())
+		pr_info("AWUCRM:0x%x, CWUCRM:0x%x\n", awucrm, cwucrm);
+	else
+		pr_info("AWUCRM:0x%x\n", awucrm);
 	pr_info("General wakeup source mask:0x%x\n", sav_wucrm);
 	pr_info("APCR_CLUSTER0:0x%x, APCR_CLUSTER1:0x%x, APCR_PER:0x%x\n",
 		apcr_cluster0, apcr_cluster0, apcr_per);
 	pr_info("APSLPW: 0x%x\n", apslpw);
-	pr_info("CPCR:0x%x\n", cpcr);
+	if (cpu_is_pxa1936())
+		pr_info("CPCR:0x%x\n", cpcr);
 	pr_info("General xPCR :0x%x\n", sav_xpcr);
 	pr_info("General xSLPW :0x%x\n", sav_slpw);
 
