@@ -201,6 +201,12 @@ static bool __free_memory(struct data_path *dp,
 		slot = __shm_get_next_slot(PSD_DF_CH_TOTAL_LEN, wptr);
 		memcpy_desc((void *)&skctl->ds.free_desc[slot],
 			desc, sizeof(*desc));
+
+		/* flush the cache before scheduling free */
+		if (dp->rbctl->rx_cacheable)
+			__shm_flush_dcache(desc->buffer_offset +
+				dp->rbctl->rx_va, desc->length);
+
 		/* must ensure the descriptor is ready first */
 		wmb();
 		skctl->ds.free_wptr = slot;
@@ -242,14 +248,14 @@ static void free_worker(struct work_struct *work)
 		while (llnode) {
 			struct free_entry *entry =
 				llist_entry(llnode, struct free_entry, llnode);
+			struct llist_node *llnext = llist_next(llnode);
 
 			if (unlikely(!__free_memory(dp, &entry->desc))) {
 				pr_err_ratelimited("%s: free memory failed\n",
 					__func__);
 				goto pushback;
 			}
-			llnode = llist_next(llnode);
-			kmem_cache_free(dp->free_entry_cache, entry);
+			llnode = llnext;
 		}
 	}
 
@@ -287,40 +293,30 @@ static inline struct free_entry *alloc_free_entry(struct data_path *dp,
 
 static inline void free_rx_memory(struct data_path *dp, void *p, size_t length)
 {
-	struct free_entry *entry;
+	struct free_entry *entry = p;
 
-	entry = alloc_free_entry(dp, p, length, GFP_ATOMIC);
-	if (likely(entry)) {
-		llist_add(&entry->llnode, &dp->free_list);
-		schedule_free(dp);
-	}
+	entry->dp = dp;
+	entry->desc.buffer_offset = (u32)((unsigned long)p -
+		(unsigned long)dp->rbctl->rx_va);
+	entry->desc.length = (u16)length;
+
+	llist_add(&entry->llnode, &dp->free_list);
+	schedule_free(dp);
 }
 
-static void clean_free_list(struct data_path *dp)
+static inline void clean_free_list(struct data_path *dp)
 {
-	struct llist_node *llnode;
-
-	llnode = llist_del_all(&dp->free_list);
-	while (llnode) {
-		struct free_entry *entry =
-			llist_entry(llnode, struct free_entry, llnode);
-
-		llnode = llist_next(llnode);
-		kmem_cache_free(dp->free_entry_cache, entry);
-	}
+	llist_del_all(&dp->free_list);
 }
 
 static void rx_free_cb(void *p)
 {
 	struct free_entry *entry = p;
 
-	/* flush the cache before scheduling free */
-	if (entry->dp->rbctl->rx_cacheable)
-		__shm_flush_dcache(entry->desc.buffer_offset +
-			entry->dp->rbctl->rx_va, entry->desc.length);
+	free_rx_memory(entry->dp, entry->desc.buffer_offset +
+		entry->dp->rbctl->rx_va, entry->desc.length);
 
-	llist_add(&entry->llnode, &entry->dp->free_list);
-	schedule_free(entry->dp);
+	kmem_cache_free(entry->dp->free_entry_cache, entry);
 }
 
 static inline int dp_data_rx(struct data_path *dp,
