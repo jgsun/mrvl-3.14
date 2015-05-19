@@ -92,7 +92,6 @@ struct data_path {
 	struct psd_rbctl *rbctl;
 
 	struct tmem_allocator *allocator;
-	struct kmem_cache *free_entry_cache;
 
 	struct tasklet_struct rx_tl;
 
@@ -273,26 +272,6 @@ pushback:
 	}
 }
 
-static inline struct free_entry *alloc_free_entry(struct data_path *dp,
-	void *p, size_t length, gfp_t priority)
-{
-	struct free_entry *entry;
-
-	entry = kmem_cache_alloc(dp->free_entry_cache, priority);
-	if (unlikely(!entry)) {
-		pr_emerg_ratelimited(
-			"%s: cannot allocate memory, %p(%zu) is leaked\n",
-			__func__, p, length);
-			return NULL;
-	}
-	entry->dp = dp;
-	entry->desc.buffer_offset = (u32)((unsigned long)p -
-		(unsigned long)dp->rbctl->rx_va);
-	entry->desc.length = (u16)length;
-
-	return entry;
-}
-
 static inline void free_rx_memory(struct data_path *dp, void *p, size_t length)
 {
 	struct free_entry *entry = p;
@@ -319,15 +298,11 @@ static inline void clean_free_list(struct data_path *dp)
 	llist_del_all(&dp->free_list);
 }
 
-static void rx_free_cb(void *p, void *ptr __maybe_unused,
-	size_t len __maybe_unused)
+static void rx_free_cb(void *p, void *ptr, size_t len)
 {
-	struct free_entry *entry = p;
+	struct data_path *dp = p;
 
-	free_rx_memory(entry->dp, entry->desc.buffer_offset +
-		entry->dp->rbctl->rx_va, entry->desc.length);
-
-	kmem_cache_free(entry->dp->free_entry_cache, entry);
+	free_rx_memory(dp, ptr, len);
 }
 
 static inline int dp_data_rx(struct data_path *dp,
@@ -366,12 +341,8 @@ static inline int dp_data_rx(struct data_path *dp,
 		/* free rx memory */
 		free_rx_memory(dp, p, total_length);
 	} else {
-		struct free_entry *entry;
-
-		entry = alloc_free_entry(dp, p, total_length, GFP_ATOMIC);
-		if (likely(entry))
-			skb = alloc_skb_p(p, total_length, rx_free_cb,
-				entry, GFP_ATOMIC);
+		skb = alloc_skb_p(p, total_length, rx_free_cb,
+			dp, GFP_ATOMIC);
 
 		if (likely(skb)) {
 			skb_reserve(skb, desc->exhdr_length +
@@ -384,7 +355,7 @@ static inline int dp_data_rx(struct data_path *dp,
 			pr_err_ratelimited(
 				"low mem, packet dropped\n");
 			/* free rx memory */
-			rx_free_cb(entry, NULL, 0);
+			free_rx_memory(dp, p, total_length);
 		}
 	}
 
@@ -753,18 +724,6 @@ static int dp_init(void *priv)
 		goto exit_debugfs;
 	}
 
-	dp->free_entry_cache = kmem_cache_create("psd_free_entry_cache",
-		sizeof(struct sk_buff),
-		0,
-		SLAB_HWCACHE_ALIGN|SLAB_PANIC,
-		NULL);
-
-	if (!dp->free_entry_cache) {
-		pr_err("%s: create free entry cache failed\n",
-			__func__);
-		goto exit_acipc;
-	}
-
 	wakeup_source_init(&dp_acipc_wakeup, "dp_acipc_wakeup");
 	wakeup_source_init(&dp_rx_wakeup, "dp_rx_wakeups");
 
@@ -772,8 +731,6 @@ static int dp_init(void *priv)
 
 	return 0;
 
-exit_acipc:
-	dp_acipc_exit();
 exit_debugfs:
 	dp_debugfs_exit(dp);
 destroy_freewq:
@@ -798,7 +755,6 @@ static void dp_exit(void *priv)
 
 	wakeup_source_trash(&dp_rx_wakeup);
 	wakeup_source_trash(&dp_acipc_wakeup);
-	kmem_cache_destroy(dp->free_entry_cache);
 	dp_acipc_exit();
 	dp_debugfs_exit(dp);
 	destroy_workqueue(dp->free_wq);
