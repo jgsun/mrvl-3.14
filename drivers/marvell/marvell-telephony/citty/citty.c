@@ -131,21 +131,12 @@ static int cctdev_ready;
  *
  */
 
-void cci_init_buffer(struct buf_struct *buffer)
+static void cci_init_buffer(struct buf_struct *buffer)
 {
-	int i;
-
 	F_ENTER();
 
-	for (i = 0; i < NUM_CITTY_BUF; i++) {
-		buffer->pBuf[i] = kmalloc(CITTY_BUF_SIZE, GFP_KERNEL);
-		if (!buffer->pBuf[i])
-			pr_err("Failed to allocate memory.\n");
-
-		buffer->iBufIn = 0;
-		buffer->iBufOut = 0;
-
-	}
+	buffer->iBufIn = 0;
+	buffer->iBufOut = 0;
 
 	mutex_init(&buffer->gMutex);
 
@@ -157,7 +148,23 @@ void cci_init_buffer(struct buf_struct *buffer)
 
 }
 
-void cci_free_buffer(struct buf_struct *buffer)
+static void cci_alloc_buffer(struct buf_struct *buffer)
+{
+	int i;
+
+	F_ENTER();
+
+	for (i = 0; i < NUM_CITTY_BUF; i++) {
+		buffer->pBuf[i] = kmalloc(CITTY_BUF_SIZE, GFP_KERNEL);
+		if (!buffer->pBuf[i])
+			pr_err("Failed to allocate memory.\n");
+	}
+
+	F_LEAVE();
+
+}
+
+static void cci_free_buffer(struct buf_struct *buffer)
 {
 	int i;
 
@@ -166,6 +173,9 @@ void cci_free_buffer(struct buf_struct *buffer)
 		kfree(buffer->pBuf[i]);
 		buffer->pBuf[i] = NULL;
 	}
+
+	buffer->iBufIn = 0;
+	buffer->iBufOut = 0;
 }
 
 /*******************************************************************
@@ -424,6 +434,7 @@ static int citty_open(struct tty_struct *tty, struct file *file)
 	if (citty->port->count == 1) {
 		/* this is the first time this port is opened */
 		/* do any hardware initialization needed here */
+		cci_alloc_buffer(&txCittyBuf[index]);
 	}
 
 	mutex_unlock(&mutex_lock_tty[index]);
@@ -453,6 +464,9 @@ static void citty_close(struct tty_struct *tty, struct file *file)
 		if (citty->port->count <= 0) {
 			citty_table[index] = NULL;
 			kfree(citty);
+			mutex_lock(&txCittyBuf[index].gMutex);
+			cci_free_buffer(&txCittyBuf[index]);
+			mutex_unlock(&txCittyBuf[index].gMutex);
 		}
 	}
 exit:
