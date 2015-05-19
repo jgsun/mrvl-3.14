@@ -52,6 +52,8 @@
 
 #define MAX_PENDING_RECLAIM_REQ 32
 
+#define RX_DIRECT_FREE
+
 /*
  * the default channel length for UL
  * total number is 2 * PSD_UL_CH_CNT * 512
@@ -250,7 +252,7 @@ static void free_worker(struct work_struct *work)
 				llist_entry(llnode, struct free_entry, llnode);
 			struct llist_node *llnext = llist_next(llnode);
 
-			if (unlikely(!__free_memory(dp, &entry->desc))) {
+			if (unlikely(!free_memory(dp, &entry->desc))) {
 				pr_err_ratelimited("%s: free memory failed\n",
 					__func__);
 				goto pushback;
@@ -299,6 +301,14 @@ static inline void free_rx_memory(struct data_path *dp, void *p, size_t length)
 	entry->desc.buffer_offset = (u32)((unsigned long)p -
 		(unsigned long)dp->rbctl->rx_va);
 	entry->desc.length = (u16)length;
+
+#ifdef RX_DIRECT_FREE
+	if (likely(free_memory(dp, &entry->desc)))
+		return;
+
+	pr_err_ratelimited("%s: free memory failed\n",
+		__func__);
+#endif
 
 	llist_add(&entry->llnode, &dp->free_list);
 	schedule_free(dp);
