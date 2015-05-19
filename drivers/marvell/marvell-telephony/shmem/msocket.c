@@ -374,9 +374,7 @@ EXPORT_SYMBOL(mrecvskb);
 
 static void cp_sync_worker(struct work_struct *work)
 {
-	bool cb_notify;
-
-	cb_notify = false;
+	bool cb_notify = false, link_notify = false;
 
 	/* acquire lock first */
 	spin_lock(&cp_sync_lock);
@@ -400,13 +398,10 @@ static void cp_sync_worker(struct work_struct *work)
 				/* only when we have received linkup ioctl
 				 * can we report the linkup message */
 				if (cp_recv_up_ioc) {
-					notify_cp_link_status(
-						MsocketLinkupProcId,
-						NULL);
 					cp_recv_up_ioc = false;
-				} else {
+					link_notify = true;
+				} else
 					cb_notify  = true;
-				}
 			}
 			break;
 		}
@@ -419,6 +414,8 @@ static void cp_sync_worker(struct work_struct *work)
 
 	if (cb_notify)
 		notify_first_cp_synced();
+	else if (link_notify)
+		notify_cp_link_status(MsocketLinkupProcId, NULL);
 }
 
 /* thottle portq receive by msocket */
