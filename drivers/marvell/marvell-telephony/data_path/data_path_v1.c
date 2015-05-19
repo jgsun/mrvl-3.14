@@ -30,6 +30,7 @@
 #include <linux/interrupt.h>
 #include <linux/skbuff.h>
 #include <asm/byteorder.h>
+#include <linux/static_key.h>
 #include "shm.h"
 #include "tel_trace.h"
 #include "debugfs.h"
@@ -40,6 +41,8 @@
 #include "skb_llist.h"
 
 #define DATA_ALIGN_SIZE 8
+
+#define RX_SLOT_PTR(b, n, sz) SHM_PACKET_PTR(b, n, sz)
 
 struct data_path_stat {
 	u32 rx_bytes;
@@ -64,6 +67,13 @@ struct data_path_stat {
 	u32 tx_resched_cnt;
 	u32 tx_force_sched_cnt;
 	u32 tx_sched_q_len;
+};
+
+struct rx_slot {
+	/* all packets sent, slot can be marked as freed for cp side */
+	bool done;
+	/* number of packets in slot that are still used */
+	struct kref refcnt;
 };
 
 struct data_path {
@@ -91,6 +101,14 @@ struct data_path {
 
 	u16 tx_sched_delay_in_ms;
 	u16 tx_q_min_sched_len;
+
+	struct mutex rx_copy_lock;
+	struct static_key rx_copy;
+	bool copy_on_rx;
+
+	spinlock_t ap_rptr_lock;
+	int local_ap_rptr;
+	struct rx_slot *rxs;
 
 	/* stat */
 	struct data_path_stat stat;
@@ -337,7 +355,74 @@ static int data_path_xmit(struct data_path *dp,
 	return ret;
 }
 
-static int dp_data_rx(unsigned char *data, unsigned int length)
+static inline void data_path_advance_rptr(struct data_path *dp)
+{
+	int slot;
+	struct rx_slot *rxs;
+	unsigned long flags;
+	struct shm_rbctl *rbctl = dp->rbctl;
+	int counter = 0;
+
+	spin_lock_irqsave(&dp->ap_rptr_lock, flags);
+
+	slot = shm_get_next_rx_slot(rbctl, rbctl->skctl_va->ap_rptr);
+	rxs = (struct rx_slot *)RX_SLOT_PTR(dp->rxs, slot,
+							sizeof(struct rx_slot));
+	if (unlikely(!rxs->done))
+		goto out;
+
+	do {
+		counter++;
+		rxs->done = false;
+		if (rbctl->rx_cacheable)
+			__shm_flush_dcache(SHM_PACKET_PTR(rbctl->rx_va, slot,
+							  rbctl->rx_skbuf_size),
+							  rbctl->rx_skbuf_size);
+
+		slot = shm_get_next_rx_slot(rbctl, slot);
+		rxs = (struct rx_slot *)RX_SLOT_PTR(dp->rxs, slot,
+					sizeof(struct rx_slot));
+	} while (rxs->done);
+
+	BUG_ON(counter >= rbctl->rx_skbuf_num);
+
+	/* advance read pointer on shmem*/
+	rbctl->skctl_va->ap_rptr = slot ? slot - 1 : rbctl->rx_skbuf_num - 1;
+
+out:
+	spin_unlock_irqrestore(&dp->ap_rptr_lock, flags);
+}
+
+static inline void data_path_rxs_done(struct kref *ref)
+{
+	struct rx_slot *rxs = container_of(ref, struct rx_slot, refcnt);
+	rxs->done = true;
+}
+
+static inline void data_path_rxs_put(struct data_path *dp, struct rx_slot *rxs)
+{
+	if (kref_put(&rxs->refcnt, data_path_rxs_done))
+		data_path_advance_rptr(dp);
+}
+
+static inline void data_path_rxs_hold(struct rx_slot *rxs)
+{
+	kref_get(&rxs->refcnt);
+}
+
+static inline void data_path_rxs_init(struct rx_slot *rxs)
+{
+	kref_init(&rxs->refcnt);
+	rxs->done = false;
+}
+
+static void data_path_free_cb(void *rxs_p)
+{
+	data_path_rxs_put(&data_path, (struct rx_slot *)rxs_p);
+}
+
+static int dp_data_rx(struct data_path *dp, unsigned char *data,
+	unsigned int length, struct rx_slot *rxs)
 {
 	unsigned char *p = data;
 	unsigned int remains = length;
@@ -376,15 +461,30 @@ static int dp_data_rx(unsigned char *data, unsigned int length)
 		p += offset_len;
 		remains -= offset_len;
 
-		headroom = psd_get_headroom(hdr->cid);
-		skb = dev_alloc_skb(iplen + headroom);
-		if (likely(skb)) {
-			skb_reserve(skb, headroom);
-			memcpy(skb_put(skb, iplen), p, iplen);
+		if (static_key_false(&data_path.rx_copy)) {
+			headroom = psd_get_headroom(hdr->cid);
+			skb = dev_alloc_skb(iplen + headroom);
+			if (likely(skb)) {
+				skb_reserve(skb, headroom);
+				memcpy(skb_put(skb, iplen), p, iplen);
+			} else {
+				pr_err_ratelimited(
+					"low mem, packet dropped\n");
+				return -1;
+			}
 		} else {
-			pr_err_ratelimited(
-				"low mem, packet dropped\n");
-			return -1;
+			skb = alloc_skb_p(hdr,
+					  iplen + offset_len + sizeof(*hdr),
+					  data_path_free_cb, rxs, GFP_ATOMIC);
+			if (likely(skb)) {
+				skb_reserve(skb, offset_len + sizeof(*hdr));
+				skb_put(skb, iplen);
+				data_path_rxs_hold(rxs);
+			} else {
+				pr_err_ratelimited(
+					"low mem, packet dropped\n");
+				return -1;
+			}
 		}
 
 		psd_data_rx(hdr->cid, skb);
@@ -615,7 +715,7 @@ static void data_path_rx_func(unsigned long arg)
 {
 	struct data_path *dp = (struct data_path *)arg;
 	struct shm_rbctl *rbctl = dp->rbctl;
-	struct shm_skctl *skctl = rbctl->skctl_va;
+	struct rx_slot *rxs;
 	struct shm_psd_skhdr *skhdr;
 	int slot;
 	int count;
@@ -623,6 +723,7 @@ static void data_path_rx_func(unsigned long arg)
 	int max_rx_shots = dp->max_rx_shots;
 
 	dp->stat.rx_sched_cnt++;
+	slot = dp->local_ap_rptr;
 
 	for (i = 0; i < max_rx_shots; i++) {
 		if (!psd_is_link_up()) {
@@ -637,15 +738,19 @@ static void data_path_rx_func(unsigned long arg)
 			acipc_notify_cp_psd_tx_resume();
 		}
 
-		if (shm_is_recv_empty(rbctl))
+		if (__shm_is_empty(rbctl->skctl_va->cp_wptr, slot))
 			break;
 
-		slot = shm_get_next_rx_slot(rbctl, skctl->ap_rptr);
+		slot = shm_get_next_rx_slot(rbctl, slot);
 
 		skhdr =
 		    (struct shm_psd_skhdr *)SHM_PACKET_PTR(rbctl->rx_va, slot,
 							   rbctl->
 							   rx_skbuf_size);
+		rxs =
+		    (struct rx_slot *)RX_SLOT_PTR(dp->rxs, slot,
+							sizeof(struct rx_slot));
+
 
 		shm_invalidate_dcache(rbctl, skhdr, rbctl->rx_skbuf_size);
 
@@ -665,10 +770,13 @@ static void data_path_rx_func(unsigned long arg)
 		dp->stat.rx_used_bytes += count;
 		dp->stat.rx_free_bytes += rbctl->rx_skbuf_size - count;
 
-		dp_data_rx((unsigned char *)(skhdr + 1), skhdr->length);
+		data_path_rxs_init(rxs);
+		dp_data_rx(dp, (unsigned char *)(skhdr + 1), skhdr->length,
+			   rxs);
+		data_path_rxs_put(dp, rxs);
 
 error_length:
-		skctl->ap_rptr = slot;
+		dp->local_ap_rptr = slot;
 	}
 
 	if (i == max_rx_shots) {
@@ -879,6 +987,56 @@ static const struct file_operations fops_wm = {
 	.llseek =	default_llseek,
 };
 
+static ssize_t read_copy_on_rx(struct file *file, char __user *ubuf,
+	size_t count, loff_t *ppos)
+{
+	struct data_path *dp = file->private_data;
+	char buf[3];
+
+	if (dp->copy_on_rx)
+		buf[0] = 'Y';
+	else
+		buf[0] = 'N';
+	buf[1] = '\n';
+	buf[2] = 0x00;
+	return simple_read_from_buffer(ubuf, count, ppos, buf, 2);
+}
+
+static ssize_t write_copy_on_rx(struct file *file, const char __user *ubuf,
+	size_t count, loff_t *ppos)
+{
+	struct data_path *dp = file->private_data;
+
+	char buf[32];
+	size_t buf_size;
+	bool bv;
+
+	buf_size = min(count, (sizeof(buf)-1));
+	if (copy_from_user(buf, ubuf, buf_size))
+		return -EFAULT;
+
+	buf[buf_size] = '\0';
+	mutex_lock(&dp->rx_copy_lock);
+	if (strtobool(buf, &bv) == 0) {
+		if (bv != dp->copy_on_rx) {
+			if (bv)
+				static_key_slow_inc(&data_path.rx_copy);
+			else
+				static_key_slow_dec(&data_path.rx_copy);
+			dp->copy_on_rx = bv;
+		}
+	}
+	mutex_unlock(&dp->rx_copy_lock);
+	return count;
+}
+
+static const struct file_operations fops_copy_on_rx = {
+	.read =		read_copy_on_rx,
+	.write =	write_copy_on_rx,
+	.open =		simple_open,
+	.llseek =	default_llseek,
+};
+
 static int dp_debugfs_init(struct data_path *dp)
 {
 	dp->dentry = debugfs_create_dir(dp->name ? dp->name : "data_path",
@@ -936,6 +1094,10 @@ static int dp_debugfs_init(struct data_path *dp)
 				dp->dentry, &dp->tx_q_min_sched_len)))
 		goto error;
 
+	if (IS_ERR_OR_NULL(debugfs_create_file(
+				"copy_on_rx", S_IRUGO | S_IWUSR,
+				dp->dentry, dp, &fops_copy_on_rx)))
+		goto error;
 	return 0;
 
 error:
@@ -1032,6 +1194,17 @@ static void dp_acipc_exit(void)
 	acipc_event_unbind(ACIPC_RINGBUF_PSD_TX_STOP);
 }
 
+static int dp_init_rxs_array(struct data_path *dp)
+{
+	kfree(dp->rxs);
+
+	dp->rxs = kzalloc(dp->rbctl->rx_skbuf_num * sizeof(struct rx_slot),
+			  GFP_KERNEL);
+	if (!dp->rxs)
+		return -1;
+	return 0;
+}
+
 static int dp_init(void *priv)
 {
 	struct data_path *dp = (struct data_path *)priv;
@@ -1042,6 +1215,8 @@ static int dp_init(void *priv)
 			 __func__, atomic_read(&dp->state));
 		return -1;
 	}
+
+	spin_lock_init(&dp->ap_rptr_lock);
 
 	tx_q_init(dp);
 
@@ -1108,6 +1283,9 @@ static void dp_exit(void *priv)
 
 	tasklet_kill(&dp->tx_tl);
 	tasklet_kill(&dp->rx_tl);
+
+	kfree(dp->rxs);
+	dp->rxs = NULL;
 
 	atomic_set(&dp->state, dp_state_idle);
 }
@@ -1233,6 +1411,12 @@ static int dp_set_addr(void *priv, const struct cpload_cp_addr *addr)
 		shm_rb_exit(dp->rbctl);
 
 	shm_param_init(dp->rbctl, addr);
+
+	if (dp_init_rxs_array(dp)) {
+		pr_err("%s: failed to allocate rxs array\n", __func__);
+		return -1;
+	}
+
 	dp_init_wm(dp);
 	if (shm_rb_init(dp->rbctl, psd_debugfs_root_dir) < 0)
 		pr_err("%s: init psd rbctl failed\n", __func__);
@@ -1273,6 +1457,11 @@ static struct data_path data_path = {
 	.max_rx_shots = MAX_RX_SHOTS,
 	.tx_sched_delay_in_ms = TX_SCHED_DELAY,
 	.tx_q_min_sched_len = TX_MIN_SCHED_LEN,
+	.rx_copy_lock = __MUTEX_INITIALIZER(data_path.rx_copy_lock),
+	.rx_copy = STATIC_KEY_INIT_FALSE,
+	.copy_on_rx = false,
+	.local_ap_rptr = 0,
+	.rxs = NULL,
 };
 
 static struct psd_driver dp_drvier = {
