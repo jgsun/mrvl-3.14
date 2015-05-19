@@ -416,7 +416,8 @@ static inline void data_path_rxs_init(struct rx_slot *rxs)
 	rxs->done = false;
 }
 
-static void data_path_free_cb(void *rxs_p)
+static void data_path_free_cb(void *rxs_p, void *ptr __maybe_unused,
+	size_t len __maybe_unused)
 {
 	data_path_rxs_put(&data_path, (struct rx_slot *)rxs_p);
 }
