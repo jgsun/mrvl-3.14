@@ -1344,7 +1344,7 @@ static void get_dvc_info(void)
 	int i = 0;
 
 	getcpdvcinfo(&dvc_vol_info);
-	for (i = 0; i < MAX_CP_PPNUM; i++) {
+	for (i = 0; i < MAX_CPDVC_NUM; i++) {
 		cpks->cp_freq[i] = dvc_vol_info.cpdvcinfo[i].cpfreq;
 		cpks->cp_vol[i] = dvc_vol_info.cpdvcinfo[i].cpvl;
 	}

@@ -123,9 +123,10 @@ struct cp_keysection {
 	volatile unsigned int uuid_high;
 	volatile unsigned int uuid_low;
 
+#define MAX_CPDVC_NUM 4
 	/* dvc voltage and frequency */
-	volatile unsigned int cp_freq[MAX_CP_PPNUM];
-	volatile unsigned int cp_vol[MAX_CP_PPNUM];
+	volatile unsigned int cp_freq[MAX_CPDVC_NUM];
+	volatile unsigned int cp_vol[MAX_CPDVC_NUM];
 	volatile unsigned int msa_dvc_vol;
 };
 
