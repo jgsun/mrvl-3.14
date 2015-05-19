@@ -288,7 +288,7 @@ struct skb_shared_info {
 	__be32          ip6_frag_id;
 
 	/* Used to free skb which allloced using skb_p */
-	void		(*priv_free_func)(void *);
+	void		(*priv_free_func)(void *, void *, size_t);
 	void		*priv_data;
 	/*
 	 * Warning : all fields before dataref are cleared in __alloc_skb()
@@ -2947,7 +2947,7 @@ static inline unsigned int skb_gso_network_seglen(const struct sk_buff *skb)
 }
 
 static inline struct sk_buff *alloc_skb_p(void *data, unsigned int size,
-					   void (*free_func)(void *),
+					   void (*free_func)(void *, void *, size_t),
 					   void *private_data, gfp_t priority)
 {
 	struct sk_buff *skb = alloc_skb(0, priority);

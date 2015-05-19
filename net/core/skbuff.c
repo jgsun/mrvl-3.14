@@ -908,7 +908,8 @@ static void skb_p_revert(struct sk_buff *skb)
 
 	if (skb_shinfo(skb)->priv_free_func) {
 		skb_shinfo(skb)->priv_free_func(
-				     skb_shinfo(skb)->priv_data);
+			skb_shinfo(skb)->priv_data,
+			skb->head, skb_end_offset(skb));
 		skb_shinfo(skb)->priv_free_func = NULL;
 		skb_shinfo(skb)->priv_data = NULL;
 	}
