@@ -20,6 +20,8 @@
 #include <linux/pxa1936_powermode.h>
 #include <linux/clk/mmpfuse.h>
 #include <linux/helanx_smc.h>
+#include <linux/vmalloc.h>
+#include <asm/cacheflush.h>
 #include "pxa1936_lowpower.h"
 #include "pm.h"
 #include "regs-addr.h"
@@ -58,6 +60,9 @@
 #define IRQ_PXA1936_GPIO_AP		(IRQ_PXA1936_START + 49)
 #define IRQ_PXA1936_GPS			(IRQ_PXA1936_START + 95)
 
+#define MAX_LEN	20
+
+static unsigned int saved_regs[MAX_LEN];
 static unsigned int share_addr, share_len;
 
 static void pxa1936_set_wake(int irq, unsigned int on)
@@ -262,6 +267,73 @@ static void check_gps_status(unsigned int pmua_pwr_status)
 	else
 		pr_info("GPS power off!\n");
 }
+
+void *map_address(unsigned long addr, unsigned long size)
+{
+	int nr, i = 0;
+	struct page **pages;
+	void *start = NULL;
+
+	size = PAGE_ALIGN(size);
+	nr = size >> PAGE_SHIFT;
+
+	pages = vmalloc(sizeof(struct page *) * nr);
+	if (pages == NULL) {
+		BUG_ON("remap reserved memory failed!\n");
+		return NULL;
+	}
+
+	while (i < nr) {
+		pages[i] = phys_to_page(addr + (i << PAGE_SHIFT));
+		i++;
+	}
+	start = vmap(pages, nr, 0, pgprot_noncached(PAGE_KERNEL));
+
+	vfree(pages);
+
+	return start;
+}
+
+static int get_saved_regs(void)
+{
+	static void *base;
+	static int cpus, len;
+	void *cpu_base;
+	int i, j, num = 0;
+	if (!base) {
+		base = map_address(share_addr, share_len);
+		if (!base)
+			BUG_ON("map_address failed!\n");
+		cpus = num_possible_cpus();
+		len = share_len / cpus;
+	}
+
+	memset((void *)saved_regs, 0, sizeof(saved_regs));
+
+	for (i = 0; i < cpus; i++) {
+		cpu_base = base + i * len;
+		num = readl(cpu_base);
+
+		if (num != 0) {
+			for (j = 1; j <= num; j++)
+				saved_regs[j - 1] = readl(cpu_base + 4 * j);
+			break;
+		};
+	}
+	if (num) {
+		__flush_dcache_area((void *)saved_regs,
+				   (num + 1) * sizeof(unsigned int));
+		memset((void *)cpu_base, 0, (num + 1) * sizeof(unsigned int));
+		/* No need to flush cache since it is mapped as non-cacheable */
+		/* __flush_dcache_area((void *)cpu_base, len); */
+		return num;
+	}
+
+	__flush_dcache_area((void *)saved_regs, sizeof(saved_regs));
+
+	return 0;
+}
+
 
 static int pxa1936_suspend_check(void)
 {
@@ -546,7 +618,7 @@ static char *hw_irq_name_1956[] = {
 	"Performance Monitor Unit for AP Cluster1 core3",
 };
 
-static int icu_async_further_check(void)
+static int icu_async_further_check(int has_saveinfo)
 {
 	int i, bit, len = 0;
 	int irq_size, irq_size_round;
@@ -571,7 +643,11 @@ static int icu_async_further_check(void)
 	}
 
 	for (i = 0; i < irq_size_round; i++) {
-		irq_status = __raw_readl(irq_stat_base + i * 4);
+		if (has_saveinfo)
+			irq_status = saved_regs[S_ICU_INT_STATUS_0 + i];
+		else
+			irq_status = __raw_readl(irq_stat_base + i * 4);
+
 		pr_info("INTReg_%d: 0x%lx ", i, irq_status);
 
 		bit = find_first_bit(&irq_status, 32);
@@ -617,7 +693,8 @@ err_exit:
 	return -EINVAL;
 }
 
-static int check_mfp_wakeup_stat(char *buf, int len, size_t size)
+static int check_mfp_wakeup_stat(char *buf, int len, size_t size,
+				 int has_saveinfo)
 {
 	int i, bit, tmp_len = len;
 	int mfp_edge_array_num;
@@ -629,19 +706,33 @@ static int check_mfp_wakeup_stat(char *buf, int len, size_t size)
 		pr_err("memory alloc for mfp wakeup check is failed!!\n");
 		return -EINVAL;
 	}
-
-	mfp_edge_array_num = edge_wakeup_mfp_status(mfp_wp_stat);
+	if (has_saveinfo) {
+#ifdef CONFIG_64BIT
+		mfp_edge_array_num = 2;
+		mfp_wp_stat[0] = saved_regs[S_GPIOE_RER0] |
+			((unsigned long)saved_regs[S_GPIOE_RER1] << 32);
+		mfp_wp_stat[1] = saved_regs[S_GPIOE_RER2] |
+			((unsigned long)saved_regs[S_GPIOE_RER3] << 32);
+#else
+		mfp_edge_array_num = 4;
+		mfp_wp_stat[0] = saved_regs[S_GPIOE_RER0];
+		mfp_wp_stat[1] = saved_regs[S_GPIOE_RER1];
+		mfp_wp_stat[2] = saved_regs[S_GPIOE_RER2];
+		mfp_wp_stat[3] = saved_regs[S_GPIOE_RER3];
+#endif
+	} else
+		mfp_edge_array_num = edge_wakeup_mfp_status(mfp_wp_stat);
 
 	for (i = 0; i < mfp_edge_array_num; i++) {
-		bit = find_first_bit(&mfp_wp_stat[i], 32);
-		while (bit < 32) {
+		bit = find_first_bit(mfp_wp_stat + i, BITS_PER_LONG);
+		while (bit < BITS_PER_LONG) {
 			if (tmp_len == len)
-				len +=
-				    snprintf(buf + len, size - len, "MFP_PAD");
-			len +=
-			    snprintf(buf + len, size - len, "-%d",
-				     bit + i * 32);
-			bit = find_next_bit(&mfp_wp_stat[i], 32, bit + 1);
+				len += snprintf(buf + len, size - len,
+						"MFP_PAD");
+			len += snprintf(buf + len, size - len, "-%d",
+					bit + i * BITS_PER_LONG);
+			bit = find_next_bit(mfp_wp_stat + i,
+					    BITS_PER_LONG, bit + 1);
 		}
 	}
 
@@ -658,22 +749,35 @@ static u32 wakeup_source_check(void)
 {
 	char *buf;
 	size_t size = PAGE_SIZE - 1;
-	int len_s = 0, len = 0;
-	void __iomem *mpmu = regs_addr_get_va(REGS_ADDR_MPMU);
-	void __iomem *apmu = regs_addr_get_va(REGS_ADDR_APMU);
-	u32 awucrm, cwucrm = 0, awucrs, cwucrs = 0;
+	int len_s = 0, len = 0, save_info = 0;
+	void __iomem *mpmu, *apmu;
+	u32 awucrm = 0, cwucrm = 0, awucrs = 0, cwucrs = 0;
 	u32 apcr_cluster0 = 0, apcr_cluster1 = 0, apcr_per = 0, apslpw = 0;
 	u32 cpcr = 0, cpsr = 0, pwrmode_status = 0, core_status = 0, pwr_status = 0;
 	u32 sav_wucrs = 0, sav_wucrm = 0, sav_xpcr = 0, sav_slpw = 0, real_wus = 0;
 
-	awucrm = __raw_readl(mpmu + AWUCRM);
-	awucrs = __raw_readl(mpmu + AWUCRS);
-	if (cpu_is_pxa1936()) {
-		cwucrm = __raw_readl(mpmu + CWUCRM_MPMU_PXA1936);
-		cwucrs = __raw_readl(mpmu + CWUCRS_MPMU_PXA1936);
-		sav_wucrs |= cwucrs;
-		sav_wucrm |= cwucrm;
+	mpmu = regs_addr_get_va(REGS_ADDR_MPMU);
+	apmu = regs_addr_get_va(REGS_ADDR_APMU);
+
+	save_info = get_saved_regs();
+	if (save_info) {
+		awucrm = saved_regs[S_AWUCRM];
+		awucrs = saved_regs[S_AWUCRS];
+		if (cpu_is_pxa1936()) {
+			cwucrm = saved_regs[S_CWUCRM];
+			cwucrs = saved_regs[S_CWUCRS];
+		}
+	} else {
+		awucrm = __raw_readl(mpmu + AWUCRM);
+		awucrs = __raw_readl(mpmu + AWUCRS);
+		if (cpu_is_pxa1936()) {
+			cwucrm = __raw_readl(mpmu + CWUCRM_MPMU_PXA1936);
+			cwucrs = __raw_readl(mpmu + CWUCRS_MPMU_PXA1936);
+		}
 	}
+
+	sav_wucrs |= cwucrs;
+	sav_wucrm |= cwucrm;
 
 	apcr_cluster0 = __raw_readl(mpmu + APCR_CLUSTER0);
 	apcr_cluster1 = __raw_readl(mpmu + APCR_CLUSTER1);
@@ -739,7 +843,7 @@ static u32 wakeup_source_check(void)
 			len += snprintf(buf + len, size - len, "3G Base band,");
 	}
 	if (real_wus & PMUM_WAKEUP2) {
-		int ret = check_mfp_wakeup_stat(buf, len, size);
+		int ret = check_mfp_wakeup_stat(buf, len, size, save_info);
 		if (ret < 0)
 			pr_info("MFP pad wakeup check failed!!!\n");
 		else
@@ -806,7 +910,7 @@ static u32 wakeup_source_check(void)
 
 	if (real_wus & PMUM_AP_ASYNC_INT) {
 		pr_info("AP is woken up by AP_INT_ASYNC\n");
-		if (icu_async_further_check())
+		if (icu_async_further_check(save_info))
 			pr_err("Cannot interpret detailed wakeup reason!\n");
 	} else {
 		void __iomem *gic_dist_base =
