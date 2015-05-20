@@ -78,4 +78,18 @@ static inline void __shm_invalidate_dcache(void *addr, size_t size)
 		size, DMA_FROM_DEVICE);
 }
 
+static inline void shm_flush_dcache(bool cacheable,
+	void *addr, size_t size)
+{
+	if (cacheable)
+		__shm_flush_dcache(addr, size);
+}
+
+static inline void shm_invalidate_dcache(bool cacheable,
+	void *addr, size_t size)
+{
+	if (cacheable)
+		__shm_invalidate_dcache(addr, size);
+}
+
 #endif /* _SHM_COMMON_H_ */

@@ -200,20 +200,6 @@ static inline void shm_notify_ap_tx_stopped(struct shm_rbctl *rbctl)
 	rbctl->is_ap_xmit_stopped = true;
 }
 
-static inline void shm_flush_dcache(struct shm_rbctl *rbctl,
-	void *addr, size_t size)
-{
-	if (rbctl && rbctl->tx_cacheable)
-		__shm_flush_dcache(addr, size);
-}
-
-static inline void shm_invalidate_dcache(struct shm_rbctl *rbctl,
-	void *addr, size_t size)
-{
-	if (rbctl && rbctl->rx_cacheable)
-		__shm_invalidate_dcache(addr, size);
-}
-
 /*
  * functions exported by this module
  */

@@ -252,7 +252,8 @@ static void direct_rb_rx_worker(struct work_struct *work)
 			SHM_PACKET_PTR(rbctl->rx_va, slot,
 			rbctl->rx_skbuf_size);
 
-		shm_invalidate_dcache(rbctl, hdr, rbctl->rx_skbuf_size);
+		shm_invalidate_dcache(rbctl->rx_cacheable, hdr,
+			rbctl->rx_skbuf_size);
 
 		count = hdr->length + sizeof(*hdr);
 
@@ -393,7 +394,7 @@ int direct_rb_xmit(struct direct_rbctl *dir_ctl, const char __user *buf,
 	data_dump((char *)hdr, sizeof(*hdr) + len, dir_ctl->svc_id, DATA_TX);
 	trace_drb_xmit(sizeof(*hdr) + len);
 
-	shm_flush_dcache(rbctl, hdr, sizeof(*hdr) + len);
+	shm_flush_dcache(rbctl->tx_cacheable, hdr, sizeof(*hdr) + len);
 	dir_ctl->stat_tx_sent++;
 	skctl->ap_wptr = slot;	/* advance pointer index */
 

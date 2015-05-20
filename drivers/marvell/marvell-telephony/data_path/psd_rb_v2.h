@@ -99,20 +99,6 @@ struct psd_rbctl {
 	struct chan_info dl_free_chan;
 };
 
-static inline void psd_flush_dcache(struct psd_rbctl *rbctl,
-	void *addr, size_t size)
-{
-	if (rbctl && rbctl->tx_cacheable)
-		__shm_flush_dcache(addr, size);
-}
-
-static inline void psd_invalidate_dcache(struct psd_rbctl *rbctl,
-	void *addr, size_t size)
-{
-	if (rbctl && rbctl->rx_cacheable)
-		__shm_invalidate_dcache(addr, size);
-}
-
 int psd_rb_init(struct psd_rbctl *rbctl, struct dentry *parent);
 int psd_rb_exit(struct psd_rbctl *rbctl);
 void psd_rb_data_init(struct psd_rbctl *rbctl);

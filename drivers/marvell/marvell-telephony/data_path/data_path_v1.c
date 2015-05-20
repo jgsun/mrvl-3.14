@@ -374,10 +374,10 @@ static inline void data_path_advance_rptr(struct data_path *dp)
 	do {
 		counter++;
 		rxs->done = false;
-		if (rbctl->rx_cacheable)
-			__shm_flush_dcache(SHM_PACKET_PTR(rbctl->rx_va, slot,
-							  rbctl->rx_skbuf_size),
-							  rbctl->rx_skbuf_size);
+		shm_flush_dcache(rbctl->rx_cacheable,
+			SHM_PACKET_PTR(rbctl->rx_va, slot,
+				rbctl->rx_skbuf_size),
+			rbctl->rx_skbuf_size);
 
 		slot = shm_get_next_rx_slot(rbctl, slot);
 		rxs = (struct rx_slot *)RX_SLOT_PTR(dp->rxs, slot,
@@ -581,7 +581,7 @@ static void data_path_tx_func(unsigned long arg)
 			 */
 			if (padded_size(packet->len, DATA_ALIGN_SIZE) >
 				remain_bytes) {
-				shm_flush_dcache(rbctl,
+				shm_flush_dcache(rbctl->tx_cacheable,
 						SHM_PACKET_PTR(rbctl->tx_va,
 							pending_slot,
 							rbctl->tx_skbuf_size),
@@ -654,7 +654,8 @@ static void data_path_tx_func(unsigned long arg)
 
 	/* send out the pending slot */
 	if (pending_slot != -1) {
-		shm_flush_dcache(rbctl, SHM_PACKET_PTR(rbctl->tx_va,
+		shm_flush_dcache(rbctl->tx_cacheable,
+			SHM_PACKET_PTR(rbctl->tx_va,
 				pending_slot,
 				rbctl->tx_skbuf_size),
 			used_bytes + sizeof(struct shm_psd_skhdr));
@@ -753,7 +754,8 @@ static void data_path_rx_func(unsigned long arg)
 							sizeof(struct rx_slot));
 
 
-		shm_invalidate_dcache(rbctl, skhdr, rbctl->rx_skbuf_size);
+		shm_invalidate_dcache(rbctl->rx_cacheable, skhdr,
+			rbctl->rx_skbuf_size);
 
 		count = skhdr->length + sizeof(*skhdr);
 

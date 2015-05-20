@@ -204,9 +204,8 @@ static bool __free_memory(struct data_path *dp,
 			desc, sizeof(*desc));
 
 		/* flush the cache before scheduling free */
-		if (dp->rbctl->rx_cacheable)
-			__shm_flush_dcache(desc->buffer_offset +
-				dp->rbctl->rx_va, desc->length);
+		shm_flush_dcache(dp->rbctl->rx_cacheable, desc->buffer_offset +
+			dp->rbctl->rx_va, desc->length);
 
 		/* must ensure the descriptor is ready first */
 		wmb();
@@ -318,7 +317,7 @@ static inline int dp_data_rx(struct data_path *dp,
 	total_length = desc->exhdr_length +
 		desc->packet_offset + desc->packet_length;
 
-	psd_invalidate_dcache(rbctl, p, total_length);
+	shm_invalidate_dcache(rbctl->rx_cacheable, p, total_length);
 
 	dp->stat.rx_bytes += total_length;
 	dp->stat.rx_packets++;
@@ -835,7 +834,7 @@ static int dp_data_tx(void *priv, int cid, int simid, int prio,
 	}
 
 	memcpy(buf + CP_UL_HEADROOM, skb->data, skb->len);
-	psd_flush_dcache(dp->rbctl, buf, len);
+	shm_flush_dcache(dp->rbctl->tx_cacheable, buf, len);
 
 	desc.buffer_offset = (u32)(unsigned long)(buf - dp->rbctl->tx_va);
 	desc.exhdr_length = 0;

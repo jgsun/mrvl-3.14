@@ -366,7 +366,7 @@ void shm_xmit(struct shm_rbctl *rbctl, struct sk_buff *skb)
 		return;
 	}
 	memcpy(data, skb->data, skb->len);
-	shm_flush_dcache(rbctl, data, skb->len);
+	shm_flush_dcache(rbctl->tx_cacheable, data, skb->len);
 	skctl->ap_wptr = slot;	/* advance pointer index */
 }
 
@@ -384,7 +384,7 @@ struct sk_buff *shm_recv(struct shm_rbctl *rbctl)
 	size_t count = 0;
 	struct sk_buff *skb = NULL;
 
-	shm_invalidate_dcache(rbctl, hdr, rbctl->rx_skbuf_size);
+	shm_invalidate_dcache(rbctl->rx_cacheable, hdr, rbctl->rx_skbuf_size);
 
 	if (likely(rbctl->cbs && rbctl->cbs->get_packet_length))
 		count = rbctl->cbs->get_packet_length(hdr);
