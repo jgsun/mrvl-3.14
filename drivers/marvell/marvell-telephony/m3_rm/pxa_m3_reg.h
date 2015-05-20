@@ -106,6 +106,37 @@ static void deinit_gnss_base_addr(void)
 #define GNSS_CODEINIT_RDY_OFFSET      3
 #define GNSS_IRQ_OUT_OFFSET           4
 
+/* the following is for gnss ip on helan4 or later */
+#define GNSS_CODEINIT_DONE_OFFSET_2	0
+#define GNSS_CODEINIT_RDY_OFFSET_2	1
+#define CIU_REG_GNSS_CODE_INIT		CIU_REG(0x168)
+
+#define GNSS_IRQ_CLR_OFFSET_2		0
+#define GNSS_IRQ_OUT_OFFSET_2		1
+#define CIU_REG_GNSS_IRQ		CIU_REG(0x184)
+
+#define AP_GNSS_WAKEUP_OFFSET_2		0
+#define CIU_REG_GNSS_WAKEUP		CIU_REG(0x188)
+
+static inline void gnss_set_init_done_2(void)
+{
+	u32 ciu_reg_v;
+
+	ciu_reg_v = REG_READ(CIU_REG_GNSS_CODE_INIT);
+	ciu_reg_v |= (0x1 << GNSS_CODEINIT_DONE_OFFSET_2);
+	REG_WRITE(ciu_reg_v, CIU_REG_GNSS_CODE_INIT);
+}
+
+static inline void gnss_clr_init_done_2(void)
+{
+	u32 ciu_reg_v;
+
+	ciu_reg_v = REG_READ(CIU_REG_GNSS_CODE_INIT);
+	ciu_reg_v &= ~(0x1 << GNSS_CODEINIT_DONE_OFFSET_2);
+	REG_WRITE(ciu_reg_v, CIU_REG_GNSS_CODE_INIT);
+}
+/* end for gnss ip on helan4 or later */
+
 static inline void gnss_set_init_done(void)
 {
 	u32 ciu_reg_v;

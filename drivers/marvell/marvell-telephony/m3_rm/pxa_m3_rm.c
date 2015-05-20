@@ -55,6 +55,7 @@ bool buck1slp_is_ever_changed;
 static int m3_gnss_open_count;
 static int m3_senhub_open_count;
 static bool chip_fused;
+static int gps_lna_gpio;
 
 int crmdev_major;
 int crmdev_minor;
@@ -235,8 +236,13 @@ int gnss_config(void)
 	retry_times = 10;
 	do {
 		mdelay(2);
-		ciu_reg_v = REG_READ(CIU_GPS_HANDSHAKE);
-		ciu_reg_v &= (0x1 << GNSS_CODEINIT_RDY_OFFSET);
+		if (3 == m3_ip_ver) {
+			ciu_reg_v = REG_READ(CIU_REG_GNSS_CODE_INIT);
+			ciu_reg_v &= (0x1 << GNSS_CODEINIT_RDY_OFFSET_2);
+		} else {
+			ciu_reg_v = REG_READ(CIU_GPS_HANDSHAKE);
+			ciu_reg_v &= (0x1 << GNSS_CODEINIT_RDY_OFFSET);
+		}
 	} while (!ciu_reg_v && --retry_times);
 	if (retry_times == 0) {
 		pr_err("fail to get gnss_init_rdy\n");
@@ -301,7 +307,11 @@ void gnss_power_off(void)
 int gnss_power_on(void)
 {
 	int ret = 0;
-	gnss_clr_init_done();
+	if (3 == m3_ip_ver)
+		gnss_clr_init_done_2();
+	else
+		gnss_clr_init_done();
+
 	ret = gnss_config(); /* software control mode by default*/
 	if (ret < 0)
 		goto power_on_exit;
@@ -488,6 +498,7 @@ static long m3_ioctl(struct file *filp,
 	int flag, status = 0;
 	int len, is_pm2, cpuid;
 	int cons_on = 0;
+	int lna_on = 0;
 	phys_addr_t ipc_base;
 
 	/*
@@ -534,11 +545,16 @@ static long m3_ioctl(struct file *filp,
 		}
 		break;
 	case RM_IOC_M3_RELEASE:
-		if (1 == m3_ip_ver)
+		if (1 == m3_ip_ver) {
 			GNSS_HALF_SRAM_MODE();
-		else if (2 == m3_ip_ver)
+			gnss_set_init_done();
+		} else if (2 == m3_ip_ver) {
 			GNSS_HALF_SRAM_MODE_V2();
-		gnss_set_init_done();
+			gnss_set_init_done();
+		} else if (3 == m3_ip_ver) {
+			GNSS_HALF_SRAM_MODE_V2();
+			gnss_set_init_done_2();
+		}
 		pr_info("RM M3: RM_IOC_M3_RELEASE is received!\n");
 		break;
 	case RM_IOC_M3_SET_IPC_ADDR:
@@ -638,6 +654,19 @@ static long m3_ioctl(struct file *filp,
 		else
 			return 0;
 	break;
+	case RM_IOC_GPS_LNA_ENABLE:
+		if (gpio_is_valid(gps_lna_gpio)) {
+			if (copy_from_user(&lna_on, (int *)arg, sizeof(int)))
+				return -EFAULT;
+			if (lna_on) {
+				gpio_set_value(gps_lna_gpio, 1);
+				pr_info("RM M3:RM_IOC_GPS_LNA_ENABLE enable\n ");
+			} else {
+				gpio_set_value(gps_lna_gpio, 0);
+				pr_info("RM M3:RM_IOC_GPS_LNA_ENABLE disable\n ");
+			}
+		}
+	break;
 	default:
 	return -EOPNOTSUPP;
 	}
@@ -676,11 +705,18 @@ int m3_mmap(struct file *file, struct vm_area_struct *vma)
 	unsigned long size = vma->vm_end - vma->vm_start;
 	unsigned long pa = vma->vm_pgoff;
 
-	if (!(REG_READ(CIU_GPS_HANDSHAKE) & 0x8)) {
-		pr_err("m3 init is not ready. try again!\n");
-		return -ENXIO;
-	}
 
+	if (3 == m3_ip_ver) {
+		if (!(REG_READ(CIU_REG_GNSS_CODE_INIT) & 0x2)) {
+			pr_err("m3 init is not ready. try again 2!\n");
+			return -ENXIO;
+		}
+	} else {
+		if (!(REG_READ(CIU_GPS_HANDSHAKE) & 0x8)) {
+			pr_err("m3 init is not ready. try again!\n");
+			return -ENXIO;
+		}
+	}
 	/* we do not want to have this area swapped out, lock it */
 	vma->vm_flags |= (VM_IO | VM_DONTEXPAND | VM_DONTDUMP);
 	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
@@ -821,6 +857,13 @@ static int pxa_m3rm_probe(struct platform_device *pdev)
 	struct device_node *np = dev->of_node;
 
 	m3rm_dev = &pdev->dev;
+	gps_lna_gpio = of_get_named_gpio(np, "gpslna", 0);
+	if (gps_lna_gpio > 0) {
+		if (gpio_is_valid(gps_lna_gpio))
+			gpio_direction_output(gps_lna_gpio, 0);
+	}
+	pr_info("m3 get gps_lna_gpio gps_lna_gpio =%d\n", gps_lna_gpio);
+
 	m3_pctrl.pinctrl = devm_pinctrl_get(m3rm_dev);
 	if (IS_ERR(m3_pctrl.pinctrl))
 		dev_err(m3rm_dev, "m3 pinctrl get fail!\n");
