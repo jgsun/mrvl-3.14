@@ -510,7 +510,7 @@
 				interrupts = <0 47 0x4>;
 				#dma-cells= <2>;
 				#dma-channels = <16>;
-				#dma-channels-tz = <15>;
+				#dma-channels-tz = <16>;
 				lpm-qos = <PM_QOS_CPUIDLE_BLOCK_AXI>;
 				status = "disabled";
 			};
