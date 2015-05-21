@@ -823,20 +823,18 @@ static int b52isp_path_hw_open(struct isp_block *block)
 	if (pm_runtime_suspended(block->dev)) {
 		d_inf(1, "ISP haven't been power on, it can't load firmware\n");
 		return 0;
-	} else if (b52isp_pwr_enable == 1)
-		goto fw_done;
-	else
-		b52isp_pwr_enable = 1;
-	ppipe = container_of(block,
-			struct b52isp_ppipe, block);
-	hw_version = ppipe->parent->hw_desc->hw_version;
-	ret = b52_load_fw(block->dev, block->reg_base, 1,
-					b52isp_pwr_enable, hw_version);
-	if (ret < 0)
-		return ret;
+	} else if (!b52isp_pwr_enable) {
+		ppipe = container_of(block, struct b52isp_ppipe, block);
+		hw_version = ppipe->parent->hw_desc->hw_version;
+		ret = b52_load_fw(block->dev, block->reg_base, hw_version);
+		if (ret < 0)
+			return ret;
 
-fw_done:
-	d_inf(2, "MCU Initialization done");
+		b52isp_pwr_enable = 1;
+
+		d_inf(2, "MCU Initialization done");
+	}
+
 	return 0;
 }
 
@@ -848,7 +846,6 @@ EXPORT_SYMBOL_GPL(check_load_firmware);
 
 static void b52isp_path_hw_close(struct isp_block *block)
 {
-	b52_load_fw(block->dev, block->reg_base, 0, b52isp_pwr_enable, 0);
 }
 
 static int b52isp_path_s_clock(struct isp_block *block, int rate)

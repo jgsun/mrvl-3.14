@@ -592,35 +592,18 @@ void b52_set_sccb_clock_rate(u32 input_rate, u32 sccb_rate)
 }
 EXPORT_SYMBOL_GPL(b52_set_sccb_clock_rate);
 
-int b52_load_fw(struct device *dev, void __iomem *base, int enable,
-					int pwr, int fw_version)
+int b52_load_fw(struct device *dev, void __iomem *base, int fw_version)
 {
 	int ret, i;
 	const struct firmware *fw;
 	__u32 *src, *dst;
 	const char *fw_name;
-	if (!pwr)
-		return 0;
 
 	if (!dev || !base) {
 		pr_err("%s param error\n", __func__);
 		return -EINVAL;
 	}
 
-	b52_base = base;
-
-	if (!enable)
-		return 0;
-
-	b52_writeb(REG_TOP_SW_STANDBY, SW_STANDBY);
-	b52_writeb(REG_TOP_CLK_RST1, 0xF0);
-	usleep_range(500, 550);
-	b52_writeb(REG_TOP_CORE_CTRL1_L, 0x40);
-
-	b52_writel(REG_ISP_INT_EN, INT_CMD_DONE | (7 << 24));
-	b52_writel(REG_ISP_INT_STAT, 0x0);
-
-	b52_writeb(0x63042, 0xf1);
 	switch (fw_version) {
 	case 1:
 		fw_name = FW_FILE_V324;
@@ -632,8 +615,22 @@ int b52_load_fw(struct device *dev, void __iomem *base, int enable,
 		fw_name = FW_FILE_V326;
 		break;
 	default:
-		fw_name = NULL;
+		pr_err("%s fw_version %d error\n", __func__, fw_version);
+		return -EINVAL;
 	}
+
+	b52_base = base;
+
+	b52_writeb(REG_TOP_SW_STANDBY, SW_STANDBY);
+	b52_writeb(REG_TOP_CLK_RST1, 0xF0);
+	usleep_range(500, 550);
+	b52_writeb(REG_TOP_CORE_CTRL1_L, 0x40);
+
+	b52_writel(REG_ISP_INT_EN, INT_CMD_DONE | (7 << 24));
+	b52_writel(REG_ISP_INT_STAT, 0x0);
+
+	b52_writeb(0x63042, 0xf1);
+
 	ret = request_firmware(&fw, fw_name, dev);
 	if (ret < 0) {
 		pr_err("request_firmware failed\n");
@@ -1632,7 +1629,6 @@ struct b52_pipe_info {
 	u16 sll;
 };
 
-#define PIPE_INFO_OFFSET   (0x80)
 int b52_get_pipe_info(struct b52_pipe_info *info, u8 id)
 {
 	int i;
@@ -2537,13 +2533,6 @@ int b52_cmd_zoom_in(int path, int zoom)
 }
 EXPORT_SYMBOL_GPL(b52_cmd_zoom_in);
 
-static int __maybe_unused b52_cmd_awb(struct b52isp_cmd *cmd)
-{
-	/* FIXME */
-	b52_writeb(CMD_REG1, 1);
-	return wait_cmd_done(CMD_AWB_MODE);
-}
-
 int b52_cmd_anti_shake(u16 block_size, int enable)
 {
 	int ret;
@@ -2557,11 +2546,6 @@ int b52_cmd_anti_shake(u16 block_size, int enable)
 	return ret;
 }
 EXPORT_SYMBOL_GPL(b52_cmd_anti_shake);
-
-static inline int b52_cmd_abort(void)
-{
-	return wait_cmd_done(CMD_ABORT);
-}
 
 int b52_cmd_vcm(void)
 {

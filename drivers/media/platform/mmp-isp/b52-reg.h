@@ -123,8 +123,7 @@ struct b52isp_cmd {
 int b52_rw_pipe_ctdata(int pipe_id, int write,
 			struct b52_regval *entry, u32 nr_entry);
 void b52_set_base_addr(void __iomem *base);
-int b52_load_fw(struct device *dev, void __iomem *base, int enable,
-						int pwr, int hw_version);
+int b52_load_fw(struct device *dev, void __iomem *base, int hw_version);
 int b52_get_metadata_len(int path);
 int b52_hdl_cmd(struct b52isp_cmd *cmd);
 int b52_ctrl_mac_irq(u8 mac_id, u8 port_id, int enable);
@@ -431,64 +430,11 @@ extern void b52isp_set_ddr_threshold(struct work_struct *work, int up);
 #define REG_ISP_TOP11                (0xb)
 #define REG_ISP_TOP12                (0xc)
 #define REG_ISP_TOP13                (0xd)
-
+#define REG_ISP_TOP37                (0x2F)
+	#define RGBHGMA_ENABLE    (1<<6)
 #define REG_ISP_TOP80                (0x50)
 #define REG_ISP_TOP99                (0x63)
 #define REG_ISP_TOP100               (0x64)
-
-/*
- * ISP input size:
- * horizol: 0x10[12:8], 0x11[7:0]
- * vertical:0x12[12:8], 0x13[7:0]
- * ISP output size
- * horizol: 0x14[12:8], 0x15[7:0]
- * vertical:0x16[12:8], 0x17[7:0]
- */
-#define REG_ISP_IN_WIDTH              (0x10)
-#define REG_ISP_IN_HEIGHT             (0x12)
-#define REG_ISP_OUT_WIDTH             (0x14)
-#define REG_ISP_OUT_HEIGHT            (0x16)
-/*
- * ISP LENC horizontal offset:
- * high:	0x18
- * low:		0x19
- * ISP LENC verital offset:
- * high:	0x1a
- * low:		0x1b
- */
-#define REG_ISP_LENC_H_OFFSET	      (0x18)
-#define REG_ISP_LENC_V_OFFSET		  (0x1a)
-/*
- * down_scale_x: 0x24[7:0]
- * down_scale_y: 0x25[7:0]
- * up_scale_x: 0x26[8], 0x27[7:0]
- * up_scale_y: 0x28[8], 0x29[7:0]
- */
-#define REG_ISP_SCALE_DOWN_X          (0x24)
-#define REG_ISP_SCALE_DOWN_Y          (0x25)
-#define REG_ISP_SCALE_UP_Y            (0x26)
-#define REG_ISP_SCALE_UP_X            (0x28)
-#define REG_ISP_TOP37			(0x2F)
-	#define RGBHGMA_ENABLE		(1<<6)
-
-/*
- * raw scale output
- * horizontal: 0x32[11:8], 0x33[7:0]
- * vertical:   0x34[11:8], 0x35[7:0]
- */
-#define REG_ISP_RAW_DCW_OUT_H          (0x32)
-#define REG_ISP_RAW_DCW_OUT_V          (0x34)
-/*
- * YUV crop register
- * yuv crop_x :0xf0[11:8], 0xf1[7:0]
- * yuv crop_y :0xf2[11:8], 0xf3[7:0]
- * yuv crop_w :0xf4[11:8], 0xf5[7:0]
- * yuv crop_h :0xf6[11:8], 0xf7[7:0]
- */
-#define REG_ISP_YUV_CROP_LEFT          (0xf0)
-#define REG_ISP_YUV_CROP_TOP           (0xf2)
-#define REG_ISP_YUV_CROP_WIDTH         (0xf4)
-#define REG_ISP_YUV_CROP_HEIGHT        (0xf6)
 
 /*
  * CIP register
