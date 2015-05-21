@@ -114,7 +114,7 @@ const unsigned char ram_table_data[] = {
 
 struct drv2604_vibrator_info {
 	int (*trigger)(struct drv2604_vibrator_info *info, int on);
-	struct i2c_client *client;
+	struct regmap *regmap;
 	struct timed_output_dev vibrator_timed_dev;
 	struct timer_list vibrate_timer;
 	struct work_struct vibrator_off_work;
@@ -139,113 +139,23 @@ struct drv2604_vibrator_info {
 };
 static struct drv2604_vibrator_info drv2604_info;
 
-/* I2C LOCAL UTILITIES */
-static inline int drv2604_i2c_read_single_byte(struct i2c_client *i2c,
-				    int reg, unsigned char *dest)
-{
-	int ret;
-
-	ret = i2c_smbus_read_byte_data(i2c, reg);
-	if (ret < 0)
-		return ret;
-
-	*dest = (unsigned char)ret;
-
-	return 0;
-}
-
-static inline int drv2604_i2c_write_multiple_byte(struct i2c_client *i2c,
-				     int reg, int bytes, void *src)
-{
-	unsigned char buf[bytes + 1];
-	int ret;
-
-	buf[0] = (unsigned char)reg;
-	memcpy(&buf[1], src, bytes);
-
-	ret = i2c_master_send(i2c, buf, bytes + 1);
-	if (ret < 0)
-		return ret;
-	return 0;
-}
-
-#define I2C_SINGLE_BYTE_BUF_SIZE 2
-static inline int drv2604_i2c_write_single_byte(struct i2c_client *i2c, int reg,
-							unsigned char val)
-{
-	unsigned char buf[I2C_SINGLE_BYTE_BUF_SIZE];
-	int ret;
-
-	buf[0] = (unsigned char)reg;
-	buf[1] = (unsigned char)val;
-
-	ret = i2c_master_send(i2c, buf, I2C_SINGLE_BYTE_BUF_SIZE);
-	if (ret < 0)
-		return ret;
-	return 0;
-}
-
-static inline int drv2604_i2c_set_reg_bits(struct i2c_client *i2c, int reg,
-							unsigned char mask)
-{
-	int ret;
-	unsigned char val;
-
-	if (drv2604_i2c_read_single_byte(i2c, reg, &val)) {
-		VIB_ERR_MSG("I2C read failed\n");
-		return -1;
-	}
-
-	val |= mask;
-	ret = drv2604_i2c_write_single_byte(i2c, reg, val);
-	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
-		return -1;
-	}
-
-	return 0;
-}
-
-static inline int drv2604_i2c_clr_reg_bits(struct i2c_client *i2c, int reg,
-							unsigned char mask)
-{
-	int ret;
-	unsigned char val;
-
-	if (drv2604_i2c_read_single_byte(i2c, reg, &val)) {
-		VIB_ERR_MSG("I2C read failed\n");
-		return -1;
-	}
-
-	val &= (~mask);
-	ret = drv2604_i2c_write_single_byte(i2c, reg, val);
-	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
-		return -1;
-	}
-
-	return 0;
-}
-
 static int drv2604_i2c_trigger(struct drv2604_vibrator_info *info, int on)
 {
 	int ret;
 
 	if (on == VIBRA_OFF_VALUE) {
 		/* turn off actuator */
-		ret = drv2604_i2c_write_single_byte(info->client,
-						DRV2604_GO, STOP_CMD);
+		ret = regmap_write(info->regmap, DRV2604_GO, STOP_CMD);
 		if (ret) {
-			VIB_ERR_MSG("I2C write failed\n");
+			VIB_ERR_MSG("regmap write failed\n");
 			mutex_unlock(&info->vib_mutex);
 			return -1;
 		}
 	} else if (on == VIBRA_ON_VALUE) {
 		/* turn on actuator */
-		ret = drv2604_i2c_write_single_byte(info->client,
-						DRV2604_GO, GO_CMD);
+		ret = regmap_write(info->regmap, DRV2604_GO, GO_CMD);
 		if (ret) {
-			VIB_ERR_MSG("I2C write failed\n");
+			VIB_ERR_MSG("regmap write failed\n");
 			mutex_unlock(&info->vib_mutex);
 			return -1;
 		}
@@ -339,46 +249,43 @@ static int vibrator_get_remaining_time(struct timed_output_dev *sdev)
 	return rettime;
 }
 
-static int drv2604_write_waveform_to_ram(struct i2c_client *i2c)
+static int drv2604_write_waveform_to_ram(struct regmap *regmap)
 {
 	int ret;
 
 	/* Load header into RAM */
-	ret = drv2604_i2c_write_single_byte(i2c, DRV2604_RAM_ADDR_UP_BYTE, 0x0);
+	ret = regmap_write(regmap, DRV2604_RAM_ADDR_UP_BYTE, 0x0);
 	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
+		VIB_ERR_MSG("regmap write failed\n");
 		goto end;
 	}
-	ret = drv2604_i2c_write_single_byte(i2c,
-				DRV2604_RAM_ADDR_LOW_BYTE, 0x0);
+	ret = regmap_write(regmap, DRV2604_RAM_ADDR_LOW_BYTE, 0x0);
 	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
+		VIB_ERR_MSG("regmap write failed\n");
 		goto end;
 	}
-	ret = drv2604_i2c_write_multiple_byte(i2c, DRV2604_RAM_DATA,
-			ARRAY_SIZE(ram_table_header), (void *)ram_table_header);
+	ret = regmap_bulk_write(regmap, DRV2604_RAM_DATA,
+			(void *)ram_table_header, ARRAY_SIZE(ram_table_header));
 	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
+		VIB_ERR_MSG("regmap write failed\n");
 		goto end;
 	}
 
 	/* Load data into RAM */
-	ret = drv2604_i2c_write_single_byte(i2c,
-				DRV2604_RAM_ADDR_UP_BYTE, 0x01);
+	ret = regmap_write(regmap, DRV2604_RAM_ADDR_UP_BYTE, 0x01);
 	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
+		VIB_ERR_MSG("regmap write failed\n");
 		goto end;
 	}
-	ret = drv2604_i2c_write_single_byte(i2c,
-				DRV2604_RAM_ADDR_LOW_BYTE, 0x0);
+	ret = regmap_write(regmap, DRV2604_RAM_ADDR_LOW_BYTE, 0x0);
 	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
+		VIB_ERR_MSG("regmap write failed\n");
 		goto end;
 	}
-	ret = drv2604_i2c_write_multiple_byte(i2c, DRV2604_RAM_DATA,
-			ARRAY_SIZE(ram_table_data), (void *)ram_table_data);
+	ret = regmap_bulk_write(regmap, DRV2604_RAM_DATA,
+			(void *)ram_table_data, ARRAY_SIZE(ram_table_data));
 	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
+		VIB_ERR_MSG("regmap write failed\n");
 		goto end;
 	}
 end:
@@ -388,47 +295,46 @@ end:
 static int drv2604_vibratior_init(struct drv2604_vibrator_info *info)
 {
 	int ret;
-	struct i2c_client *i2c = info->client;
 
 	/* exit stand-by mode */
-	ret = drv2604_i2c_write_single_byte(i2c, DRV2604_MODE, MODE_INIT_MASK);
+	ret = regmap_write(info->regmap, DRV2604_MODE, MODE_INIT_MASK);
 	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
+		VIB_ERR_MSG("regmap write failed\n");
 		goto end;
 	}
 
 	/* Set RTP register to zero, prevent playback */
-	ret = drv2604_i2c_write_single_byte(i2c, DRV2604_RTP, 0x0);
+	ret = regmap_write(info->regmap, DRV2604_RTP, 0x0);
 	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
+		VIB_ERR_MSG("regmap write failed\n");
 		goto end;
 	}
 
 	/* Set Library Overdrive time to zero */
-	ret = drv2604_i2c_write_single_byte(i2c, DRV2604_ODT, 0x0);
+	ret = regmap_write(info->regmap, DRV2604_ODT, 0x0);
 	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
+		VIB_ERR_MSG("regmap write failed\n");
 		goto end;
 	}
 
 	/* Set Library Sustain positive time */
-	ret = drv2604_i2c_write_single_byte(i2c, DRV2604_SPT, 0x0);
+	ret = regmap_write(info->regmap, DRV2604_SPT, 0x0);
 	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
+		VIB_ERR_MSG("regmap write failed\n");
 		goto end;
 	}
 
 	/* Set Library Sustain negative time */
-	ret = drv2604_i2c_write_single_byte(i2c, DRV2604_SNT, 0x0);
+	ret = regmap_write(info->regmap, DRV2604_SNT, 0x0);
 	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
+		VIB_ERR_MSG("regmap write failed\n");
 		goto end;
 	}
 
 	/* Set Library Brake Time */
-	ret = drv2604_i2c_write_single_byte(i2c, DRV2604_BRT, 0x0);
+	ret = regmap_write(info->regmap, DRV2604_BRT, 0x0);
 	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
+		VIB_ERR_MSG("regmap write failed\n");
 		goto end;
 	}
 end:
@@ -492,7 +398,6 @@ static unsigned char drv2604_calc_lra_od_clamp_voltage(
 static int drv2604_auto_calibration_trigger(struct drv2604_vibrator_info *info)
 {
 	int ret;
-	struct i2c_client *i2c = info->client;
 
 	/*
 	 * Set DRV260x Control Registers
@@ -500,31 +405,31 @@ static int drv2604_auto_calibration_trigger(struct drv2604_vibrator_info *info)
 	 */
 
 	/* set rated-voltage register */
-	ret = drv2604_i2c_write_single_byte(i2c,
+	ret = regmap_write(info->regmap,
 				DRV2604_RATED_VOLTAGE,
 				info->calc_rated_voltage(info));
 	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
+		VIB_ERR_MSG("regmap write failed\n");
 		goto end;
 	}
 
 	/* set overdrive-clamp-voltage register */
-	ret = drv2604_i2c_write_single_byte(i2c,
+	ret = regmap_write(info->regmap,
 				DRV2604_OVERDRIVE_CLAMP_VOLTAGE,
 				info->calc_od_clamp_voltage(info));
 	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
+		VIB_ERR_MSG("regmap write failed\n");
 		goto end;
 	}
 
 	/* set feedback control register */
-	ret = drv2604_i2c_write_single_byte(i2c, DRV2604_FBCTRL,
+	ret = regmap_write(info->regmap, DRV2604_FBCTRL,
 				FBCTRL_N_ERM_LRA(info->actuator_type) |
 				FBCTRL_BRAKE_FACTOR(info->brake_factor) |
 				FBCTRL_LOOP_RESPONSE(info->loop_response) |
 				FBCTRL_BEMF_GAIN(info->bemf_gain));
 	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
+		VIB_ERR_MSG("regmap write failed\n");
 		goto end;
 	}
 
@@ -534,17 +439,17 @@ static int drv2604_auto_calibration_trigger(struct drv2604_vibrator_info *info)
 	 */
 
 	/* exit stand-by mode and set to auto calibration mode */
-	ret = drv2604_i2c_write_single_byte(i2c, DRV2604_MODE,
+	ret = regmap_write(info->regmap, DRV2604_MODE,
 					MODE_SET(MODE_TYPE_AUTOCAL));
 	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
+		VIB_ERR_MSG("regmap write failed\n");
 		goto end;
 	}
 
 	/* set the GO bit */
-	ret = drv2604_i2c_write_single_byte(i2c, DRV2604_GO, GO_CMD);
+	ret = regmap_write(info->regmap, DRV2604_GO, GO_CMD);
 	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
+		VIB_ERR_MSG("regmap write failed\n");
 		goto end;
 	}
 
@@ -558,15 +463,13 @@ static int drv2604_auto_calibration_test_result(
 				struct drv2604_vibrator_info *info)
 {
 	int ret;
-	unsigned char val;
-	unsigned int cal_time_msec;
-	struct i2c_client *i2c = info->client;
+	unsigned int cal_time_msec, val;
 
 	/* check if calibration process ended */
-	ret = drv2604_i2c_read_single_byte(i2c, DRV2604_GO, &val);
+	ret = regmap_read(info->regmap, DRV2604_GO, &val);
 	/* if read error occures- try in next iteration */
 	if (ret) {
-		VIB_ERR_MSG("I2C read failed\n");
+		VIB_ERR_MSG("regmap read failed\n");
 		return ret;
 	}
 
@@ -581,9 +484,9 @@ static int drv2604_auto_calibration_test_result(
 	}
 
 	/* check calibration results */
-	ret = drv2604_i2c_read_single_byte(i2c, DRV2604_STATUS, &val);
+	ret = regmap_read(info->regmap, DRV2604_STATUS, &val);
 	if (ret) {
-		VIB_ERR_MSG("I2C read failed\n");
+		VIB_ERR_MSG("regmap read failed\n");
 		return ret;
 	}
 	if (val & STATUS_DIAG_RESULT)
@@ -592,29 +495,29 @@ static int drv2604_auto_calibration_test_result(
 	return 0;
 }
 
-static int drv2604_enable_recorded_sequence(struct i2c_client *i2c)
+static int drv2604_enable_recorded_sequence(struct regmap *regmap)
 {
 	int ret;
 
 	/* populate RAM with waveforms */
-	ret = drv2604_write_waveform_to_ram(i2c);
+	ret = drv2604_write_waveform_to_ram(regmap);
 	if (ret) {
 		VIB_ERR_MSG("failed to write waveform to RAM\n");
 		return ret;
 	}
 
 	/* set the desired sequence to be played */
-	ret = drv2604_i2c_write_single_byte(i2c, DRV2604_WAVEFORMSEQ1, 0x1);
+	ret = regmap_write(regmap, DRV2604_WAVEFORMSEQ1, 0x1);
 	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
+		VIB_ERR_MSG("regmap write failed\n");
 		return ret;
 	}
 
 	/* Insert termination character in sequence register 2 */
-	ret = drv2604_i2c_write_single_byte(i2c, DRV2604_WAVEFORMSEQ2,
+	ret = regmap_write(regmap, DRV2604_WAVEFORMSEQ2,
 							WAVEFORMSEQ_TERMINATE);
 	if (ret) {
-		VIB_ERR_MSG("I2C write failed\n");
+		VIB_ERR_MSG("regmap write failed\n");
 		return ret;
 	}
 
@@ -624,21 +527,20 @@ static int drv2604_enable_recorded_sequence(struct i2c_client *i2c)
 static int drv2604_set_internal_trigger(struct drv2604_vibrator_info *info)
 {
 	int ret;
-	struct i2c_client *i2c = info->client;
 
 	/* slect internal trigger */
 	if (info->trig_gpio < 0) {
-		ret = drv2604_i2c_write_single_byte(i2c, DRV2604_MODE,
+		ret = regmap_write(info->regmap, DRV2604_MODE,
 					MODE_SET(MODE_TYPE_INT_TRIG));
 		if (ret) {
-			VIB_ERR_MSG("I2C write failed\n");
+			VIB_ERR_MSG("regmap write failed\n");
 			return ret;
 		}
 	} else {
-		ret = drv2604_i2c_write_single_byte(i2c, DRV2604_MODE,
+		ret = regmap_write(info->regmap, DRV2604_MODE,
 					MODE_SET(MODE_TYPE_EXT_LEVEL_TRIG));
 		if (ret) {
-			VIB_ERR_MSG("I2C write failed\n");
+			VIB_ERR_MSG("regmap write failed\n");
 			return ret;
 		}
 	}
@@ -757,6 +659,12 @@ static int of_vibrator_probe(struct device_node *np,
 }
 #endif
 
+static const struct regmap_config drv2604_regmap = {
+	.reg_bits = 8,
+	.val_bits = 8,
+	.max_register = 0xFF,
+};
+
 static int vibrator_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
@@ -764,6 +672,15 @@ static int vibrator_probe(struct i2c_client *client,
 	struct drv2604_vibrator_info *info;
 
 	info = &drv2604_info;
+
+	/* allocate register map */
+	info->regmap = devm_regmap_init_i2c(client, &drv2604_regmap);
+	if (IS_ERR(info->regmap)) {
+		ret = PTR_ERR(info->regmap);
+		VIB_ERR_MSG("Failed to allocate register map: %d\n", ret);
+		goto err;
+	}
+
 	if (info->probe_called) {
 		/* check auto calibration results */
 		ret = drv2604_auto_calibration_test_result(info);
@@ -771,7 +688,7 @@ static int vibrator_probe(struct i2c_client *client,
 			goto err_unregister;
 
 		/* work with recorded RAM sequence */
-		ret = drv2604_enable_recorded_sequence(client);
+		ret = drv2604_enable_recorded_sequence(info->regmap);
 		if (ret)
 			goto err_unregister;
 
@@ -808,9 +725,6 @@ static int vibrator_probe(struct i2c_client *client,
 	info->vibrator_timed_dev.name = "vibrator";
 	info->vibrator_timed_dev.enable = vibrator_enable_set_timeout;
 	info->vibrator_timed_dev.get_time = vibrator_get_remaining_time;
-
-	/* store i2c client */
-	info->client = client;
 
 	/* Vibrator dev register in /sys/class/timed_output/ */
 	ret = timed_output_dev_register(&info->vibrator_timed_dev);
