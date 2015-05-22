@@ -123,6 +123,7 @@ struct pxa1936_clk_unit {
 	void __iomem *apbs_base;
 	void __iomem *ciu_base;
 	void __iomem *dciu_base;	/* Dragon CIU */
+	void __iomem *sc2desc_base;
 };
 
 static struct mmp_param_fixed_rate_clk fixed_rate_clks[] = {
@@ -830,7 +831,19 @@ static const char *isp_pipe_parent_names[] = {"pll1_416_gate", "pll1_624_gate",
 			"pll4_div3", "pll1_499_gate",};
 static const char *isp_pipe_parent_names_pxa1956[] = {"pll1_416_gate", "pll1_624_gate",
 			"pll4_div3", "pll3_div3",};
+static struct mmp_clk_mix_clk_table isp_pipe_clk_pptbl[] = {
+	{.rate = 208000000, .parent_index = 0, .xtc = 0x00110011, },
+	/*{.rate = 250000000, .parent_index = 3, .xtc = 0x00115511, }, */
+	{.rate = 312000000, .parent_index = 1, .xtc = 0x00115511, },
+	{.rate = 416000000, .parent_index = 0, .xtc = 0x00115511, },
+	{.rate = 499000000, .parent_index = 3, .xtc = 0x00115511, },
+};
 static struct mmp_clk_mix_config isp_pipe_mix_config = {
+	.reg_info = DEFINE_MIX_REG_INFO(3, 4, 2, 2, 7),
+	.table = isp_pipe_clk_pptbl,
+	.table_size = ARRAY_SIZE(isp_pipe_clk_pptbl),
+};
+static struct mmp_clk_mix_config isp_pipe_mix_config_pxa1956 = {
 	.reg_info = DEFINE_MIX_REG_INFO(3, 4, 2, 2, 7),
 };
 
@@ -1235,13 +1248,16 @@ static void pxa1936_axi_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 			0x24, 0x24, 0x0, 0, &ccic0_lock);
 	mmp_clk_add(unit, PXA1936_CLK_SC2_PHY4LN_CLK_EN, clk);
 
-	isp_pipe_mix_config.reg_info.reg_clk_ctrl = pxa_unit->apmu_base + APMU_ISP;
 	if (cpu_is_pxa1956()) {
+		isp_pipe_mix_config_pxa1956.reg_info.reg_clk_ctrl = pxa_unit->apmu_base + APMU_ISP;
+		isp_pipe_mix_config_pxa1956.reg_info.reg_clk_xtc = pxa_unit->sc2desc_base + ISP_XTC;
 		clk = mmp_clk_register_mix(NULL, "isp_pipe_mix_clk",
 				isp_pipe_parent_names_pxa1956,
 				ARRAY_SIZE(isp_pipe_parent_names_pxa1956), 0,
-				&isp_pipe_mix_config, &isp_lock);
+				&isp_pipe_mix_config_pxa1956, &isp_lock);
 	} else {
+		isp_pipe_mix_config.reg_info.reg_clk_ctrl = pxa_unit->apmu_base + APMU_ISP;
+		isp_pipe_mix_config.reg_info.reg_clk_xtc = pxa_unit->sc2desc_base + ISP_XTC;
 		clk = mmp_clk_register_mix(NULL, "isp_pipe_mix_clk",
 				isp_pipe_parent_names,
 				ARRAY_SIZE(isp_pipe_parent_names), 0,
@@ -2003,6 +2019,12 @@ static void __init pxa1936_clk_init(struct device_node *np)
 	pxa_unit->dciu_base = of_iomap(np, 6);
 	if (!pxa_unit->dciu_base) {
 		pr_err("failed to map dragon ciu registers\n");
+		goto err;
+	}
+
+	pxa_unit->sc2desc_base = of_iomap(np, 7);
+	if (!pxa_unit->sc2desc_base) {
+		pr_err("failed to map sc2 mmu registers\n");
 		goto err;
 	}
 
