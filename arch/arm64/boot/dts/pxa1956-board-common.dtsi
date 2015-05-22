@@ -1301,7 +1301,7 @@
 			compatible = "marvell,map-dailink-8";
 			dai-name = "MAP PDM SPEAKER audio";
 			stream-name = "PDM audio";
-			marvell,cpu-dai = <&mmp_map_be 4>;
+			marvell,cpu-dai = <&mmp_map_be 2>;
 			marvell,codec-dai = <&snd_soc_dummy 0>;
 			marvell,codec-name = "snd-soc-dummy";
 			marvell,codec-dai-name = "snd-soc-dummy-dai";
@@ -1312,7 +1312,7 @@
 			compatible = "marvell,map-dailink-8";
 			dai-name = "MAP DMIC12 audio";
 			stream-name = "DMIC12 audio";
-			marvell,cpu-dai = <&mmp_map_be 5>;
+			marvell,cpu-dai = <&mmp_map_be 3>;
 			marvell,codec-dai = <&snd_soc_dummy 0>;
 			marvell,codec-name = "snd-soc-dummy";
 			marvell,codec-dai-name = "snd-soc-dummy-dai";
@@ -1323,7 +1323,7 @@
 			compatible = "marvell,map-dailink-8";
 			dai-name = "MAP DMIC34 audio";
 			stream-name = "DMIC34 audio";
-			marvell,cpu-dai = <&mmp_map_be 6>;
+			marvell,cpu-dai = <&mmp_map_be 4>;
 			marvell,codec-dai = <&snd_soc_dummy 0>;
 			marvell,codec-name = "snd-soc-dummy";
 			marvell,codec-dai-name = "snd-soc-dummy-dai";
