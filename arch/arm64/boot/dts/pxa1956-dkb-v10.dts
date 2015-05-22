@@ -89,7 +89,6 @@
 					};
 			};
 			map@d1200000 {
-				pmic-name = "88pm880";
 				vccmain-supply = <&buck1aslp>;
 			};
 		};
