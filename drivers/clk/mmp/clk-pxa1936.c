@@ -2024,10 +2024,15 @@ static void __init pxa1936_clk_init(struct device_node *np)
  * make sure initialize dvfs_platinfo before clock and ddr init.
  */
 #if defined(CONFIG_PXA_DVFS)
-	setup_pxa1936_dvfs_platinfo();
+	if (cpu_is_pxa1956()) {
+		setup_pxa1956_dvfs_platinfo();
+		max_freq_fused = get_helan4_max_freq();
+	} else {
+		setup_pxa1936_dvfs_platinfo();
+		max_freq_fused = get_helan3_max_freq();
+	}
 	init_ddr_dfc();
 	/* get big cluster max freq */
-	max_freq_fused = get_helan3_max_freq();
 	max_freq_fused = pxa1936_round_max_freq(max_freq_fused);
 	clst1_core_params.max_cpurate = max_freq_fused;
 

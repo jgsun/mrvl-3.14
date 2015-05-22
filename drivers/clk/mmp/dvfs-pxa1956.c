@@ -906,7 +906,7 @@ static struct dvc_plat_info dvc_pxa1956_info = {
 	.pmic_maxvl = 8,
 	.pmic_rampup_step = 12500,
 	/* On pxa1956, AP side cannot access registers in PMUcp */
-	/* .pmucp_inaccessible = 1 */
+	.pmucp_inaccessible = 1,
 	/* by default print the debug msg into logbuf */
 	.dbglvl = 1,
 	.regname = "vccmain",
