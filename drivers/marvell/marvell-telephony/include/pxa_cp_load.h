@@ -15,12 +15,10 @@
 #include "linux_driver_types.h"
 
 enum cp_type {
-	cp_type_pxa988,
-	cp_type_pxa1L88,
-	cp_type_pxa1928,
-	cp_type_pxa1908,
-
-	cp_type_cnt
+	cp_type_pxa988 = 0x30393838,
+	cp_type_pxa1L88 = 0x314C3838,
+	cp_type_pxa1928 = 0x31393238,
+	cp_type_pxa1908 = 0x31393038,
 };
 
 struct cp_buffer {

@@ -1042,7 +1042,7 @@
 
 			cp-load {
 				compatible = "marvell,cp_load";
-				cp-type = <2>; /* pxa1928 */
+				cp-type = <0x31393238>; /* pxa1928 */
 				lpm-qos = <PM_QOS_CPUIDLE_BLOCK_AXI>;
 				status = "disable";
 			};
