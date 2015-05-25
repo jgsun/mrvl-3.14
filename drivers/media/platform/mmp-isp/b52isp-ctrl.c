@@ -1577,15 +1577,8 @@ static int b52isp_ctrl_get_mean_y(struct b52isp_ctrls *ctrls, int id)
 
 static int b52isp_ctrl_get_aec_stable(struct b52isp_ctrls *ctrls, int id)
 {
-	u32 base = FW_P1_REG_BASE + id * FW_P1_P2_OFFSET;
-	u8 status = b52_readb(REG_FW_AEC_RD_STATE1);
+	u8 status = b52_readb(REG_FW_AEC_RD_STATE3);
 	if (status == AEC_STATE_STABLE)
-		ctrls->aec_stable->val = AEC_STATE_STABLE;
-	else if (b52_readw(base + REG_FW_AEC_MAN_GAIN) ==
-					b52_readw(base + REG_FW_MAX_CAM_GAIN))
-		ctrls->aec_stable->val = AEC_STATE_STABLE;
-	else if ((b52_readl(base + REG_FW_AEC_MAN_EXP) >> 4) ==
-					b52_readl(base + REG_FW_MIN_CAM_EXP))
 		ctrls->aec_stable->val = AEC_STATE_STABLE;
 	else
 		ctrls->aec_stable->val = AEC_STATE_UNSTABLE;

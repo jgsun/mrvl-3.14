@@ -720,6 +720,7 @@ extern void b52isp_set_ddr_threshold(struct work_struct *work, int up);
 #define REG_FW_AEC_RD_GAIN2         (0x30044)
 #define REG_FW_AEC_RD_STATE1        (0x30205)
 #define REG_FW_AEC_RD_STATE2        (0x30035)
+#define REG_FW_AEC_RD_STATE3        (0x30373)
 	#define AEC_STATE_STABLE   (0x1)
 	#define AEC_STATE_UNSTABLE (0x0)
 #define  REG_FW_MEAN_Y				(0x30206)
