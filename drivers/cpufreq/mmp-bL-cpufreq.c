@@ -30,6 +30,7 @@
 #include <linux/suspend.h>
 #include <linux/pm_qos.h>
 #include <linux/clk-private.h>
+#include <linux/uaccess.h>
 
 #ifdef CONFIG_DEBUG_FS
 #include <linux/debugfs.h>
@@ -45,6 +46,8 @@
 
 /* FIXME: too simple and may be conflicted with other clock names. */
 #define CLUSTER_CLOCK_NAME	"clst"
+
+#define BL_MAP_TABLE_SIZE	6
 
 /*
  * clients that requests cpufreq Qos min:
@@ -122,6 +125,21 @@ static LIST_HEAD(clst_list);
 
 /* Locks used to serialize cpufreq target request. */
 static DEFINE_MUTEX(mmp_cpufreq_lock);
+
+/*
+ * This table is used to set min constraint
+ * on big cluster by little cluster FC.
+ */
+static unsigned int bl_map_table[BL_MAP_TABLE_SIZE][NR_CLST_TYPE] = {
+	{ 312000, 416000, },
+	{ 416000, 624000, },
+	{ 624000, 832000, },
+	{ 832000, 1057000, },
+	{ 1057000, 1248000, },
+	{ 1248000, 1491000, },
+};
+static struct pm_qos_request cpufreq_little_req_big_min;
+static unsigned int little_set_min_big_enable;
 
 /*
  * We have two modes to handle cpufreq on dual clusters:
@@ -303,6 +321,8 @@ static int __cpufreq_freq_min_notify(
 	int ret, index;
 	unsigned int volt_level;
 	struct cpufreq_cluster *clst;
+	int i;
+	struct cpufreq_cluster *clst_temp;
 
 	if (!nb)
 		return NOTIFY_BAD;
@@ -323,6 +343,19 @@ static int __cpufreq_freq_min_notify(
 		if (pm_qos_request_active(&clst->vl_qos_req_min))
 			pm_qos_update_request(&clst->vl_qos_req_min, volt_level);
 	} else {
+		if (little_set_min_big_enable && clst->clst_index == LITTLE_CLST && !list_empty(&clst_list)) {
+			list_for_each_entry(clst_temp, &clst_list, node) {
+				if (!clst_temp->is_big)
+					continue;
+				for (i = BL_MAP_TABLE_SIZE - 1; i >= 0; i--) {
+					if (clst->freq_table[index].frequency >= bl_map_table[i][0]) {
+						pm_qos_update_request(&cpufreq_little_req_big_min, bl_map_table[i][1]);
+						break;
+					}
+				}
+				break;
+			}
+		}
 		if (pm_qos_request_active(&clst->qosmin_req_max))
 			pm_qos_update_request(&clst->qosmin_req_max, clst->freq_table[index].frequency);
 	}
@@ -642,13 +675,87 @@ static struct cpufreq_driver mmp_bL_cpufreq_driver = {
 };
 
 static struct dentry *vl_cpufreq;
+static struct dentry *d_little_set_min_big;
+static struct dentry *d_bl_map_table;
+
+static ssize_t bl_map_table_read(struct file *filp,
+	char __user *buffer, size_t count, loff_t *ppos)
+{
+	int i;
+	char *buf;
+	ssize_t ret, size = 2 * PAGE_SIZE - 1;
+	u32 len = 0;
+
+	buf = (char *)__get_free_pages(GFP_KERNEL, get_order(size));
+	if (!buf)
+		return -ENOMEM;
+
+	len += snprintf(buf + len, size - len,
+		"Help information :\n");
+	len += snprintf(buf + len, size - len,
+		"cat this node to print big/LITTLE freq map table.\n");
+	len += snprintf(buf + len, size - len,
+		"echo LITTLE_freq,big_freq to set min QoS big_freq for big cluster when little cluster runs at LITTLE_freq.\n");
+	len += snprintf(buf + len, size - len,
+		"For example, echo 312000,416000 > this node.\n");
+	len += snprintf(buf + len, size - len,
+		"Current big/LITTLE freq map table:\n");
+	len += snprintf(buf + len, size - len,
+		"LITTLE_freq, big_freq\n");
+	for (i = 0; i < BL_MAP_TABLE_SIZE; i++) {
+		len += snprintf(buf + len, size - len, "%8u, %8u\n",
+			bl_map_table[i][0], bl_map_table[i][1]);
+	}
+
+	ret = simple_read_from_buffer(buffer, count, ppos, buf, len);
+	free_pages((unsigned long)buf, get_order(size));
+	return ret;
+}
+
+static ssize_t bl_map_table_write(struct file *filp,
+	const char __user *buffer, size_t count, loff_t *ppos)
+{
+	int i;
+	char buf[32] = { 0 };
+	unsigned int l_freq, b_freq;
+
+	if (copy_from_user(buf, buffer, count))
+		return -EFAULT;
+	if (sscanf(buf, "%u,%u", &l_freq, &b_freq) != 2)
+		return -EFAULT;
+
+	for (i = 0; i < BL_MAP_TABLE_SIZE; i++) {
+		if (bl_map_table[i][0] >= l_freq) {
+			bl_map_table[i][1] = b_freq;
+			break;
+		}
+	}
+
+	return count;
+}
+
+static const struct file_operations bl_map_table_fops = {
+	.owner = THIS_MODULE,
+	.read = bl_map_table_read,
+	.write = bl_map_table_write,
+};
 
 static int __init mmp_bL_cpufreq_register(void)
 {
+	cpufreq_little_req_big_min.name = __cpufreq_printf("%s", "LITTLE_REQ_MIN_B");
+	if (!cpufreq_little_req_big_min.name)
+		BUG_ON("no memory for cpufreq_little_req_big_min.name.\n");
+	pm_qos_add_request(&cpufreq_little_req_big_min, PM_QOS_CPUFREQ_B_MIN, PM_QOS_DEFAULT_VALUE);
 #ifdef CONFIG_DEBUG_FS
 	vl_cpufreq = debugfs_create_u32("vl_cpufreq", 0664, pxa, &vl_cpufreq_enable);
 	if (vl_cpufreq == NULL)
 		pr_err("%s: Error to create file node vl_cpufreq.\n", __func__);
+	d_little_set_min_big = debugfs_create_u32("l_set_min_b", 0664, pxa, &little_set_min_big_enable);
+	if (d_little_set_min_big == NULL)
+		pr_err("%s: Error to create file node little_set_min_big.\n", __func__);
+	d_bl_map_table = debugfs_create_file("bl_map_table", 0664, pxa, NULL, &bl_map_table_fops);
+	if (d_bl_map_table == NULL)
+		pr_err("%s: Error to create file node bl_map_table.\n", __func__);
 #endif
 	return cpufreq_register_driver(&mmp_bL_cpufreq_driver);
 }
@@ -656,8 +763,9 @@ static int __init mmp_bL_cpufreq_register(void)
 static void __exit mmp_bL_cpufreq_unregister(void)
 {
 #ifdef CONFIG_DEBUG_FS
-	if (vl_cpufreq)
-		debugfs_remove(vl_cpufreq);
+	debugfs_remove(vl_cpufreq);
+	debugfs_remove(d_little_set_min_big);
+	debugfs_remove(d_bl_map_table);
 #endif
 	cpufreq_unregister_driver(&mmp_bL_cpufreq_driver);
 }
