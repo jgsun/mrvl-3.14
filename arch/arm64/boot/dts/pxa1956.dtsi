@@ -979,7 +979,7 @@
 
 	mmp_m3_1: apsenhb {
 		compatible = "marvell,mmp-m3";
-		ipver = <2>;
+		ipver = <3>;
 		status = "disabled";
 	};
 
