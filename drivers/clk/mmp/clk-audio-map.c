@@ -119,7 +119,7 @@ static void helanx_power_on(void __iomem *apmu_base, int pwr_on)
 
 static int audio_power_times;
 #if 0
-static void helan4_hw_power_on(void __iomem *apmu_base, struct clk *puclk, int pwr_on)
+static void helan4_hw_power_on(void __iomem *apmu_base, int pwr_on)
 {
 	u32 val, timeout = 2000;
 	if (pwr_on) {
@@ -192,7 +192,7 @@ static void helan4_hw_power_on(void __iomem *apmu_base, struct clk *puclk, int p
 }
 #endif
 
-static void helan4_sw_power_on(void __iomem *apmu_base, struct clk *puclk, int pwr_on)
+static void helan4_sw_power_on(void __iomem *apmu_base, int pwr_on)
 {
 	u32 val, timeout = 2000;
 
