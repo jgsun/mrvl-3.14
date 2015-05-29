@@ -12,6 +12,7 @@
 #include <linux/init.h>
 #include <linux/io.h>
 #include <linux/irqchip.h>
+#include <linux/irqchip/mmp.h>
 #include <linux/of_platform.h>
 #include <linux/clocksource.h>
 #include <linux/clk-provider.h>
@@ -22,7 +23,6 @@
 
 #include <linux/cputype.h>
 
-#include "common.h"
 #include "regs-addr.h"
 #include "mmpx-dt.h"
 
@@ -50,7 +50,7 @@ static __init void enable_pxawdt_clock(void)
 {
 }
 
-#define GENERIC_COUNTER_PHYS_BASE	0xf6130000 /* time stamp */
+#define GENERIC_COUNTER_PHYS_BASE	0xf2130000 /* time stamp */
 #define CNTCR				0x00 /* Counter Control Register */
 #define CNTCR_EN			(3 << 0) /* The counter is enabled */
 
@@ -113,12 +113,14 @@ static void __init pxa1978_sdhc_reset_all(void)
 {
 }
 
+#if (0)
 static void __init pxa1978_dt_irq_init(void)
 {
 	irqchip_init();
 	/* only for wake up */
 	mmp_of_wakeup_init();
 }
+#endif
 
 static __init void pxa1978_timer_init(void)
 {
@@ -135,7 +137,9 @@ static __init void pxa1978_timer_init(void)
 
 	enable_soc_timer();
 
+#ifdef CONFIG_ARM /* done in arm64_device_init otherwise */
 	of_clk_init(NULL);
+#endif
 
 	clocksource_of_init();
 
@@ -172,21 +176,8 @@ static void __init pxa1978_init_machine(void)
 			     mmpx_auxdata_lookup, &platform_bus);
 }
 
-static void pxa_reserve_secmem(void)
-{
-	unsigned long start = PLAT_PHYS_OFFSET;
-	unsigned size = CONFIG_TEXT_OFFSET & ~((1<<21) - 1);
-	/* Reserve memory for secure state */
-	BUG_ON(memblock_reserve(start, size) != 0);
-	memblock_free(start, size);
-	memblock_remove(start, size);
-	pr_info("Reserved secure memory: 0x%x@0x%lx\n", size, start);
-}
-
 static void __init pxa1978_reserve(void)
 {
-	pxa_reserve_secmem();
-
 	pxa_reserve_cp_memblock();
 }
 
@@ -196,13 +187,9 @@ static const char * const pxa1978_dt_board_compat[] __initconst = {
 };
 
 DT_MACHINE_START(PXA1978_DT, "PXA1978")
-	.smp_init	= smp_init_ops(mmp_smp_init_ops),
 	.init_time      = pxa1978_timer_init,
 	.init_machine	= pxa1978_init_machine,
 	.dt_compat      = pxa1978_dt_board_compat,
 	.reserve	= pxa1978_reserve,
-#if (0)
-	.restart	= mmp_arch_restart, /* restart.c is mmp specific */
-#endif
 MACHINE_END
 

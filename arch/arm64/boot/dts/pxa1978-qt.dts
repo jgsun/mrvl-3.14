@@ -16,7 +16,7 @@
 /memreserve/ 0x0b000000 0x01000000;	/* CM3 ACQ buffer(16MB) */
 #endif
 #include "pxa1978.dtsi"
-#include "pxa988-pinfunc.h"
+#include "pxa1908-pinfunc.h"
 #include <dt-bindings/mmc/pxa_sdhci.h>
 
 / {
@@ -37,9 +37,9 @@
 		pd_display: pd_display@0xd4282800 {
 			compatible = "marvell,power-domain-display-pxa1u88";
 			reg = <0xd4282800 0x1000>;
-			clocks = <&soc_clocks PXA1U88_CLK_DISP_HCLK>,
-				<&soc_clocks PXA1U88_CLK_DSI_ESC>,
-				<&soc_clocks PXA1U88_CLK_DISP1_EN>;
+			clocks = <&soc_clocks PXA1936_CLK_DISP_HCLK>,
+				<&soc_clocks PXA1936_CLK_DSI_ESC>,
+				<&soc_clocks PXA1936_CLK_DISP1_EN>;
 			clock-names = "LCDCIHCLK", "esc_clk", "disp1_clk_gate";
 		};
 
@@ -60,7 +60,7 @@
 				status = "okay";
 			};
 
-			edgewakeup: edgewakeup@f6101000 {
+			edgewakeup: edgewakeup@f2101000 {
 				status = "okay";
 			};
 
@@ -91,8 +91,8 @@
 				status = "disabled";
 			};
 
-			mfpr: mfpr@f6120000 {
-				reg = <0xf6120000 0x280>;
+			mfpr: mfpr@f2120000 {
+				reg = <0xf2120000 0x280>;
 				status = "disabled";
 			};
 
@@ -1061,9 +1061,7 @@
 		status = "disabled";
 	};
 };
-#include "88pm822.dtsi"
-#include "88pm822_pxa1u88_dkb.dtsi"
-
-#include "88pm830.dtsi"
-#include "88pm830_battery_common.dtsi"
-#include "88pm830_sp4555557sa.dtsi"
+#include "88pm88x.dtsi"
+#include "88pm880.dtsi"
+#include "88pm88x_battery_common.dtsi"
+#include "88pm88x_battery_485760ar.dtsi"
