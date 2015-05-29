@@ -316,7 +316,7 @@ again:
 			dp->rbctl->rx_va, desc->length);
 
 		/* must ensure the descriptor is ready first */
-		wmb();
+		barrier();
 		put_next_free_queue_slot(dp, slot);
 		return true;
 	} else {
@@ -484,7 +484,7 @@ static void dp_rx_func(unsigned long arg)
 	/* tell CP we are receiving */
 	skctl->ds.active = 1;
 	/* make sure active is set before receiving */
-	wmb();
+	barrier();
 
 	for (i = 0; i < MAX_RX_SHOTS; i++) {
 		if (unlikely(!psd_is_link_up())) {
@@ -512,7 +512,7 @@ static void dp_rx_func(unsigned long arg)
 		/* we will stop */
 		skctl->ds.active = 0;
 		/* make sure active is set before double checking */
-		wmb();
+		barrier();
 
 		/* double check the ring buffer */
 		wptr = skctl->ds.wptr;
@@ -959,7 +959,7 @@ static int dp_data_tx(void *priv, int cid, int simid, int prio,
 	dp->stat.tx_bytes += len;
 
 	/* make sure the sequence: update pointer -> check active */
-	wmb();
+	barrier();
 	if (!skctl->us.active) {
 		dp->stat.tx_interrupts++;
 		notify_data_start();
@@ -996,7 +996,7 @@ static void *dp_alloc_queue(void *priv, int cid)
 		skctl->ci.ap_chan_status = (u16)rbctl->ap_chan_status;
 		skctl->ci.chan_cid[qidx] = cid;
 		/* make sure all the changes synced before interrupting */
-		wmb();
+		barrier();
 		notify_cp_chan_status_changed();
 		ret = (void *)(unsigned long)(qidx + QUEUE_OFFSET);
 		pr_info("%s: allocated queue %d for cid %d\n",
@@ -1029,7 +1029,7 @@ static void dp_free_queue(void *priv, void *queue)
 		cid = skctl->ci.chan_cid[qidx];
 		skctl->ci.chan_cid[qidx] = INVALID_CID;
 		/* make sure all the changes synced before interrupting */
-		wmb();
+		barrier();
 		notify_cp_chan_status_changed();
 		pr_info("%s: freed queue %d for cid %d\n",
 			__func__, qidx, cid);
