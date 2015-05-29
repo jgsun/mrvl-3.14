@@ -35,6 +35,8 @@
 
 #define PSD_CACHELINE_SIZE (64)
 
+#define SLOT_FREE_FLAG (0x66524565) /* fREe */
+
 struct channel_info {
 	/* bitmap, each channel has one bit, close = 0 open = 1 */
 	u16 ap_chan_status;

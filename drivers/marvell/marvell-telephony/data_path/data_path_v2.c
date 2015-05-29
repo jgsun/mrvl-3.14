@@ -203,6 +203,9 @@ static bool __free_memory(struct data_path *dp,
 		memcpy_desc((void *)&skctl->ds.free_desc[slot],
 			desc, sizeof(*desc));
 
+		/* write one free flag to each slot */
+		*(u32 *)(desc->buffer_offset + dp->rbctl->rx_va) = SLOT_FREE_FLAG;
+
 		/* flush the cache before scheduling free */
 		shm_flush_dcache(dp->rbctl->rx_cacheable, desc->buffer_offset +
 			dp->rbctl->rx_va, desc->length);
