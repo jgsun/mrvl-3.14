@@ -171,17 +171,47 @@ static inline void schedule_free(struct data_path *dp)
 		queue_work(dp->free_wq, &dp->free_work);
 }
 
-/* dst and src must be 4-bytes aligned, and len is multiple of 4 */
-static inline void *memcpy_desc(void *dst, const void *src, size_t len)
+/* to copy from/to free_descriptor */
+static inline void *memcpy_free_desc(void *dst, const void *src,
+	size_t len)
 {
-	int *d = (int *)dst;
-	int *s = (int *)src;
-	int *send = (int *)src + len / sizeof(int);
+	BUG_ON(len != 8);
 
-	BUG_ON(len & (sizeof(int) - 1));
+	*(u64 *)dst = *(u64 *)src;
 
-	while (s != send)
-		*d++ = *s++;
+	return dst;
+}
+
+/* copy dl_descriptor/ul_descriptor to share memory */
+static inline void *memcpy_desc_to_shm(void *dst, const void *src,
+	size_t len)
+{
+	BUG_ON(len != 12);
+
+	if ((long)dst & 7) {
+		*(u32 *)dst = *(u32 *)src;
+		*(u64 *)(dst + 4) = *(u64 *)(src + 4);
+	} else {
+		*(u64 *)dst = *(u64 *)src;
+		*(u32 *)(dst + 8) = *(u32 *)(src + 8);
+	}
+
+	return dst;
+}
+
+/* copy dl_descriptor/ul_descriptor from share memory */
+static inline void *memcpy_desc_from_shm(void *dst, const void *src,
+	size_t len)
+{
+	BUG_ON(len != 12);
+
+	if ((long)src & 7) {
+		*(u32 *)dst = *(u32 *)src;
+		*(u64 *)(dst + 4) = *(u64 *)(src + 4);
+	} else {
+		*(u64 *)dst = *(u64 *)src;
+		*(u32 *)(dst + 8) = *(u32 *)(src + 8);
+	}
 
 	return dst;
 }
@@ -275,7 +305,7 @@ again:
 	if (likely(!__shm_is_full(PSD_DF_CH_TOTAL_LEN, wptr, rptr))) {
 		if (unlikely(!get_next_free_queue_slot(dp, wptr, &slot)))
 			goto again;
-		memcpy_desc((void *)&skctl->ds.free_desc[slot],
+		memcpy_free_desc((void *)&skctl->ds.free_desc[slot],
 			desc, sizeof(*desc));
 
 		/* write one free flag to each slot */
@@ -467,7 +497,8 @@ static void dp_rx_func(unsigned long arg)
 			break;
 
 		slot = __shm_get_next_slot(PSD_DL_CH_TOTAL_LEN, rbctl->local_dl_rptr);
-		memcpy_desc(&desc, (void *)&skctl->ds.desc[slot], sizeof(desc));
+		memcpy_desc_from_shm(&desc, (void *)&skctl->ds.desc[slot],
+			sizeof(desc));
 		dp_data_rx(dp, &desc);
 
 		rbctl->local_dl_rptr = slot;
@@ -519,7 +550,7 @@ static void reclaim_memory(struct data_path *dp, size_t freed_bytes)
 			break;
 
 		slot = __shm_get_next_slot(PSD_UF_CH_TOTAL_LEN, rbctl->local_ul_free_rptr);
-		memcpy_desc(&desc, (void *)&skctl->us.free_desc[slot],
+		memcpy_free_desc(&desc, (void *)&skctl->us.free_desc[slot],
 			sizeof(desc));
 		reclaim_one_slot(dp, &desc);
 		bytes += desc.length;
@@ -921,7 +952,7 @@ static int dp_data_tx(void *priv, int cid, int simid, int prio,
 	desc.cid = cid;
 
 	slot = __shm_get_next_slot(ci->count, wptr);
-	memcpy_desc((void *)((struct ul_descriptor *)ci->desc + slot),
+	memcpy_desc_to_shm((void *)((struct ul_descriptor *)ci->desc + slot),
 		&desc, sizeof(desc));
 	*ci->wptr = *local_wptr = slot;
 	dp->stat.tx_packets[prio]++;
