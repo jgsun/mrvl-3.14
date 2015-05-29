@@ -475,6 +475,11 @@ void psd_rb_data_init(struct psd_rbctl *rbctl)
 	atomic_set(&rbctl->local_dl_free_wptr, 0);
 	atomic_set(&rbctl->local_committed_dl_free_wptr, 0);
 
+	memset(rbctl->local_ul_defl_wptr, 0, sizeof(rbctl->local_ul_defl_wptr));
+	memset(rbctl->local_ul_high_wptr, 0, sizeof(rbctl->local_ul_high_wptr));
+	rbctl->local_ul_free_rptr = 0;
+	rbctl->local_dl_rptr = 0;
+
 	/* make sure chan_len is copied before we start */
 	wmb();
 

@@ -88,9 +88,13 @@ struct psd_rbctl {
 	spinlock_t free_lock;
 	spinlock_t reclaim_lock;
 
-	/* local copies of dl free queue wptr */
+	/* local copies of AP-write ptrs */
 	atomic_t local_dl_free_wptr;
 	atomic_t local_committed_dl_free_wptr;
+	int local_ul_defl_wptr[PSD_UL_CH_CNT];
+	int local_ul_high_wptr[PSD_UL_CH_CNT];
+	int local_ul_free_rptr;
+	int local_dl_rptr;
 
 	/* ul channel info */
 	u16 ul_defl_chan_len[PSD_UL_CH_CNT];

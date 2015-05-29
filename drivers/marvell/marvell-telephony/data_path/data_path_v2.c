@@ -447,12 +447,10 @@ static void dp_rx_func(unsigned long arg)
 	int i;
 
 	struct dl_descriptor desc;
-	int rptr;
 	int wptr;
 
 	dp->stat.rx_sched_cnt++;
 
-	rptr = skctl->ds.rptr;
 	/* tell CP we are receiving */
 	skctl->ds.active = 1;
 	/* make sure active is set before receiving */
@@ -465,16 +463,16 @@ static void dp_rx_func(unsigned long arg)
 		}
 
 		wptr = skctl->ds.wptr;
-		if (__shm_is_empty(wptr, rptr))
+		if (__shm_is_empty(wptr, rbctl->local_dl_rptr))
 			break;
 
-		slot = __shm_get_next_slot(PSD_DL_CH_TOTAL_LEN, rptr);
+		slot = __shm_get_next_slot(PSD_DL_CH_TOTAL_LEN, rbctl->local_dl_rptr);
 		memcpy_desc(&desc, (void *)&skctl->ds.desc[slot], sizeof(desc));
 		dp_data_rx(dp, &desc);
 
-		rptr = slot;
+		rbctl->local_dl_rptr = slot;
 		/* let CP know this slot asap */
-		skctl->ds.rptr = rptr;
+		skctl->ds.rptr = rbctl->local_dl_rptr;
 	}
 
 	if (i == MAX_RX_SHOTS) {
@@ -487,7 +485,7 @@ static void dp_rx_func(unsigned long arg)
 
 		/* double check the ring buffer */
 		wptr = skctl->ds.wptr;
-		if (!__shm_is_empty(wptr, rptr))
+		if (!__shm_is_empty(wptr, rbctl->local_dl_rptr))
 			dp_schedule_rx(dp);
 	}
 }
@@ -505,7 +503,6 @@ static void reclaim_memory(struct data_path *dp, size_t freed_bytes)
 	volatile struct psd_skctl *skctl = rbctl->skctl_va;
 
 	struct free_descriptor desc;
-	int rptr;
 	int wptr;
 	int slot;
 	size_t bytes = 0;
@@ -513,23 +510,23 @@ static void reclaim_memory(struct data_path *dp, size_t freed_bytes)
 
 	spin_lock_irqsave(&rbctl->reclaim_lock, flags);
 
-	rptr = skctl->us.free_rptr;
+	rbctl->local_ul_free_rptr = skctl->us.free_rptr;
 
 	while (bytes < freed_bytes) {
 		wptr = skctl->us.free_wptr;
 
-		if (__shm_is_empty(wptr, rptr))
+		if (__shm_is_empty(wptr, rbctl->local_ul_free_rptr))
 			break;
 
-		slot = __shm_get_next_slot(PSD_UF_CH_TOTAL_LEN, rptr);
+		slot = __shm_get_next_slot(PSD_UF_CH_TOTAL_LEN, rbctl->local_ul_free_rptr);
 		memcpy_desc(&desc, (void *)&skctl->us.free_desc[slot],
 			sizeof(desc));
 		reclaim_one_slot(dp, &desc);
 		bytes += desc.length;
-		rptr = slot;
+		rbctl->local_ul_free_rptr = slot;
 	}
 
-	skctl->us.free_rptr = rptr;
+	skctl->us.free_rptr = rbctl->local_ul_free_rptr;
 	spin_unlock_irqrestore(&rbctl->reclaim_lock, flags);
 }
 
@@ -856,6 +853,7 @@ static int dp_data_tx(void *priv, int cid, int simid, int prio,
 	int rptr;
 	int wptr;
 	int slot;
+	int *local_wptr;
 
 	if (unlikely(!dp || atomic_read(&dp->state) != dp_state_opened)) {
 		pr_err("%s: data path is not open!\n", __func__);
@@ -879,12 +877,15 @@ static int dp_data_tx(void *priv, int cid, int simid, int prio,
 		goto drop;
 	}
 
-	if (prio == PSD_QUEUE_HIGH)
+	if (prio == PSD_QUEUE_HIGH) {
+		local_wptr = &rbctl->local_ul_high_wptr[qidx];
 		ci = rbctl->ul_high_chan + qidx;
-	else
+	} else {
+		local_wptr = &rbctl->local_ul_defl_wptr[qidx];
 		ci = rbctl->ul_defl_chan + qidx;
+	}
 
-	wptr = *ci->wptr;
+	wptr = *local_wptr;
 	rptr = *ci->rptr;
 
 	if (__shm_is_full(ci->count, wptr, rptr)) {
@@ -922,7 +923,7 @@ static int dp_data_tx(void *priv, int cid, int simid, int prio,
 	slot = __shm_get_next_slot(ci->count, wptr);
 	memcpy_desc((void *)((struct ul_descriptor *)ci->desc + slot),
 		&desc, sizeof(desc));
-	*ci->wptr = slot;
+	*ci->wptr = *local_wptr = slot;
 	dp->stat.tx_packets[prio]++;
 	dp->stat.tx_bytes += len;
 
