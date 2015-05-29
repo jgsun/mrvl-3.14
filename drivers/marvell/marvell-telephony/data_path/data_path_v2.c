@@ -186,6 +186,79 @@ static inline void *memcpy_desc(void *dst, const void *src, size_t len)
 	return dst;
 }
 
+static inline bool get_next_free_queue_slot(struct data_path *dp,
+	int wptr, int *slot)
+{
+	int new_wptr = __shm_get_next_slot(PSD_DF_CH_TOTAL_LEN, wptr);
+
+	if (atomic_cmpxchg(&dp->rbctl->local_dl_free_wptr, wptr, new_wptr)
+		== wptr) {
+		*slot = new_wptr;
+		return true;
+	}
+
+	return false;
+}
+
+static inline void put_next_free_queue_slot(struct data_path *dp,
+	int __maybe_unused slot)
+{
+	struct psd_rbctl *rbctl = dp->rbctl;
+	volatile struct psd_skctl *skctl = rbctl->skctl_va;
+
+	int wptr, new_cwptr, cwptr;
+	int distance;
+
+	/* update the committed number */
+	do {
+		cwptr = atomic_read(&rbctl->local_committed_dl_free_wptr);
+		new_cwptr = __shm_get_next_slot(PSD_DF_CH_TOTAL_LEN, cwptr);
+	} while (atomic_cmpxchg(&rbctl->local_committed_dl_free_wptr,
+			cwptr, new_cwptr) != cwptr);
+
+	wptr = atomic_read(&rbctl->local_dl_free_wptr);
+
+	distance = __shm_free_slot(wptr, skctl->ds.free_wptr,
+		PSD_DF_CH_TOTAL_LEN);
+	/*
+	 * compare the committed wtpr and current wptr, if they are equal,
+	 * means we do not have any slot held by other one, commit the
+	 * value to shm to let CP know
+	 */
+	if (wptr == new_cwptr) {
+		/*
+		 * we may be interrupted by someone
+		 * double confirm we are still in the front of wptr
+		 */
+		if (distance < 64)
+			skctl->ds.free_wptr = wptr;
+	} else {
+		/*
+		 * sometimes, we may not have chance to update the wptr in
+		 * share memory, process all the pending slot here
+		 * this is the slow path, should not happen!!!
+		 */
+		if (unlikely(distance > 32 && distance < 64)) {
+			unsigned long flags;
+
+			pr_warn_ratelimited("%s: so many free slots are pending\n",
+				__func__);
+			if (spin_trylock_irqsave(&rbctl->free_lock, flags)) {
+				int i = skctl->ds.free_wptr;
+
+				while (1) {
+					i = __shm_get_next_slot(PSD_DF_CH_TOTAL_LEN, i);
+					if (*(u32 *)(skctl->ds.free_desc[i].buffer_offset
+							+ rbctl->rx_va) != SLOT_FREE_FLAG)
+						break;
+					skctl->ds.free_wptr = i;
+				}
+				spin_unlock_irqrestore(&rbctl->free_lock, flags);
+			}
+		}
+	}
+}
+
 static bool __free_memory(struct data_path *dp,
 	const struct free_descriptor *desc)
 {
@@ -195,11 +268,13 @@ static bool __free_memory(struct data_path *dp,
 	int wptr;
 	int slot;
 
-	wptr = skctl->ds.free_wptr;
+again:
+	wptr = atomic_read(&dp->rbctl->local_dl_free_wptr);
 	rptr = skctl->ds.free_rptr;
 
 	if (likely(!__shm_is_full(PSD_DF_CH_TOTAL_LEN, wptr, rptr))) {
-		slot = __shm_get_next_slot(PSD_DF_CH_TOTAL_LEN, wptr);
+		if (unlikely(!get_next_free_queue_slot(dp, wptr, &slot)))
+			goto again;
 		memcpy_desc((void *)&skctl->ds.free_desc[slot],
 			desc, sizeof(*desc));
 
@@ -212,7 +287,7 @@ static bool __free_memory(struct data_path *dp,
 
 		/* must ensure the descriptor is ready first */
 		wmb();
-		skctl->ds.free_wptr = slot;
+		put_next_free_queue_slot(dp, slot);
 		return true;
 	} else {
 		pr_warn_ratelimited("%s: dl free queue is full\n", __func__);
@@ -224,13 +299,11 @@ static bool __free_memory(struct data_path *dp,
 static bool __maybe_unused free_memory(struct data_path *dp,
 	const struct free_descriptor *desc)
 {
-	struct psd_rbctl *rbctl = dp->rbctl;
-	unsigned long flags;
 	bool ret;
 
-	spin_lock_irqsave(&rbctl->free_lock, flags);
+	preempt_disable();
 	ret = __free_memory(dp, desc);
-	spin_unlock_irqrestore(&rbctl->free_lock, flags);
+	preempt_enable();
 
 	return ret;
 }
@@ -995,6 +1068,8 @@ static struct psd_rbctl psd_rbctl = {
 	.va_lock = __MUTEX_INITIALIZER(psd_rbctl.va_lock),
 	.free_lock = __SPIN_LOCK_UNLOCKED(psd_rbctl.free_lock),
 	.reclaim_lock = __SPIN_LOCK_UNLOCKED(psd_rbctl.reclaim_lock),
+	.local_dl_free_wptr = ATOMIC_INIT(0),
+	.local_committed_dl_free_wptr = ATOMIC_INIT(0),
 };
 
 static struct data_path data_path = {

@@ -88,6 +88,10 @@ struct psd_rbctl {
 	spinlock_t free_lock;
 	spinlock_t reclaim_lock;
 
+	/* local copies of dl free queue wptr */
+	atomic_t local_dl_free_wptr;
+	atomic_t local_committed_dl_free_wptr;
+
 	/* ul channel info */
 	u16 ul_defl_chan_len[PSD_UL_CH_CNT];
 	u16 ul_high_chan_len[PSD_UL_CH_CNT];
