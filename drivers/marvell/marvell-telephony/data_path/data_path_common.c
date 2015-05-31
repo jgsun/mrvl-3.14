@@ -222,11 +222,15 @@ int psd_data_rx(unsigned char cid, struct sk_buff *skb)
 			pr_err_ratelimited(
 				"%s: no psd user for cid:%d\n",
 				__func__, cid);
+		else
+			goto done;
 	} else
 		pr_err_ratelimited(
 			"%s: invalid cid:%d\n",
 			__func__, cid);
 
+	dev_kfree_skb_any(skb);
+done:
 	return 0;
 }
 
