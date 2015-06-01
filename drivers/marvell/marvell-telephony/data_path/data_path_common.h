@@ -60,6 +60,7 @@ struct psd_driver {
 };
 
 extern struct dentry *psd_debugfs_root_dir;
+extern bool data_enabled;
 
 static inline unsigned padding_size(unsigned len,
 	unsigned aligned_size)

@@ -19,6 +19,7 @@
 #endif
 
 #include "psdatastub.h"
+#include "data_path_common.h"
 
 #define PSDATASTUB_IOC_MAGIC 'P'
 #define PSDATASTUB_GCFDATA _IOW(PSDATASTUB_IOC_MAGIC, 1, int)
@@ -37,8 +38,6 @@ struct GCFDATA32 {
 	compat_uptr_t databuf;
 };
 #endif
-
-static bool data_enabled;
 
 static int psdatastub_open(struct inode *inode, struct file *filp)
 {

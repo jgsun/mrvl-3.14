@@ -70,7 +70,7 @@ static u32 ack_opt = true;
 static u32 data_drop = true;
 static u32 ndev_fc;
 
-static bool data_enabled = true;
+bool data_enabled = true;
 
 int psd_register(const struct psd_user *user, int cid)
 {
