@@ -511,9 +511,10 @@ retry:
 		dp_data_rx(dp, &desc);
 
 		rbctl->local_dl_rptr = slot;
-		/* let CP know this slot asap */
-		skctl->ds.rptr = rbctl->local_dl_rptr;
 	}
+
+	/* let CP know this slot */
+	skctl->ds.rptr = rbctl->local_dl_rptr;
 
 	if (i == MAX_RX_SHOTS) {
 		dp_schedule_rx(dp);
