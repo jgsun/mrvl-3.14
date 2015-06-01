@@ -478,6 +478,7 @@ static void dp_rx_func(unsigned long arg)
 
 	struct dl_descriptor desc;
 	int wptr;
+	bool retry = false;
 
 	dp->stat.rx_sched_cnt++;
 
@@ -486,15 +487,23 @@ static void dp_rx_func(unsigned long arg)
 	/* make sure active is set before receiving */
 	barrier();
 
+	wptr = skctl->ds.wptr;
 	for (i = 0; i < MAX_RX_SHOTS; i++) {
 		if (unlikely(!psd_is_link_up())) {
 			/* if not sync, just return */
 			break;
 		}
 
-		wptr = skctl->ds.wptr;
-		if (__shm_is_empty(wptr, rbctl->local_dl_rptr))
+retry:
+		if (__shm_is_empty(wptr, rbctl->local_dl_rptr)) {
+			if (retry) {
+				wptr = skctl->ds.wptr;
+				retry = false;
+				goto retry;
+			}
 			break;
+		}
+		retry = true;
 
 		slot = __shm_get_next_slot(PSD_DL_CH_TOTAL_LEN, rbctl->local_dl_rptr);
 		memcpy_desc_from_shm(&desc, (void *)&skctl->ds.desc[slot],
