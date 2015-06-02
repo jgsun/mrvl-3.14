@@ -1934,34 +1934,10 @@ void init_ddr_dfc(void)
 	else if (ddr_mode == DDR_800M)
 		find_ddr_level(lpddr800_op_array);
 
+	fillddrdfcinfo(&ddrdfcinfo);
 	return;
 }
 
-/*
- * This interface will be used by different platform to fill CP ddr dfc info
- */
-int fillddrdfcinfo(struct ddr_dfc_info *dfc_info)
-{
-	if (!dfc_info)
-		return -EINVAL;
-
-	memcpy(&ddrdfcinfo, dfc_info, sizeof(struct ddr_dfc_info));
-	return 0;
-}
-
-/*
- * This interface will be used by telephony to get CP ddr dfc info, and
- * they will use ACIPC to pass the info to CP
- */
-int getddrdfcinfo(struct ddr_dfc_info *dfc_info)
-{
-	if (!dfc_info)
-		return -EINVAL;
-
-	memcpy(dfc_info, &ddrdfcinfo, sizeof(struct ddr_dfc_info));
-	return 0;
-}
-EXPORT_SYMBOL(getddrdfcinfo);
 
 static void __init pxa1936_clk_init(struct device_node *np)
 {

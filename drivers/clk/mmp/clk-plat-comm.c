@@ -352,6 +352,36 @@ int getcpdvcinfo(struct cpmsa_dvc_info *dvc_info)
 }
 EXPORT_SYMBOL(getcpdvcinfo);
 
+
+static struct ddr_dfc_info ddrdfc;
+
+/*
+ * This interface will be used by different platform to fill CP ddr dfc info
+ */
+int fillddrdfcinfo(struct ddr_dfc_info *dfc_info)
+{
+	if (!dfc_info)
+		return -EINVAL;
+
+	memcpy(&ddrdfc, dfc_info, sizeof(struct ddr_dfc_info));
+	return 0;
+}
+
+/*
+ * This interface will be used by telephony to get CP ddr dfc info, and
+ * they will use ACIPC to pass the info to CP
+ */
+int getddrdfcinfo(struct ddr_dfc_info *dfc_info)
+{
+	if (!dfc_info)
+		return -EINVAL;
+
+	memcpy(dfc_info, &ddrdfc, sizeof(struct ddr_dfc_info));
+	return 0;
+}
+EXPORT_SYMBOL(getddrdfcinfo);
+
+
 static struct comm_fuse_info comm_fuseinfo;
 
 int plat_fill_fuseinfo(struct comm_fuse_info *info)
