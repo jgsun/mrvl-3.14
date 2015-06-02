@@ -2774,15 +2774,16 @@ static int b52isp_laxi_stream_handler(struct b52isp_laxi *laxi,
 			struct v4l2_subdev *hst_sd = lpipe->cur_cmd->hsd;
 			struct v4l2_subdev *sd = host_subdev_get_guest(hst_sd,
 						MEDIA_ENT_T_V4L2_SUBDEV_SENSOR);
-			struct media_pad *csi_pad = media_entity_remote_pad(sd->entity.pads);
-			struct v4l2_subdev *csi_sd = media_entity_to_v4l2_subdev(csi_pad->entity);
 			struct b52_sensor *sensor = to_b52_sensor(sd);
 
 			if ((lpipe->cur_cmd->cmd_name == CMD_SET_FORMAT) ||
 					(lpipe->cur_cmd->cmd_name == CMD_RAW_DUMP))
-				b52_sensor_call(sensor, init);
-			v4l2_subdev_call(csi_sd, video, s_stream, 1);
-			v4l2_subdev_call(sd, video, s_stream, 1);
+				ret = b52_sensor_call(sensor, init);
+				if (ret < 0) {
+					mutex_unlock(&lpipe->state_lock);
+					b52_enable_axi_port(laxi, 0, vnode);
+					goto unmap_scalar;
+				}
 		}
 		/*
 		 * This is just a W/R. Eventually, all command will be decided
@@ -2874,8 +2875,34 @@ static int b52isp_laxi_stream_handler(struct b52isp_laxi *laxi,
 					mm_stream = 1;
 				}
 			}
+			if ((lpipe->cur_cmd->cmd_name == CMD_SET_FORMAT)
+					&& !(lpipe->cur_cmd->flags & BIT(CMD_FLAG_MS))) {
+				struct v4l2_subdev *hst_sd = lpipe->cur_cmd->hsd;
+				struct v4l2_subdev *sd = host_subdev_get_guest(hst_sd,
+							MEDIA_ENT_T_V4L2_SUBDEV_SENSOR);
+				struct media_pad *csi_pad =
+						media_entity_remote_pad(sd->entity.pads);
+				struct v4l2_subdev *csi_sd =
+						media_entity_to_v4l2_subdev(csi_pad->entity);
+
+				v4l2_subdev_call(csi_sd, video, s_stream, 1);
+				v4l2_subdev_call(sd, video, s_stream, 1);
+			}
 			break;
 		case CMD_IMG_CAPTURE:
+			/* stream on sensor for capture img cmd */
+			{
+				struct v4l2_subdev *hst_sd = lpipe->cur_cmd->hsd;
+				struct v4l2_subdev *sd = host_subdev_get_guest(hst_sd,
+							MEDIA_ENT_T_V4L2_SUBDEV_SENSOR);
+				struct media_pad *csi_pad =
+						media_entity_remote_pad(sd->entity.pads);
+				struct v4l2_subdev *csi_sd =
+						media_entity_to_v4l2_subdev(csi_pad->entity);
+
+				v4l2_subdev_call(csi_sd, video, s_stream, 1);
+				v4l2_subdev_call(sd, video, s_stream, 1);
+			}
 			lpipe->cur_cmd->output_map = topo->dst_map;
 			for (i = 0; i < lpipe->path_arg.nr_frame; i++) {
 				isp_vb = isp_vnode_get_idle_buffer(vnode);
@@ -3097,8 +3124,10 @@ disable_axi:
 			struct media_pad *csi_pad = media_entity_remote_pad(sd->entity.pads);
 			struct v4l2_subdev *csi_sd = media_entity_to_v4l2_subdev(csi_pad->entity);
 
-			v4l2_subdev_call(sd, video, s_stream, 0);
-			v4l2_subdev_call(csi_sd, video, s_stream, 0);
+			if (lpipe->cur_cmd->cmd_name != CMD_CHG_FORMAT) {
+				v4l2_subdev_call(sd, video, s_stream, 0);
+				v4l2_subdev_call(csi_sd, video, s_stream, 0);
+			}
 		}
 
 		if (laxi->stream && ret < 0)
