@@ -391,6 +391,11 @@ static inline void data_path_advance_rptr(struct data_path *dp)
 
 out:
 	spin_unlock_irqrestore(&dp->ap_rptr_lock, flags);
+
+	/* process share memory socket buffer flow control */
+	if (!__shm_is_empty(rbctl->skctl_va->cp_wptr, dp->local_ap_rptr) ||
+		rbctl->is_cp_xmit_stopped)
+		data_path_schedule_rx(dp);
 }
 
 static inline void data_path_rxs_done(struct kref *ref)
