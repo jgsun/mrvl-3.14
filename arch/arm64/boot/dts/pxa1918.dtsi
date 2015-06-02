@@ -526,7 +526,7 @@
 
 				counter0 {
 					compatible = "marvell,timer-counter-clkevt";
-					interrupts = <0 64 0x4>;
+					interrupts = <0 21 0x4>;
 					marvell,timer-counter-id = <0>;
 					marvell,timer-counter-broadcast;
 					marvell,timer-counter-frequency = <32768>;
@@ -547,7 +547,7 @@
 			uart1: uart@d4018000 {
 				compatible = "mrvl,mmp-uart";
 				reg = <0xd4018000 0x1000>;
-				interrupts = <0 28 0x4>;
+				interrupts = <0 24 0x4>;
 				dmas = <&pdma0 23 1
 					&pdma0 24 1>;
 				dma-names = "rx", "tx";
@@ -701,7 +701,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				reg = <0xd4010800 0x64>;
-				interrupts = <0 33 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts = <0 23 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&soc_clocks PXA1U88_CLK_TWSI1>;
 				lpm-qos = <PM_QOS_CPUIDLE_BLOCK_DDR>;
 
@@ -738,7 +738,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				reg = <0xd4013800 0x64>;
-				interrupts = <0 93 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts = <0 2 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&soc_clocks PXA1U88_CLK_TWSI3>;
 				lpm-qos = <PM_QOS_CPUIDLE_BLOCK_DDR>;
 
@@ -758,7 +758,7 @@
 			thermal: thermal@d4013300 {
 				compatible = "marvell,pxa28nm-thermal";
 				reg = <0xd4013300 0x1C>;
-				interrupts = <0 60 0x4>;
+				interrupts = <0 33 0x4>;
 				clocks = <&soc_clocks PXA1U88_CLK_THERMAL>;
 				clock-names = "ts_clk";
 				status = "disabled";
