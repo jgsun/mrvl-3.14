@@ -186,9 +186,9 @@
 				status = "disabled";
 			};
 
-			udc: udc@d4208100 {
+			udc: udc@d4208000 {
 				compatible = "marvell,mv-udc";
-				reg = <0xd4208100 0x200>;
+				reg = <0xd4208000 0x200>;
 				interrupts = <0 44 0x4>;
 				marvell,udc-name = "mv-udc";
 				marvell,udc-mode = <MV_USB_MODE_OTG>;
