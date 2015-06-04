@@ -382,6 +382,19 @@ int getddrdfcinfo(struct ddr_dfc_info *dfc_info)
 EXPORT_SYMBOL(getddrdfcinfo);
 
 
+static int ddr_800M_4x_status;
+
+int fill_ddr_800M_4x(int status)
+{
+	ddr_800M_4x_status = status;
+	return 0;
+}
+
+int get_ddr_800M_4x(void)
+{
+	return ddr_800M_4x_status;
+}
+
 static struct comm_fuse_info comm_fuseinfo;
 
 int plat_fill_fuseinfo(struct comm_fuse_info *info)
