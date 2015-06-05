@@ -115,7 +115,7 @@ config MRVL_SKMALLOC_WIRELESS_EN
 	driver will use skmalloc-xxx instead of kmalloc-xxx.
 
 config MRVL_MMP_MODEM
-	tristate "Marvell mmp modem driver"
+	bool "Marvell mmp modem driver"
 	depends on PXA9XX_ACIPC
 	default n
 	help
