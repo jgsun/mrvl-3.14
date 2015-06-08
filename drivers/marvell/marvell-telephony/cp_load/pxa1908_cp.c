@@ -12,14 +12,13 @@
 #include <linux/module.h>
 #include "pxa_cp_load.h"
 #include "common_regs.h"
+#include "pxa988_series.h"
 
 /*
- * pxa1908 cp related operations are almost the same as as pxa988
- * exception the branch address set
- * for pxa988, we need to set the branch address CIU_SW_BRANCH_ADDR
- * but pxa1908, we need to set the remap register CIU_SEAGULL_REMAP
+ * pxa988 series:
+ * for pxa1908, we need to set the remap register CIU_SEAGULL_REMAP
  */
-void cp1908_releasecp(void)
+static void releasecp(void)
 {
 	/* the load address must be 64k aligned */
 	BUG_ON(arbel_bin_phys_addr & 0xFFFF);
@@ -27,13 +26,35 @@ void cp1908_releasecp(void)
 	__cp988_releasecp();
 }
 
-void cp1908_holdcp(void)
+static void holdcp(void)
 {
-	cp988_holdcp();
+	__cp988_holdcp();
 }
 
-bool cp1908_get_status(void)
+static bool get_status(void)
 {
-	return cp988_get_status();
+	return __cp988_get_status();
 }
 
+static struct cpload_driver cp_driver = {
+	.name = "pxa1908_cp",
+	.release_cp = releasecp,
+	.hold_cp = holdcp,
+	.get_status = get_status,
+	.cp_type = 0x31393038,
+};
+
+
+static int __init cpload_init(void)
+{
+	register_cpload_driver(&cp_driver);
+	return 0;
+}
+
+static void __exit cpload_exit(void)
+{
+	unregister_cpload_driver(&cp_driver);
+}
+
+module_init(cpload_init);
+module_exit(cpload_exit);

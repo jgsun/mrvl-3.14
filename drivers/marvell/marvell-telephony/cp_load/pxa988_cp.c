@@ -13,139 +13,47 @@
 #include <linux/module.h>
 #include "pxa_cp_load.h"
 #include "common_regs.h"
+#include "pxa988_series.h"
 
-/**
- * CP release procedure
- * 1. acquire fc mutex
- * 2. unmask bits CP_CLK_OFF_ACK, CP_HALT of register APMU_DEBUG to
- *    enable ACK from CP
- * 3. clear bit CPR of register APRR to release CP
- * 4. wait until read back zero value after clear bit CPR
- * 5. release fc mutex
+/*
+ * pxa988 series:
+ * for pxa988, we need to set the branch address CIU_SW_BRANCH_ADDR
  */
-void __cp988_releasecp(void)
-{
-	int value;
-	int timeout = 1000000;
-	u8 apmu_debug;
 
-	acquire_fc_mutex();
-	pr_info("%s: acquire fc mutex\n", __func__);
-
-	/*
-	 * unmask CP_CLK_OFF_ACK and CP_HALT
-	 */
-	pr_info("%s: unmask cp halt and cp clk off ack bit\n",
-	       __func__);
-	apmu_debug = __raw_readb(APMU_DEBUG);
-	pr_info("%s: APMU_DEBUG before %02x\n", __func__, apmu_debug);
-	apmu_debug &= ~(APMU_DEBUG_CP_HALT | APMU_DEBUG_CP_CLK_OFF_ACK);
-	__raw_writeb(apmu_debug, APMU_DEBUG);
-	pr_info("%s: APMU_DEBUG after %02x\n", __func__,
-	       __raw_readb(APMU_DEBUG));
-
-	pr_info("release cp...\n");
-	value = __raw_readl(MPMU_APRR);
-	pr_info("the PMUM_APRR value is %p\n",
-	       MPMU_APRR);
-	pr_info("the value is 0x%08x\n", value);
-	/* set CPR(bit[0]) bit of APRR register low */
-	value &= ~MPMU_APRR_CPR;
-	__raw_writel(value, MPMU_APRR);
-	/*
-	 * avoid endless loop
-	 * TODO: accurate the timeout time
-	 */
-	while (((__raw_readl(MPMU_APRR)
-		 & MPMU_APRR_CPR) != 0x0) && timeout)
-		timeout--;
-	if (!timeout) {
-		pr_info("fail!\n");
-		/*
-		 * release CP failed, invoke panic() here???
-		 * mask CP_CLK_OFF_ACK and CP_HALT again to avoid hang in FC
-		 */
-		pr_info(
-		       "%s: mask cp halt and cp clk off ack bit again\n",
-		       __func__);
-		apmu_debug = __raw_readb(APMU_DEBUG);
-		pr_info("%s: APMU_DEBUG before %02x\n",
-		       __func__, apmu_debug);
-		apmu_debug |= (APMU_DEBUG_CP_HALT | APMU_DEBUG_CP_CLK_OFF_ACK);
-		__raw_writeb(apmu_debug, APMU_DEBUG);
-		pr_info("%s: APMU_DEBUG after %02x\n", __func__,
-		       __raw_readb(APMU_DEBUG));
-	} else
-		pr_info("done!\n");
-
-	release_fc_mutex();
-	pr_info("%s: release fc mutex\n", __func__);
-}
-
-void cp988_releasecp(void)
+static void releasecp(void)
 {
 	writel(arbel_bin_phys_addr, CIU_SW_BRANCH_ADDR);
 	__cp988_releasecp();
 }
 
-/**
- * CP hold procedure
- * 1. acquire fc mutex
- * 2. stop watchdog
- * 3. set bit CPR of register APRR to hold CP in reset
- * 4. set bits DSPR, BBR and DSRAMINT of register CPRR to hold MSA in reset
- * 5. wait several us
- * 6. mask bits CP_CLK_OFF_ACK, CP_HALT of register APMU_DEBUG to
- *    disable ACK from CP
- * 7. release fc mutex
- */
-void cp988_holdcp(void)
+static void holdcp(void)
 {
-	int value;
-	u8 apmu_debug;
-
-	acquire_fc_mutex();
-	pr_info("%s: acquire fc mutex\n", __func__);
-
-	if (watchdog_count_stop_fp)
-		watchdog_count_stop_fp();
-
-	pr_info("hold cp...");
-	/* set CPR(bit[0]) bit of APRR register high */
-	value = __raw_readl(MPMU_APRR) | MPMU_APRR_CPR;
-	__raw_writel(value, MPMU_APRR);
-	pr_info("done!\n");
-	pr_info("hold msa...");
-	value = __raw_readl(MPMU_CPRR);
-	/* set DSPR(bit[2]), BBR(bit[3]) and DSRAMINT(bit[5])
-	 * bits of CPRR register high */
-	value |= MPMU_CPRR_DSPR | MPMU_CPRR_BBR | MPMU_CPRR_DSRAMINT;
-	__raw_writel(value, MPMU_CPRR);
-	pr_info("done!\n");
-	/*
-	 * recommended software wait several us after hold CP/MSA
-	 * in reset status and then start load the new image
-	 * TODO: accurate the wait time
-	 */
-	udelay(100);
-
-	/*
-	 * mask CP_CLK_OFF_ACK and CP_HALT
-	 */
-	pr_info("%s: mask cp halt and cp clk off ack bit\n",
-	       __func__);
-	apmu_debug = __raw_readb(APMU_DEBUG);
-	pr_info("%s: APMU_DEBUG before %02x\n", __func__, apmu_debug);
-	apmu_debug |= (APMU_DEBUG_CP_HALT | APMU_DEBUG_CP_CLK_OFF_ACK);
-	__raw_writeb(apmu_debug, APMU_DEBUG);
-	pr_info("%s: APMU_DEBUG after %02x\n", __func__,
-	       __raw_readb(APMU_DEBUG));
-
-	release_fc_mutex();
-	pr_info("%s: release fc mutex\n", __func__);
+	__cp988_holdcp();
 }
 
-bool cp988_get_status(void)
+static bool get_status(void)
 {
-	return !(readl(MPMU_APRR) & MPMU_APRR_CPR);
+	return __cp988_get_status();
 }
+
+static struct cpload_driver cp_driver = {
+	.name = "pxa988_cp",
+	.release_cp = releasecp,
+	.hold_cp = holdcp,
+	.get_status = get_status,
+	.cp_type = 0x30393838,
+};
+
+static int __init cpload_init(void)
+{
+	register_cpload_driver(&cp_driver);
+	return 0;
+}
+
+static void __exit cpload_exit(void)
+{
+	unregister_cpload_driver(&cp_driver);
+}
+
+module_init(cpload_init);
+module_exit(cpload_exit);

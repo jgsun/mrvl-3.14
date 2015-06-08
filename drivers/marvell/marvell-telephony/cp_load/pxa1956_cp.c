@@ -12,12 +12,13 @@
 #include <linux/module.h>
 #include "pxa_cp_load.h"
 #include "common_regs.h"
+#include "pxa988_series.h"
 
 /*
- * pxa1956 cp related operations are almost the same as as pxa988
- * exception the branch address set
+ * pxa988 series:
+ * for pxa1956, we need to set address MPMU_CP_REMAP_REG0
  */
-void cp1956_releasecp(void)
+static void releasecp(void)
 {
 	/* the load address must be 64k aligned */
 	BUG_ON(arbel_bin_phys_addr & 0xFFFF);
@@ -26,12 +27,34 @@ void cp1956_releasecp(void)
 	__cp988_releasecp();
 }
 
-void cp1956_holdcp(void)
+static void holdcp(void)
 {
-	cp988_holdcp();
+	__cp988_holdcp();
 }
 
-bool cp1956_get_status(void)
+static bool get_status(void)
 {
-	return cp988_get_status();
+	return __cp988_get_status();
 }
+
+static struct cpload_driver cp_driver = {
+	.name = "pxa1956_cp",
+	.release_cp = releasecp,
+	.hold_cp = holdcp,
+	.get_status = get_status,
+	.cp_type = 0x31393536,
+};
+
+static int __init cpload_init(void)
+{
+	register_cpload_driver(&cp_driver);
+	return 0;
+}
+
+static void __exit cpload_exit(void)
+{
+	unregister_cpload_driver(&cp_driver);
+}
+
+module_init(cpload_init);
+module_exit(cpload_exit);

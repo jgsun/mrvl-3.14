@@ -45,7 +45,9 @@
 #include "shm_map.h"
 #include "util.h"
 
-static struct cp_dev *global_cp;
+static struct cpload_device cpload_dev = {
+	.name = "cpload",
+};
 uint32_t arbel_bin_phys_addr;
 EXPORT_SYMBOL(arbel_bin_phys_addr);
 uint32_t reliable_bin_phys_addr;
@@ -54,56 +56,23 @@ static void *reliable_bin_virt_addr;
 
 uint32_t seagull_remap_smc_funcid;
 
-int cp_set_ops(void)
-{
-	int ret = 0;
-
-	switch (global_cp->cp_type) {
-	case cp_type_pxa988:
-	case cp_type_pxa1L88:
-		global_cp->hold_cp = cp988_holdcp;
-		global_cp->release_cp = cp988_releasecp;
-		global_cp->get_status = cp988_get_status;
-		break;
-	case cp_type_pxa1928:
-		global_cp->hold_cp = cp1928_holdcp;
-		global_cp->release_cp = cp1928_releasecp;
-		global_cp->get_status = cp1928_get_status;
-		break;
-	case cp_type_pxa1908:
-		global_cp->hold_cp = cp1908_holdcp;
-		global_cp->release_cp = cp1908_releasecp;
-		global_cp->get_status = cp1908_get_status;
-		break;
-	case cp_type_pxa1956:
-		global_cp->hold_cp = cp1956_holdcp;
-		global_cp->release_cp = cp1956_releasecp;
-		global_cp->get_status = cp1956_get_status;
-		break;
-	default:
-		pr_err("cp_set_ops: error cp type\n");
-		ret = -1;
-		break;
-	}
-
-	return ret;
-}
-
 void cp_releasecp(void)
 {
-	global_cp->release_cp();
+	if (cpload_dev.driver)
+		cpload_dev.driver->release_cp();
 }
 EXPORT_SYMBOL(cp_releasecp);
 
 void cp_holdcp(void)
 {
-	global_cp->hold_cp();
+	if (cpload_dev.driver)
+		cpload_dev.driver->hold_cp();
 }
 EXPORT_SYMBOL(cp_holdcp);
 
 bool cp_get_status(void)
 {
-	return global_cp->get_status();
+	return cpload_dev.driver ? cpload_dev.driver->get_status() : false;
 }
 EXPORT_SYMBOL(cp_get_status);
 
@@ -275,7 +244,7 @@ static void post_mem_set(struct cpload_cp_addr *addr)
 		aponly = true;
 	} else {
 		aponly = false;
-		notify_cp_mem_set(global_cp->lpm_qos, addr);
+		notify_cp_mem_set(cpload_dev.lpm_qos, addr);
 	}
 }
 
@@ -380,6 +349,64 @@ static struct miscdevice cp_miscdev = {
 void (*watchdog_count_stop_fp)(void);
 EXPORT_SYMBOL(watchdog_count_stop_fp);
 
+static int cpload_match(struct device *dev, struct device_driver *drv)
+{
+	struct cpload_device *pdev = to_cpload_device(dev);
+	struct cpload_driver *pdrv = to_cpload_driver(drv);
+
+	return pdev->cp_type == pdrv->cp_type;
+}
+
+static struct bus_type cpload_bus_type = {
+	.name = "cpload",
+	.match = cpload_match,
+};
+
+static int register_cpload_device(struct cpload_device *dev)
+{
+	dev->dev.bus = &cpload_bus_type;
+	dev_set_name(&dev->dev, "%s", dev->name);
+	return device_register(&dev->dev);
+}
+
+static void unregister_cpload_device(struct cpload_device *dev)
+{
+	device_unregister(&dev->dev);
+}
+
+static int cpload_driver_probe(struct device *dev)
+{
+	struct cpload_device *pdev = to_cpload_device(dev);
+	struct cpload_driver *pdrv = to_cpload_driver(dev->driver);
+
+	pdev->driver = pdrv;
+
+	return 0;
+}
+
+static int cpload_driver_remove(struct device *dev)
+{
+	struct cpload_device *pdev = to_cpload_device(dev);
+
+	pdev->driver = NULL;
+
+	return 0;
+}
+
+int register_cpload_driver(struct cpload_driver *driver)
+{
+	driver->driver.name = driver->name;
+	driver->driver.bus = &cpload_bus_type;
+	driver->driver.probe = cpload_driver_probe;
+	driver->driver.remove = cpload_driver_remove;
+	return driver_register(&driver->driver);
+}
+
+void unregister_cpload_driver(struct cpload_driver *driver)
+{
+	driver_unregister(&driver->driver);
+}
+
 static int cp_load_probe(struct platform_device *pdev)
 {
 	int ret;
@@ -413,23 +440,16 @@ static int cp_load_probe(struct platform_device *pdev)
 		goto err4;
 	}
 
-	global_cp = kzalloc(sizeof(struct cp_dev), GFP_KERNEL);
-	if (!global_cp) {
-		pr_err("%s: failed to alloc global_cp\n",
-			   __func__);
+	if (of_property_read_u32(pdev->dev.of_node, "cp-type",
+					&cpload_dev.cp_type)) {
+		pr_err("%s: failed to read cp-type\n", __func__);
 		goto err5;
 	}
 
-	if (of_property_read_u32(pdev->dev.of_node, "cp-type",
-					&global_cp->cp_type)) {
-		pr_err("%s: failed to read cp-type\n", __func__);
-		goto err6;
-	}
-
 	if (of_property_read_u32(pdev->dev.of_node, "lpm-qos",
-					&global_cp->lpm_qos)) {
+					&cpload_dev.lpm_qos)) {
 		pr_err("%s: failed to read lpm-qos\n", __func__);
-		goto err6;
+		goto err5;
 	}
 
 	if (of_property_read_u32(pdev->dev.of_node, "remap-smc-funcid",
@@ -440,13 +460,14 @@ static int cp_load_probe(struct platform_device *pdev)
 		pr_info("%s: seagull_remap_smc_funcid is set to 0x%08x",
 			__func__, seagull_remap_smc_funcid);
 
-	if (cp_set_ops())
-		goto err6;
+	if (register_cpload_device(&cpload_dev) < 0) {
+		pr_err("%s: register cpload device failed\n",
+			__func__);
+		goto err5;
+	}
 
 	return 0;
 
-err6:
-	kfree(global_cp);
 err5:
 	subsys_interface_unregister(&cp_interface);
 err4:
@@ -474,8 +495,8 @@ static int cp_load_remove(struct platform_device *dev)
 	unmap_ciu_base_va();
 
 	misc_deregister(&cp_miscdev);
-	kfree(global_cp);
 	subsys_interface_unregister(&cp_interface);
+	unregister_cpload_device(&cpload_dev);
 	return 0;
 }
 
@@ -496,12 +517,29 @@ static struct platform_driver cp_load_driver = {
 
 static int __init cp_init(void)
 {
-	return platform_driver_register(&cp_load_driver);
+	int ret;
+
+	ret = bus_register(&cpload_bus_type);
+	if (ret) {
+		pr_err("%s: register cpload bus error: %d\n",
+			__func__, ret);
+		return ret;
+	}
+
+	ret = platform_driver_register(&cp_load_driver);
+	if (ret) {
+		pr_err("%s: register platform driver error: %d\n",
+			__func__, ret);
+		bus_unregister(&cpload_bus_type);
+	}
+
+	return ret;
 }
 
 static void cp_exit(void)
 {
 	platform_driver_unregister(&cp_load_driver);
+	bus_unregister(&cpload_bus_type);
 }
 
 module_init(cp_init);

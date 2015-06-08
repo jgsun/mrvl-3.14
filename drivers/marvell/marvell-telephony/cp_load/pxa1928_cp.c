@@ -11,7 +11,6 @@
 #include <linux/delay.h>
 #include <linux/io.h>
 #include <linux/module.h>
-
 #include "pxa_cp_load.h"
 #include "common_regs.h"
 
@@ -20,7 +19,7 @@
  * 1. clear bit SGR of register APRR to release CP
  * 2. wait until read back zero value after clear bit CPR
  */
-void cp1928_releasecp(void)
+static void releasecp(void)
 {
 	int value;
 
@@ -57,7 +56,7 @@ void cp1928_releasecp(void)
  * 3. set bits DSPR, BBR and DSRAMINT of register CPRR to hold MSA in reset
  * 4. wait several us
  */
-void cp1928_holdcp(void)
+static void holdcp(void)
 {
 	int value;
 	int timeout = 1000000;
@@ -89,7 +88,29 @@ void cp1928_holdcp(void)
 	udelay(100);
 }
 
-bool cp1928_get_status(void)
+static bool get_status(void)
 {
 	return !(readl(MPMU_APRR) & MPMU_APRR_SGR);
 }
+
+static struct cpload_driver cp_driver = {
+	.name = "pxa1928_cp",
+	.release_cp = releasecp,
+	.hold_cp = holdcp,
+	.get_status = get_status,
+	.cp_type = 0x31393238,
+};
+
+static int __init cpload_init(void)
+{
+	register_cpload_driver(&cp_driver);
+	return 0;
+}
+
+static void __exit cpload_exit(void)
+{
+	unregister_cpload_driver(&cp_driver);
+}
+
+module_init(cpload_init);
+module_exit(cpload_exit);

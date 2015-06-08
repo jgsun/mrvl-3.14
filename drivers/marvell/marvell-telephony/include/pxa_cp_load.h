@@ -13,46 +13,35 @@
 
 #include "util.h"
 #include "linux_driver_types.h"
+#include <linux/platform_device.h>
+#include <linux/device.h>
 
-enum cp_type {
-	cp_type_pxa988 = 0x30393838,
-	cp_type_pxa1L88 = 0x314C3838,
-	cp_type_pxa1928 = 0x31393238,
-	cp_type_pxa1908 = 0x31393038,
-	cp_type_pxa1956 = 0x31393536,
-};
-
-struct cp_buffer {
-	char *addr;
-	int len;
-};
-
-struct cp_dev {
-	u32 cp_type;
-	u32 lpm_qos;
+struct cpload_driver {
 	void (*release_cp)(void);
 	void (*hold_cp)(void);
 	bool (*get_status)(void);
+	u32 cp_type;
+	const char *name;
+	struct device_driver driver;
 };
 
-void cp1928_releasecp(void);
-void cp1928_holdcp(void);
-bool cp1928_get_status(void);
-void cp988_releasecp(void);
-void cp988_holdcp(void);
-bool cp988_get_status(void);
-void __cp988_releasecp(void);
-void cp1908_releasecp(void);
-void cp1908_holdcp(void);
-bool cp1908_get_status(void);
-void cp1956_releasecp(void);
-void cp1956_holdcp(void);
-bool cp1956_get_status(void);
+struct cpload_device {
+	u32 cp_type;
+	u32 lpm_qos;
+	const char *name;
+	struct cpload_driver *driver;
+	struct device dev;
+};
+
+#define to_cpload_driver(drv) container_of(drv, struct cpload_driver, driver)
+#define to_cpload_device(dev) container_of(dev, struct cpload_device, dev)
 
 extern struct bus_type cpu_subsys;
 extern void cp_releasecp(void);
 extern void cp_holdcp(void);
 extern bool cp_get_status(void);
+extern int register_cpload_driver(struct cpload_driver *driver);
+extern void unregister_cpload_driver(struct cpload_driver *driver);
 
 extern uint32_t arbel_bin_phys_addr;
 extern uint32_t seagull_remap_smc_funcid;
@@ -65,7 +54,7 @@ extern void (*watchdog_count_stop_fp)(void);
 extern void acquire_fc_mutex(void);
 extern void release_fc_mutex(void);
 
-int cp_invoke_smc(u64 function_id, u64 arg0, u64 arg1,
+extern int cp_invoke_smc(u64 function_id, u64 arg0, u64 arg1,
 	u64 arg2);
 
 static inline int cp_set_seagull_remap_reg(u64 val)
@@ -82,6 +71,6 @@ static inline int cp_set_seagull_remap_reg(u64 val)
 
 DECLARE_BLOCKING_NOTIFIER(cp_mem_set);
 
-bool cp_is_aponly(void);
+extern bool cp_is_aponly(void);
 
 #endif /* _PXA_CP_LOAD_H_ */
