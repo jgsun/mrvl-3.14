@@ -12,7 +12,7 @@
 #define	B52_S5K4H5_H
 
 #include <media/b52-sensor.h>
-
+#include <media/b52_api.h>
 #define OTP_DRV_START_ADDR  0x7220
 #define OTP_DRV_INFO_GROUP_COUNT  3
 #define OTP_DRV_INFO_SIZE  5
@@ -141,9 +141,9 @@ struct regval_tab S5K4H5_res_init[] = {
 	{0x0310, 0x01},
 	{0x3C1A, 0xEC},
 	{0x0340, 0x09},
-	{0x0341, 0xB6},
-	{0x0342, 0x0E},
-	{0x0343, 0xAA},
+	{0x0341, 0xf0},
+	{0x0342, 0x0e},
+	{0x0343, 0x68},
 	{0x0344, 0x00},
 	{0x0345, 0x08},
 	{0x0346, 0x00},
@@ -170,7 +170,9 @@ struct regval_tab S5K4H5_res_init[] = {
 	{0x0203, 0xE2},
 	{0x0200, 0x0C},
 	{0x0201, 0x98},
-	{0x0101, 0x00},
+	{0x0101, 0x03},
+	{0x0204, 0x00},
+	{0x0205, 0xf0},
 
 
 };
@@ -180,7 +182,12 @@ struct regval_tab S5K4H5_fmt_raw10[] = {
 struct regval_tab S5K4H5_res_720P[] = {
 
 };
+
 struct regval_tab S5K4H5_res_8M[] = {
+
+};
+
+struct regval_tab S5K4H5_res_video[] = {
 
 };
 
@@ -192,7 +199,7 @@ struct regval_tab S5K4H5_id[] = {
 };
 struct regval_tab  S5K4H5_vts[] = {
 	{0x0340, 0x09, 0xff},
-	{0x0341, 0xb6, 0xff},
+	{0x0341, 0xf0, 0xff},
 };
 struct regval_tab  S5K4H5_stream_on[] = {
 	{0x0100, 0x01, 0xff},
@@ -201,12 +208,12 @@ struct regval_tab  S5K4H5_stream_off[] = {
 	{0x0100, 0x00, 0xff},
 };
 struct regval_tab  S5K4H5_expo[] = {
-	{0x0202, 0x04, 0xff},
-	{0x0203, 0xe2, 0xff},
+	{0x0202, 0x09, 0xff},
+	{0x0203, 0xf0, 0xff},
 };
 struct regval_tab S5K4H5_frationalexp[] = {
 	{0x0200, 0x0e, 0xff},
-	{0x0201, 0xaa, 0xff},
+	{0x0201, 0x68, 0xff},
 };
 struct regval_tab  S5K4H5_ag[] = {
 	{0x0204, 0x00, 0xff},
@@ -246,6 +253,8 @@ static int ev_bias_offset[] = {
 #define N_S5K4H5_HFLIP ARRAY_SIZE(S5K4H5_hflip)
 #define N_S5K4H5_STREAM_ON ARRAY_SIZE(S5K4H5_stream_on)
 #define N_S5K4H5_STREAM_OFF ARRAY_SIZE(S5K4H5_stream_off)
+#define N_S5K4H5_video ARRAY_SIZE(S5K4H5_res_video)
+
 struct b52_sensor_mbus_fmt S5K4H5_fmt = {
 	.mbus_code	= V4L2_MBUS_FMT_SGRBG10_1X10,
 	.colorspace	= V4L2_COLORSPACE_SRGB,
@@ -258,14 +267,29 @@ struct b52_sensor_resolution S5K4H5_res[] = {
 	[0] = {
 		 .width = 3264,
 		 .height = 2448,
-		 .hts = 0x0eaa,
-		 .min_vts = 0x09b6,
+		 .hts = 0x0e68,
+		 .min_vts = 0x09f0,
+		 .sensor_mode = SENSOR_PREVIEW_MODE,
 		 .prop = SENSOR_RES_BINING1,
 		 .regs = {
 			.tab = S5K4H5_res_8M,
 			.num = N_S5K4H5_8M,
 		},
 	},
+
+	[1] = {
+		 .width = 3264,
+		 .height = 2448,
+		 .hts = 0x0e68,
+		 .min_vts = 0x09b6,
+		 .sensor_mode = SENSOR_VIDEO_MODE,
+		 .prop = SENSOR_RES_BINING1,
+		 .regs = {
+			.tab = S5K4H5_res_video,
+			.num = N_S5K4H5_video,
+		},
+	},
+
 };
 
 static struct b52_sensor_module S5K4H5_SSG = {
@@ -300,7 +324,7 @@ struct b52_sensor_data b52_s5k4h5 = {
 	.mbus_fmt = &S5K4H5_fmt,
 	.num_mbus_fmt = 1,
 	.res = S5K4H5_res,
-	.num_res = 1,
+	.num_res = 2,
 	.streamon = {
 		.tab = S5K4H5_stream_on,
 		.num = N_S5K4H5_STREAM_ON,
@@ -313,12 +337,12 @@ struct b52_sensor_data b52_s5k4h5 = {
 		.numerator = 100,
 		.denominator = 0x10,
 	},
-	.vts_range = {0x09b6, 0x7fff},
+	.vts_range = {0x09f0, 0x7fff},
 	.gain_range = {
 		[B52_SENSOR_AG] = {0x0010, 0x00ff},
 		[B52_SENSOR_DG] = {0x0010, 0x0010},
 	},
-	.expo_range = {0x0004, 0x09b6},
+	.expo_range = {0x0004, 0x09f0},
 	.frationalexp_range = {0x00000, 0x11a0},
 	.focus_range = {0x0010, 0x03ff},
 	.vts_reg = {

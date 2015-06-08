@@ -247,6 +247,14 @@ enum B52_flash_type {
 #define V4L2_CID_SENSOR_OTP_CONTROL_WB	0x01
 #define V4L2_CID_SENSOR_OTP_CONTROL_LENC	0x02
 
+/*
+ * Sensor mode, userspace control to match resolution sensor setting
+ */
+#define NORMAL_STATUS 0
+#define VIDEO_TO_NORMAL 1
+#define NORMAL_TO_VIDEO 2
+#define VIDEO_TO_CALL 3
+
 /* B52 component names */
 #define B52_IDI1_NAME		"b52isd-IDI1"
 #define B52_IDI2_NAME		"b52isd-IDI2"
@@ -311,6 +319,8 @@ enum B52_flash_type {
 	(V4L2_CID_CAMERA_CLASS_BASE + 0x1012)
 #define V4L2_CID_PRIVATE_FLASH_DURATION \
 	(V4L2_CID_CAMERA_CLASS_BASE + 0x1013)
+#define V4L2_CID_PRIVATE_B52_VIDEO_MODE \
+	(V4L2_CID_CAMERA_CLASS_BASE + 0x1014)
 #define V4L2_PLANE_SIGNATURE_PIPELINE_META	\
 	v4l2_fourcc('M', 'E', 'T', 'A')
 #define V4L2_PLANE_SIGNATURE_PIPELINE_INFO	\

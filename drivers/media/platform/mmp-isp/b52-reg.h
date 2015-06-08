@@ -187,6 +187,11 @@ extern void b52isp_set_ddr_threshold(struct work_struct *work, int up);
 #define DATA_GGAIN            (DATA_BUF_START + 0x234)
 #define DATA_RGAIN            (DATA_BUF_START + 0x236)
 
+/*VTS apply to sensor*/
+#define VTS_SYNC_TO_SENSOR            (0x3303d)
+#define ENABLE_SYNC		(0x01)
+#define DISABLE_SYNC		(0x00)
+
 /* CMD set registers */
 #define CMD_REG0            (0x63900)
 #define CMD_REG1            (CMD_REG0 + 0x1)

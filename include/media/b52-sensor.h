@@ -86,6 +86,14 @@ enum b52_sensor_res_prop {
 	SENSOR_RES_MAX,
 };
 
+/*sensor mode*/
+enum b52_sensor_mode {
+	SENSOR_NORMAL_MODE = 0,
+	SENSOR_PREVIEW_MODE,
+	SENSOR_VIDEO_MODE,
+	SENSOR_CAPTURE_MODE,
+};
+
 /*HB >= 7% one line length, unit pixel */
 /*not include exposure, gain and VTS cfg*/
 struct b52_sensor_resolution {
@@ -93,6 +101,7 @@ struct b52_sensor_resolution {
 	u32 height;
 	u32 hts;
 	u32 min_vts;
+	enum b52_sensor_mode sensor_mode;
 	enum b52_sensor_res_prop prop;
 	struct b52_sensor_regs regs;
 };

@@ -27,7 +27,11 @@
 #include "plat_cam.h"
 
 static int otp_ctrl = -1;
+static enum b52_sensor_mode s_mode;
 module_param(otp_ctrl, int, 0644);
+
+static const struct v4l2_ctrl_ops b52_ctrl_ops;
+
 /* supported controls */
 static struct v4l2_queryctrl sensor_qctrl[] = {
 	{
@@ -1402,10 +1406,14 @@ static int b52_sensor_set_fmt(struct v4l2_subdev *sd,
 	mf->code = b52_sensor_get_real_mbus(sd, data->mbus_fmt[i].mbus_code);
 	mf->colorspace = data->mbus_fmt[i].colorspace;
 
-	for (j = 0; j < data->num_res; j++)
-		if (mf->width == data->res[j].width &&
+	for (j = 0; j < data->num_res; j++) {
+		if (((s_mode != 0) ? (data->res[j].sensor_mode == s_mode) : 1) &&
+			mf->width == data->res[j].width &&
 			mf->height == data->res[j].height)
 			break;
+	}
+
+	s_mode = SENSOR_NORMAL_MODE;
 
 	if (j >= data->num_res) {
 		pr_info("%s: frame size not match\n", __func__);
@@ -1893,6 +1901,35 @@ static struct v4l2_ctrl_config b52_sensor_otp_ctrl_cfg = {
 	.def = V4L2_CID_SENSOR_OTP_CONTROL_WB | V4L2_CID_SENSOR_OTP_CONTROL_LENC,
 };
 
+static int b52_s_ctrl(struct v4l2_ctrl *ctrl)
+{
+	int ret = 0;
+
+	switch (ctrl->id) {
+	case V4L2_CID_PRIVATE_B52_VIDEO_MODE:
+		s_mode = ctrl->val;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return ret;
+}
+static const struct v4l2_ctrl_ops b52_ctrl_ops = {
+	.s_ctrl = b52_s_ctrl,
+};
+
+static struct v4l2_ctrl_config b52_ctrl_video_mode_cfg = {
+	.ops = &b52_ctrl_ops,
+	.id = V4L2_CID_PRIVATE_B52_VIDEO_MODE,
+	.name = "video mode",
+	.type = V4L2_CTRL_TYPE_INTEGER,
+	.min = VIDEO_TO_NORMAL,
+	.max = VIDEO_TO_CALL,
+	.step = 1,
+	.def = VIDEO_TO_NORMAL,
+};
+
 static int b52_sensor_init_ctrls(struct b52_sensor *sensor)
 {
 	int i;
@@ -1966,6 +2003,7 @@ static int b52_sensor_init_ctrls(struct b52_sensor *sensor)
 
 	v4l2_ctrl_new_custom(&ctrls->ctrl_hdl, &b52_sensor_otp_ctrl_cfg, NULL);
 
+	v4l2_ctrl_new_custom(&ctrls->ctrl_hdl, &b52_ctrl_video_mode_cfg, NULL);
 	sensor->sd.ctrl_handler = &ctrls->ctrl_hdl;
 
 	return ctrls->ctrl_hdl.error;

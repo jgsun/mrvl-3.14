@@ -2188,6 +2188,8 @@ static int b52_cmd_set_fmt(struct b52isp_cmd *cmd)
 
 	b52_writeb(CMD_REG8, (u8)cmd->enable_map);
 
+	b52_writeb(VTS_SYNC_TO_SENSOR, ENABLE_SYNC);
+
 	b52_cfg_input(&cmd->src_fmt, cmd->src_type);
 	b52_cfg_pixel_order(&cmd->src_fmt, cmd->path);
 	if (!(flags & BIT(CMD_FLAG_MS)))
@@ -2213,6 +2215,8 @@ static int b52_cmd_set_fmt(struct b52isp_cmd *cmd)
 		b52_dump_isp_cnt(); /* dump ISP cnt to check */
 		return ret;
 	}
+
+	b52_writeb(VTS_SYNC_TO_SENSOR, DISABLE_SYNC);
 
 	if (!(flags & BIT(CMD_FLAG_MS)) &&
 		(flags & BIT(CMD_FLAG_STREAM_OFF)))
