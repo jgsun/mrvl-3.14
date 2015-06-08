@@ -1,3 +1,16 @@
+/*
+ *  include/linux/clk/mmpdcstat.h
+ *
+ *  Author:	Liang Chen <chl@marvell.com>
+ *  Copyright:	(C) 2013 Marvell International Ltd.
+ *
+ * This software program is licensed subject to the GNU General Public License
+ * (GPL).Version 2,June 1991, available at http://www.fsf.org/copyleft/gpl.html
+ *
+ * (C) Copyright 2012 Marvell International Ltd.
+ * All Rights Reserved
+ */
+
 #ifndef __MMPDCSTAT_H
 #define __MMPDCSTAT_H
 
@@ -22,6 +35,7 @@ enum lowpower_mode {
 	LPM_D2 = POWER_MODE_UDR_VCTCXO,
 	LPM_D2_UDR = POWER_MODE_UDR,
 	MAX_LPM_INDEX = 15,
+	LPM_C0 = MAX_LPM_INDEX,
 };
 #else
 enum lowpower_mode {
@@ -33,6 +47,7 @@ enum lowpower_mode {
 	LPM_D2,
 	LPM_D2_UDR,
 	MAX_LPM_INDEX = 15,
+	LPM_C0 = MAX_LPM_INDEX,
 };
 #endif
 
@@ -53,11 +68,11 @@ struct op_dcstat_info {
 	u64 pwr_off_time;		/* ns */
 
 	/* used for ddr ticks ratio */
-	long ddr_glob_ratio;
-	long ddr_idle_ratio;
-	long ddr_busy_ratio;
-	long ddr_data_ratio;
-	long ddr_util_ratio;
+	unsigned int ddr_glob_ratio;
+	unsigned int ddr_idle_ratio;
+	unsigned int ddr_busy_ratio;
+	unsigned int ddr_data_ratio;
+	unsigned int ddr_util_ratio;
 
 };
 
@@ -120,6 +135,7 @@ enum clk_stat_msg {
 };
 
 struct idle_dcstat_info {
+	bool stat_start;
 	u64 all_idle_start;
 	u64 all_idle_end;
 	u64 total_all_idle;
