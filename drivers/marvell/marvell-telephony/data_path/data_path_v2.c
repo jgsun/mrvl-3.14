@@ -614,37 +614,79 @@ static inline void dp_broadcast_msg(struct data_path *dp, int status)
 	}
 }
 
-static int debugfs_show_stat(struct seq_file *s, void *data)
+static ssize_t read_stat(struct file *file, char __user *ubuf,
+	size_t count, loff_t *ppos)
 {
-	struct data_path *dp = s->private;
-	int ret = 0;
+	struct data_path *dp = file->private_data;
+	struct page *page;
+	char *buf;
+	char *p;
+	int ret;
+	int len;
 	int i;
 
-	ret += seq_printf(s, "rx_bytes\t: %lu\n",
+	page = alloc_page(GFP_KERNEL);
+	if (!page) {
+		pr_err("%s: cannot get memory\n", __func__);
+		return -ENOMEM;
+	}
+
+	buf = page_address(page);
+	p = buf;
+	p += sprintf(p, "rx_bytes\t: %lu\n",
 		(unsigned long)dp->stat.rx_bytes);
-	ret += seq_printf(s, "rx_packets\t: %lu\n",
+	p += sprintf(p, "rx_packets\t: %lu\n",
 		(unsigned long)dp->stat.rx_packets);
-	ret += seq_printf(s, "rx_interrupts\t: %lu\n",
+	p += sprintf(p, "rx_interrupts\t: %lu\n",
 		(unsigned long)dp->stat.rx_interrupts);
-	ret += seq_printf(s, "rx_sched_cnt\t: %lu\n",
+	p += sprintf(p, "rx_sched_cnt\t: %lu\n",
 		(unsigned long)dp->stat.rx_sched_cnt);
 
-	ret += seq_printf(s, "tx_bytes\t: %lu\n",
+	p += sprintf(p, "tx_bytes\t: %lu\n",
 		(unsigned long)dp->stat.tx_bytes);
 
-	ret += seq_puts(s, "tx_packets\t:");
+	p += sprintf(p, "tx_packets\t:");
 	for (i = 0; i < PSD_QUEUE_CNT; ++i)
-		ret += seq_printf(s, " %lu",
+		p += sprintf(p, " %lu",
 			(unsigned long)dp->stat.tx_packets[i]);
-	ret += seq_puts(s, "\n");
+	p += sprintf(p, "\n");
 
-	ret += seq_printf(s, "tx_interrupts\t: %lu\n",
+	p += sprintf(p, "tx_interrupts\t: %lu\n",
 		(unsigned long)dp->stat.tx_interrupts);
+
+	len = strlen(buf);
+	buf[len] = '\n';
+
+	ret = simple_read_from_buffer(ubuf, count, ppos, buf, len + 1);
+
+	__free_page(page);
 
 	return ret;
 }
 
-TEL_DEBUG_ENTRY(stat);
+static ssize_t write_stat(struct file *file, const char __user *ubuf,
+	size_t count, loff_t *ppos)
+{
+	struct data_path *dp = file->private_data;
+	unsigned val;
+	int ret;
+
+	ret = kstrtouint_from_user(ubuf, count, 0, &val);
+	if (ret)
+		return ret;
+
+	if (!val)
+		memset(&dp->stat, 0, sizeof(dp->stat));
+
+	return count;
+}
+
+static const struct file_operations fops_stat = {
+	.read =		read_stat,
+	.write =	write_stat,
+	.open =		simple_open,
+	.llseek =	default_llseek,
+};
 
 static ssize_t read_copy_on_rx(struct file *file, char __user *ubuf,
 	size_t count, loff_t *ppos)
