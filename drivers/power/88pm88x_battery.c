@@ -171,9 +171,7 @@ struct pm88x_battery_info {
 	struct iio_channel	*chan[MAX_CHAN];
 	struct temp_vs_ohm	*temp_ohm_table;
 	int			temp_ohm_table_size;
-	int			zero_degree_ohm;
 
-	int			abs_lowest_temp;
 	int			t1;
 	int			t2;
 	int			t3;
@@ -2068,7 +2066,7 @@ static struct pm88x_irq_desc {
 static int pm88x_battery_dt_init(struct device_node *np,
 				 struct pm88x_battery_info *info)
 {
-	int ret, size, rows, i, ohm, temp,  index = 0;
+	int ret, size, rows, i, index = 0;
 	const __be32 *values;
 
 	if (of_get_property(np, "bat-ntc-support", NULL))
@@ -2120,11 +2118,6 @@ static int pm88x_battery_dt_init(struct device_node *np,
 	if (ret)
 		return ret;
 
-	ret = of_property_read_u32(np, "zero-degree-ohm",
-				   &info->zero_degree_ohm);
-	if (ret)
-		return ret;
-
 	values = of_get_property(np, "ntc-table", &size);
 	if (!values) {
 		pr_warn("No NTC table for %s\n", np->name);
@@ -2141,27 +2134,15 @@ static int pm88x_battery_dt_init(struct device_node *np,
 	info->temp_ohm_table_size = rows;
 
 	for (i = 0; i < rows; i++) {
-		ohm = be32_to_cpup(values + index++);
-		info->temp_ohm_table[i].ohm = ohm;
-
-		temp = be32_to_cpup(values + index++);
-		if (ohm > info->zero_degree_ohm)
-			info->temp_ohm_table[i].temp = 0 - temp;
-		else
-			info->temp_ohm_table[i].temp = temp;
+		info->temp_ohm_table[i].ohm = be32_to_cpup(values + index++);
+		info->temp_ohm_table[i].temp = be32_to_cpup(values + index++);
 	}
 
 	/* ignore if fails */
-	ret = of_property_read_u32(np, "abs-lowest-temp", &info->abs_lowest_temp);
 	ret = of_property_read_u32(np, "t1-degree", &info->t1);
 	ret = of_property_read_u32(np, "t2-degree", &info->t2);
 	ret = of_property_read_u32(np, "t3-degree", &info->t3);
 	ret = of_property_read_u32(np, "t4-degree", &info->t4);
-
-	info->t1 -= info->abs_lowest_temp;
-	info->t2 -= info->abs_lowest_temp;
-	info->t3 -= info->abs_lowest_temp;
-	info->t4 -= info->abs_lowest_temp;
 
 	ret = of_property_read_u32(np, "times-in-minus-ten", &info->times_in_minus_ten);
 	ret = of_property_read_u32(np, "offset-in-minus-ten", &info->offset_in_minus_ten);
@@ -2243,7 +2224,6 @@ static int pm88x_battery_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	/* initialize the property in case the are missing in device tree */
-	info->abs_lowest_temp = 0;
 	info->t1 = 0;
 	info->t2 = 15;
 	info->t3 = 25;
