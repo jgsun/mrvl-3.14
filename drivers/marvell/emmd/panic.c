@@ -85,9 +85,10 @@ void dump_task_info(void)
 	pr_info("-----------------------------------------------------------------------------------\n");
 }
 
+int emmd_enable = 1;
 void set_emmd_indicator(void)
 {
-	if (emmd_page)
+	if (emmd_page && emmd_enable)
 		emmd_page->indicator = 0x454d4d44;
 }
 
