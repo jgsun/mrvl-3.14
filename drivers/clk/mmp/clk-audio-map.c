@@ -643,6 +643,13 @@ static int map_32k_apll_enable(void *dspaux_base, u32 srate)
 		return -EBUSY;
 	}
 
+#ifdef CONFIG_SND_MMP_MAP_V2
+	/*
+	 * Since 32k APLL changed for always listening,
+	 * need wait 80us after PLL_LOCK changed to 1.
+	 */
+	udelay(80);
+#endif
 	return 0;
 }
 

@@ -365,6 +365,12 @@ static int map_32k_apll_enable(struct map_private *map_priv)
 		return -EBUSY;
 	}
 
+	/*
+	 * Since 32k APLL changed for always listening,
+	 * need wait 80us after PLL_LOCK changed to 1.
+	 */
+	udelay(80);
+
 	return 0;
 }
 
