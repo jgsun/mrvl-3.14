@@ -1101,6 +1101,11 @@
 		lpm-qos =  <PM_QOS_CPUIDLE_BLOCK_AXI>;
 	};
 
+	tdm {
+		compatible = "marvell,pxa-tdm";
+		status = "okay";
+	};
+
 	iml: iml@7ffffe0{
 		compatible = "marvell,mmp-iml";
 		reg = <0x07ffffe0 0x10>, <0xd403d200 0x10>, <0xd403b038 0x10>;
