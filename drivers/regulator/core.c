@@ -2504,6 +2504,16 @@ int regulator_set_voltage(struct regulator *regulator, int min_uV, int max_uV)
 EXPORT_SYMBOL_GPL(regulator_set_voltage);
 
 /**
+ * regulator_set_voltage_max - set regulator output voltage, use the max value
+ * in the consumer list
+ */
+int regulator_set_voltage_max(struct regulator *regulator, int min_uV, int max_uV)
+{
+	return regulator_set_voltage_internal(regulator, min_uV, max_uV, true);
+}
+EXPORT_SYMBOL_GPL(regulator_set_voltage_max);
+
+/**
  * regulator_set_voltage_time - get raise/fall time
  * @regulator: regulator source
  * @old_uV: starting voltage in microvolts

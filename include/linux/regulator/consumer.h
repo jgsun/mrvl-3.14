@@ -201,6 +201,7 @@ unsigned int regulator_get_linear_step(struct regulator *regulator);
 int regulator_set_suspend_voltage(struct regulator *regulator, int uV);
 int regulator_set_suspend_mode(struct regulator *regulator, unsigned int mode);
 int regulator_set_voltage(struct regulator *regulator, int min_uV, int max_uV);
+int regulator_set_voltage_max(struct regulator *regulator, int min_uV, int max_uV);
 int regulator_set_voltage_time(struct regulator *regulator,
 			       int old_uV, int new_uV);
 int regulator_get_voltage(struct regulator *regulator);
@@ -395,6 +396,12 @@ static inline void regulator_bulk_free(int num_consumers,
 
 static inline int regulator_set_voltage(struct regulator *regulator,
 					int min_uV, int max_uV)
+{
+	return 0;
+}
+
+static inline int regulator_set_voltage_max(struct regulator *regulator,
+					    int min_uV, int max_uV)
 {
 	return 0;
 }
