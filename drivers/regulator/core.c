@@ -193,9 +193,10 @@ static int regulator_check_voltage(struct regulator_dev *rdev,
 
 /* Make sure we select a voltage that suits the needs of all
  * regulator consumers
+ * select the max voltage in from the consumer list is use_max is true
  */
 static int regulator_check_consumers(struct regulator_dev *rdev,
-				     int *min_uV, int *max_uV)
+				     int *min_uV, int *max_uV, bool use_max)
 {
 	struct regulator *regulator;
 
@@ -207,8 +208,14 @@ static int regulator_check_consumers(struct regulator_dev *rdev,
 		if (!regulator->min_uV && !regulator->max_uV)
 			continue;
 
-		if (*max_uV > regulator->max_uV)
-			*max_uV = regulator->max_uV;
+		if (use_max) {
+			if (*max_uV < regulator->max_uV)
+				*max_uV = regulator->max_uV;
+		} else {
+			if (*max_uV > regulator->max_uV)
+				*max_uV = regulator->max_uV;
+		}
+
 		if (*min_uV < regulator->min_uV)
 			*min_uV = regulator->min_uV;
 	}
@@ -2420,25 +2427,8 @@ static int _regulator_do_set_voltage(struct regulator_dev *rdev,
 	return ret;
 }
 
-/**
- * regulator_set_voltage - set regulator output voltage
- * @regulator: regulator source
- * @min_uV: Minimum required voltage in uV
- * @max_uV: Maximum acceptable voltage in uV
- *
- * Sets a voltage regulator to the desired output voltage. This can be set
- * during any regulator state. IOW, regulator can be disabled or enabled.
- *
- * If the regulator is enabled then the voltage will change to the new value
- * immediately otherwise if the regulator is disabled the regulator will
- * output at the new voltage when enabled.
- *
- * NOTE: If the regulator is shared between several devices then the lowest
- * request voltage that meets the system constraints will be used.
- * Regulator system constraints must be set for this regulator before
- * calling this function otherwise this call will fail.
- */
-int regulator_set_voltage(struct regulator *regulator, int min_uV, int max_uV)
+static int regulator_set_voltage_internal(struct regulator *regulator,
+					  int min_uV, int max_uV, bool use_max)
 {
 	struct regulator_dev *rdev = regulator->rdev;
 	int ret = 0;
@@ -2471,7 +2461,7 @@ int regulator_set_voltage(struct regulator *regulator, int min_uV, int max_uV)
 	regulator->min_uV = min_uV;
 	regulator->max_uV = max_uV;
 
-	ret = regulator_check_consumers(rdev, &min_uV, &max_uV);
+	ret = regulator_check_consumers(rdev, &min_uV, &max_uV, use_max);
 	if (ret < 0)
 		goto out2;
 
@@ -2487,6 +2477,29 @@ out2:
 	regulator->max_uV = old_max_uV;
 	mutex_unlock(&rdev->mutex);
 	return ret;
+}
+
+/**
+ * regulator_set_voltage - set regulator output voltage
+ * @regulator: regulator source
+ * @min_uV: Minimum required voltage in uV
+ * @max_uV: Maximum acceptable voltage in uV
+ *
+ * Sets a voltage regulator to the desired output voltage. This can be set
+ * during any regulator state. IOW, regulator can be disabled or enabled.
+ *
+ * If the regulator is enabled then the voltage will change to the new value
+ * immediately otherwise if the regulator is disabled the regulator will
+ * output at the new voltage when enabled.
+ *
+ * NOTE: If the regulator is shared between several devices then the lowest
+ * request voltage that meets the system constraints will be used.
+ * Regulator system constraints must be set for this regulator before
+ * calling this function otherwise this call will fail.
+ */
+int regulator_set_voltage(struct regulator *regulator, int min_uV, int max_uV)
+{
+	return regulator_set_voltage_internal(regulator, min_uV, max_uV, false);
 }
 EXPORT_SYMBOL_GPL(regulator_set_voltage);
 
@@ -2575,15 +2588,7 @@ int regulator_set_voltage_time_sel(struct regulator_dev *rdev,
 }
 EXPORT_SYMBOL_GPL(regulator_set_voltage_time_sel);
 
-/**
- * regulator_sync_voltage - re-apply last regulator output voltage
- * @regulator: regulator source
- *
- * Re-apply the last configured voltage.  This is intended to be used
- * where some external control source the consumer is cooperating with
- * has caused the configured voltage to change.
- */
-int regulator_sync_voltage(struct regulator *regulator)
+static int regulator_sync_voltage_internal(struct regulator *regulator, bool use_max)
 {
 	struct regulator_dev *rdev = regulator->rdev;
 	int ret, min_uV, max_uV;
@@ -2610,7 +2615,7 @@ int regulator_sync_voltage(struct regulator *regulator)
 	if (ret < 0)
 		goto out;
 
-	ret = regulator_check_consumers(rdev, &min_uV, &max_uV);
+	ret = regulator_check_consumers(rdev, &min_uV, &max_uV, use_max);
 	if (ret < 0)
 		goto out;
 
@@ -2619,6 +2624,19 @@ int regulator_sync_voltage(struct regulator *regulator)
 out:
 	mutex_unlock(&rdev->mutex);
 	return ret;
+}
+
+/**
+ * regulator_sync_voltage - re-apply last regulator output voltage
+ * @regulator: regulator source
+ *
+ * Re-apply the last configured voltage.  This is intended to be used
+ * where some external control source the consumer is cooperating with
+ * has caused the configured voltage to change.
+ */
+int regulator_sync_voltage(struct regulator *regulator)
+{
+	return regulator_sync_voltage_internal(regulator, false);
 }
 EXPORT_SYMBOL_GPL(regulator_sync_voltage);
 
