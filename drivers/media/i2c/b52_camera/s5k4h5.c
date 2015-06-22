@@ -129,10 +129,12 @@ static void S5K4H5_eflash_write_reg(struct v4l2_subdev *sd, short reg, char val)
 }
 #define ER BIT(7)
 #define PG BIT(1)
+#define MA BIT(0)
 #define EFLSH_PAGE_SIZE 1024
-static void S5K4H5_erase_page(struct v4l2_subdev *sd, char page)
+static int S5K4H5_erase_page(struct v4l2_subdev *sd, char page)
 {
 	char val =  0;
+	char wait_count = 0;
 	const struct b52_sensor_i2c_attr attr = {
 		.reg_len = I2C_8BIT,
 		.val_len = I2C_8BIT,
@@ -151,13 +153,92 @@ static void S5K4H5_erase_page(struct v4l2_subdev *sd, char page)
 	tab.val = 0xee;
 	tab.mask = 0xff;
 	/* wait for last step over */
-	while (S5K4H5_vcm_read_reg(sd, 0x05) & 0x02)
+	do {
+		if (wait_count > 3) {
+			pr_err("eflash time out\n");
+			return -EIO;
+		}
 		usleep_range(100, 300);
+		wait_count++;
+	} while (S5K4H5_vcm_read_reg(sd, 0x05) & 0x02);
+
 	b52_cmd_write_i2c(&data);
 	/* wait for last step over */
-	while (S5K4H5_vcm_read_reg(sd, 0x05) & 0x02)
-		usleep_range(2500, 3000);
+	wait_count =  0;
+	do {
+		if (wait_count > 3) {
+			pr_err("eflash erase time out\n");
+			return -EIO;
+		}
+		usleep_range(1000, 3000);
+		wait_count++;
+	} while (S5K4H5_vcm_read_reg(sd, 0x05) & 0x02);
+	return 0;
 }
+
+static int S5K4H5_erase_chip(struct v4l2_subdev *sd)
+{
+	char val =  0;
+	char wait_count = 0;
+	const struct b52_sensor_i2c_attr attr = {
+		.reg_len = I2C_8BIT,
+		.val_len = I2C_8BIT,
+		.addr = 0x58,
+	};
+	struct b52_cmd_i2c_data data;
+	struct regval_tab tab;
+	struct b52_sensor *sensor = to_b52_sensor(sd);
+	data.attr = &attr;
+	data.tab = &tab;
+	data.num = 1;
+	data.pos = sensor->pos;
+
+	val = ER | MA;
+	tab.reg = val;
+	tab.val = 0xee;
+	tab.mask = 0xff;
+	/* wait for last step over */
+	do {
+		if (wait_count > 3) {
+			pr_err("eflash time out\n");
+			return -EIO;
+		}
+		msleep(20);
+		wait_count++;
+	} while (S5K4H5_vcm_read_reg(sd, 0x05) & 0x02);
+
+	b52_cmd_write_i2c(&data);
+	/* wait for last step over */
+	wait_count =  0;
+	do {
+		if (wait_count > 3) {
+			pr_err("eflash erase time out\n");
+			return -EIO;
+		}
+		msleep(20);
+		wait_count++;
+	} while (S5K4H5_vcm_read_reg(sd, 0x05) & 0x02);
+	return 0;
+}
+
+static int S5K4H5_otp_erase(struct v4l2_subdev *sd,
+							char page, char len)
+{
+	int i;
+	if (page < 0 || page > 8)
+		return -EIO;
+	if (len < 0 || page + len > 8)
+		return -EIO;
+	if (len == 8)
+		return S5K4H5_erase_chip(sd);
+	for (i = 0; i < len; i++)
+		if (S5K4H5_erase_page(sd, page + i) < 0) {
+			pr_err("S5K4h5 page erase erorr at page:%d\n", page + i);
+			return -EIO;
+		}
+	return 0;
+}
+
 static int S5K4H5_otp_write(struct v4l2_subdev *sd,
 		unsigned int offset, char *buffer, int len)
 {
