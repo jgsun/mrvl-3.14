@@ -1696,9 +1696,11 @@ struct sensor_otp32 {
 	compat_caddr_t	otp_data;
 	compat_caddr_t	module_data;
 	compat_caddr_t	full_otp;
-	__u16   full_otp_len;
-	__u16   full_otp_offset;
+	__u16	full_otp_len;
+	__u16	full_otp_offset;
 	compat_caddr_t	read_otp_len;
+	__u8	erase_otp_len;
+	__u8	erase_otp_base;
 };
 
 #define VIDIOC_PRIVATE_B52ISP_SENSOR_OTP32 \
@@ -1720,7 +1722,9 @@ static int get_sensor_otp32(struct sensor_otp *kp,
 			get_user(kp->module_data_len, &up->module_data_len) ||
 			get_user(kp->full_otp_offset, &up->full_otp_offset) ||
 			get_user(kp->full_otp_len, &up->full_otp_len) ||
-			get_user(kp->crc_status, &up->crc_status))
+			get_user(kp->crc_status, &up->crc_status) ||
+			get_user(kp->erase_otp_len, &up->erase_otp_len) ||
+			get_user(kp->erase_otp_base, &up->erase_otp_base))
 		return -EFAULT;
 	kp->otp_data = compat_ptr(tmp1);
 	kp->module_data = compat_ptr(tmp2);

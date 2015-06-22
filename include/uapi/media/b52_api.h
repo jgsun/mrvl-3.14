@@ -94,6 +94,8 @@ struct sensor_otp {
 	__u16			full_otp_offset;
 	__u16			full_otp_len;
 	__u16			*read_otp_len;
+	__u8			erase_otp_len;
+	__u8			erase_otp_base;
 };
 
 enum type_aeag {
