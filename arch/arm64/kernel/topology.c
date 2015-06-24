@@ -349,6 +349,48 @@ void __init arch_get_fast_and_slow_cpus(struct cpumask *fast,
 	cpumask_clear(slow);
 }
 
+static int plat_nr_clst;
+static struct cpu_clst_info clst_info[MAX_NR_CLST];
+
+static void init_clst_info(struct cpumask cpu_mask, int is_big)
+{
+	int index;
+	int cpu;
+	int first_cpu = -1;
+	int nr_cpu = 0;
+
+	for_each_cpu_mask(cpu, cpu_mask) {
+		if (first_cpu == -1)
+			first_cpu = cpu;
+		nr_cpu++;
+	}
+
+	/*
+	 * Below line should work for two clusters with core numbers:
+	 * 4/x. x from 1 to 4.
+	 * Anyway, let's don't make things complicated here on Helan3.
+	 */
+	index = first_cpu / 4;
+	clst_info[index].first_cpu = first_cpu;
+	clst_info[index].nr_cpu = nr_cpu;
+	clst_info[index].clst_index = index;
+	clst_info[index].is_big = is_big;
+	plat_nr_clst++;
+}
+
+struct cpu_clst_info *get_clst_info(int index)
+{
+	struct cpu_clst_info *temp;
+
+	if (index >= 0 && index < plat_nr_clst) {
+		temp = clst_info;
+		temp += index;
+		return temp;
+	}
+	pr_err("%s: invalid cluster index, %d\n", __func__, index);
+	return NULL;
+}
+
 struct cpumask hmp_slow_cpu_mask;
 
 void __init arch_get_hmp_domains(struct list_head *hmp_domains_list)
@@ -369,12 +411,14 @@ void __init arch_get_hmp_domains(struct list_head *hmp_domains_list)
 		cpumask_copy(&domain->possible_cpus, &hmp_slow_cpu_mask);
 		cpumask_and(&domain->cpus, cpu_online_mask, &domain->possible_cpus);
 		list_add(&domain->hmp_domains, hmp_domains_list);
+		init_clst_info(hmp_slow_cpu_mask, 0);
 	}
 	domain = (struct hmp_domain *)
 		kmalloc(sizeof(struct hmp_domain), GFP_KERNEL);
 	cpumask_copy(&domain->possible_cpus, &hmp_fast_cpu_mask);
 	cpumask_and(&domain->cpus, cpu_online_mask, &domain->possible_cpus);
 	list_add(&domain->hmp_domains, hmp_domains_list);
+	init_clst_info(hmp_fast_cpu_mask, 1);
 }
 #endif /* CONFIG_SCHED_HMP */
 

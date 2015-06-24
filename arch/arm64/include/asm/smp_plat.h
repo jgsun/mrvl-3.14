@@ -56,4 +56,15 @@ static inline int get_logical_index(u32 mpidr)
 	return -EINVAL;
 }
 
+#define MAX_NR_CLST (2)
+
+struct cpu_clst_info {
+	int is_big;
+	int clst_index;
+	int first_cpu;
+	int nr_cpu;
+};
+
+struct cpu_clst_info *get_clst_info(int clst_index);
+
 #endif /* __ASM_SMP_PLAT_H */
