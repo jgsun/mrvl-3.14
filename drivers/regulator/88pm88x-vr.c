@@ -26,6 +26,11 @@
 #include <linux/regulator/of_regulator.h>
 
 #define PM88X_VR_EN		(0x28)
+#define PM88X_CHG_CONFIG4	(0x2b)
+#define PM88X_VBUS_SW_EN	(1 << 0)
+#define PM88X_OTG_LOG1		(0x47)
+#define PM88X_OTG_UVVBAT	(1 << 0)
+#define PM88X_OTG_SHORT_DET	(1 << 1)
 
 #define PM886_BUCK1_SLP_VOUT	(0xa3)
 #define PM886_BUCK1_SLP_EN	(0xa2)
@@ -40,7 +45,20 @@
 #define PM880_BUCK1B_AUDIO_EN	(0x3f)
 #define PM880_BUCK1B_AUDIO_VOUT (0x3f)
 
-#define PM88X_VR(vreg, ebit, nr)					\
+#define USB_OTG_MIN		(4800) /* mV */
+
+/* 1.367 mV/LSB */
+/*
+ * this should be 1.709mV/LSB. setting to 1.367mV/LSB
+ * as a W/A since there's currently a BUG per JIRA PM886-9
+ * will be refined once fix is available
+ */
+#define PM886A0_VBUS_REG2VOLT(regval)		((regval * 700) >> 9)
+
+/* 1.709 mV/LSB */
+#define PM88X_VBUS_REG2VOLT(regval)		((regval * 875) >> 9)
+
+#define PM88X_VR(vreg, ebit, nr, ebit2)					\
 {									\
 	.desc	= {							\
 		.name	= #vreg,					\
@@ -52,6 +70,9 @@
 		.enable_mask	= 1 << (ebit),				\
 	},								\
 	.page_nr = nr,							\
+	.enable2_reg	= PM88X_CHG_CONFIG4,				\
+	.enable2_mask	= PM88X_VBUS_SW_EN,				\
+	.enable2_off	= ebit2,					\
 }
 
 #define PM88X_BUCK_SLP(_pmic, vreg, ebit, nr, volt_ranges, n_volt)	\
@@ -128,6 +149,8 @@
 #define PM880_BUCK_AUDIO_OF_MATCH(comp, label) \
 	PM88X_BUCK_AUDIO_OF_MATCH(pm880, PM880_ID, comp, label)
 
+static struct pm88x_chip *priv_chip;
+
 static const struct regulator_linear_range buck_slp_volt_range1[] = {
 	REGULATOR_LINEAR_RANGE(600000, 0, 0x4f, 12500),
 	REGULATOR_LINEAR_RANGE(1600000, 0x50, 0x54, 50000),
@@ -140,6 +163,9 @@ static const struct regulator_linear_range buck_audio_volt_range1[] = {
 struct pm88x_vr_info {
 	struct regulator_desc desc;
 	unsigned int page_nr;
+	u8 enable2_reg;
+	u8 enable2_mask;
+	u8 enable2_off;
 };
 
 struct pm88x_buck_slp_info {
@@ -168,10 +194,116 @@ struct pm88x_vr_print {
 	char audio[10];
 };
 
+static void pm88x_vbus_handle_errors(struct regulator_dev *rdev)
+{
+	int val = 0;
+
+	regmap_read(rdev->regmap, PM88X_OTG_LOG1, &val);
+
+	if (val & PM88X_OTG_UVVBAT)
+		dev_err(&rdev->dev, "OTG error: OTG_UVVBAT\n");
+	if (val & PM88X_OTG_SHORT_DET)
+		dev_err(&rdev->dev, "OTG error: OTG_SHORT_DET\n");
+
+	if (val)
+		regmap_write(rdev->regmap, PM88X_OTG_LOG1, val);
+}
+
+static bool pm88x_vbus_volt_is_valid(void)
+{
+	int volt, val, ret;
+	unsigned char buf[2];
+
+	ret = regmap_bulk_read(priv_chip->gpadc_regmap, PM88X_VBUS_MEAS1, buf, 2);
+	if (ret)
+		return ret;
+
+	val = ((buf[0] & 0xff) << 4) | (buf[1] & 0x0f);
+
+	switch (priv_chip->type) {
+	case PM886:
+		if (priv_chip->chip_id == PM886_A0)
+			volt = PM886A0_VBUS_REG2VOLT(val);
+		else
+			volt = PM88X_VBUS_REG2VOLT(val);
+		break;
+	default:
+		volt = PM88X_VBUS_REG2VOLT(val);
+		break;
+	}
+
+	return (volt >= USB_OTG_MIN) ? true : false;
+}
+
+static int pm88x_vr_enable(struct regulator_dev *rdev)
+{
+	struct pm88x_vr_info *info = rdev_get_drvdata(rdev);
+	int ret;
+	bool vbus_sts;
+
+	ret = regulator_enable_regmap(rdev);
+	if (ret < 0)
+		return ret;
+	ret = regmap_update_bits(rdev->regmap, info->enable2_reg, info->enable2_mask,
+				(1 << info->enable2_off));
+	if (ret < 0)
+		return ret;
+
+	/* wait and make sure vbus voltage is valid */
+	usleep_range(10000, 20000);
+
+	/* check if vbus voltage is valid, if not, disable otg */
+	vbus_sts = pm88x_vbus_volt_is_valid();
+	if (!vbus_sts) {
+		dev_err(&rdev->dev, "otg enable failed.");
+		ret = regulator_disable_regmap(rdev);
+		if (ret < 0)
+			return ret;
+		ret = regmap_update_bits(rdev->regmap, info->enable2_reg, info->enable2_mask, 0);
+		if (ret < 0)
+			return ret;
+	}
+
+	pm88x_vbus_handle_errors(rdev);
+
+	return vbus_sts ? ret : -1;
+}
+
+static int pm88x_vr_disable(struct regulator_dev *rdev)
+{
+	struct pm88x_vr_info *info = rdev_get_drvdata(rdev);
+	int ret;
+
+	ret = regulator_disable_regmap(rdev);
+	if (ret < 0)
+		return ret;
+	ret = regmap_update_bits(rdev->regmap, info->enable2_reg, info->enable2_mask, 0);
+	if (ret < 0)
+		return ret;
+
+	/* wait and make sure vbus voltage is valid */
+	usleep_range(10000, 20000);
+	pm88x_vbus_handle_errors(rdev);
+
+	return ret;
+}
+
+static int pm88x_vr_is_enabled(struct regulator_dev *rdev)
+{
+	struct pm88x_vr_info *info = rdev_get_drvdata(rdev);
+	int ret, val1, val2;
+
+	val1 = regulator_is_enabled_regmap(rdev);
+	ret = regmap_read(rdev->regmap, info->enable2_reg, &val2);
+	if (ret < 0)
+		return ret;
+	return val1 && (val2 & info->enable2_mask);
+}
+
 static struct regulator_ops pm88x_virtual_regulator_ops = {
-	.enable = regulator_enable_regmap,
-	.disable = regulator_disable_regmap,
-	.is_enabled = regulator_is_enabled_regmap,
+	.enable = pm88x_vr_enable,
+	.disable = pm88x_vr_disable,
+	.is_enabled = pm88x_vr_is_enabled,
 };
 
 static int pm88x_buck_slp_enable(struct regulator_dev *rdev)
@@ -249,7 +381,7 @@ static struct regulator_ops pm88x_buck_audio_ops = {
 };
 
 static struct pm88x_vr_info pm88x_vr_configs[] = {
-	PM88X_VR(VOTG, 7, 3),
+	PM88X_VR(VOTG, 7, 3, 0),
 };
 
 static struct pm88x_buck_slp_info pm880_buck_slp_configs[] = {
@@ -802,6 +934,7 @@ static int pm88x_virtual_regulator_probe(struct platform_device *pdev)
 	}
 	data->map = nr_to_regmap(chip, info->page_nr);
 	data->chip = chip;
+	priv_chip = chip;
 
 	/* add regulator config */
 	config.dev = &pdev->dev;
