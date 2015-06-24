@@ -292,20 +292,25 @@ get_bdt:
 	if (offset + size > frame->whole.size) {
 		pr_err("m4u: size error: offset %x, sz %x, plane sz %x\n",
 			(u32)offset, (u32)size, (u32)frame->whole.size);
-		return NULL;
+		goto err;
 	}
 
 	if (offset & align_mask_addr) {
 		pr_err("m4u: the offset is not aligned\n");
-		return NULL;
+		goto err;
 	}
 
 	bdt = m4u_frame_to_bdt(frame, offset, size);
-	if (bdt == NULL) {
-		if (frame->ref_map == 0)
-			m4u_release_frame(frame);
-		return NULL;
+	if (!bdt) {
+		pr_err("m4u: unable to get bdt\n");
+		goto err;
 	}
 
 	return bdt;
+
+err:
+	if (frame->ref_map == 0)
+		dma_buf_meta_dettach(dbuf, M4U_DMABUF_META_ID);
+
+	return NULL;
 }
