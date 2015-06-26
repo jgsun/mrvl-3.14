@@ -1975,17 +1975,6 @@ static unsigned int __init pxa1936_round_max_freq(unsigned int freq)
 		return CORE_1p5G;
 }
 
-unsigned int ddr_800M_4x(void)
-{
-	struct ddr_opt *ddr_op_array = lpddr800_op_array;
-	int i = ARRAY_SIZE(lpddr800_op_array) - 1;
-	if ((ddr_op_array[i].dclk == 797)
-		&& (ddr_op_array[i].mode_4x_en == 1))
-		return 1;
-
-	return 0;
-}
-
 static struct ddr_dfc_info ddrdfcinfo;
 
 void find_ddr_level(struct ddr_opt *ddr_op_array)
@@ -2096,7 +2085,6 @@ static void __init pxa1936_clk_init(struct device_node *np)
  * make sure initialize dvfs_platinfo before clock and ddr init.
  */
 #if defined(CONFIG_PXA_DVFS)
-	fill_ddr_800M_4x(ddr_800M_4x());
 	if (cpu_is_pxa1956()) {
 		setup_pxa1956_dvfs_platinfo();
 		max_freq_fused = get_helan4_max_freq();

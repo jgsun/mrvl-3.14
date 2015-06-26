@@ -11,8 +11,6 @@ extern unsigned int get_helan3_max_freq(void);
 extern unsigned int get_helan3_svc_version(void);
 extern int setup_pxa1956_dvfs_platinfo(void);
 extern unsigned int get_helan4_max_freq(void);
-extern int fill_ddr_800M_4x(int status);
-extern int get_ddr_800M_4x(void);
 #endif
 
 /* supported DDR chip type */

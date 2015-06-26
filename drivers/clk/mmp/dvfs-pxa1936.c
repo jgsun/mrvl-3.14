@@ -1335,7 +1335,7 @@ void adjust_ddr_svc(void)
 	else if (svc_version == SVC_TSMC_B0 || svc_version == SVC_TSMC_B0_1p8G)
 		ddr_voltage = ddr_800M_tsmc_b0_svc[uiprofile];
 
-	if (ddr_mode == DDR_800M && get_ddr_800M_4x())
+	if (ddr_mode == DDR_800M)
 		for (i = 0; i < VL_MAX; i++)
 			if ((freqs_cmb[DDR][i] != 0) &&
 				(millivolts[i] >= ddr_voltage))
