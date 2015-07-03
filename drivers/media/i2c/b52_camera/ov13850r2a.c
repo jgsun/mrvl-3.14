@@ -68,16 +68,33 @@ static int OV13850R2A_get_dphy_desc(struct v4l2_subdev *sd,
 static int OV13850R2A_get_pixelclock(struct v4l2_subdev *sd,
 						u32 *rate, u32 mclk)
 {
-	int temp1 = 0, temp2 = 0;
-	int PLL1_divmipi;
-	u32 mipi_clk;
-	int Pll1_divmipi_map[] = {4, 5, 6, 8};
+	int temp1, temp2;
+	int pll2_prediv0, pll2_prediv2x, pll2_mult, sys_pre_div, sys_div;
+	int pll2_prediv2x_map[] = {2, 3, 4, 5, 6, 8, 12, 16};
+	int sys_div_map[] = {2, 3, 4, 5, 6, 7, 8, 10};
+	u32 sys_clk;
 	struct b52_sensor *sensor = to_b52_sensor(sd);
-	OV13850R2A_get_mipiclock(sd, &mipi_clk, mclk);
-	b52_sensor_call(sensor, i2c_read, 0x0304, &temp1, 1);
-	temp2 = temp1 & 0x03;
-	PLL1_divmipi = Pll1_divmipi_map[temp2];
-	*rate = mipi_clk / PLL1_divmipi * sensor->drvdata->nr_lane;
+
+	b52_sensor_call(sensor, i2c_read, 0x3611, &temp1, 1);
+	temp2 = temp1 & 0x08;
+	if (temp2 == 0x08)
+		pll2_prediv0 = 2;
+	else
+		pll2_prediv0 = 1;
+
+	b52_sensor_call(sensor, i2c_read, 0x3611, &temp1, 1);
+	temp2 = temp1 & 0x07;
+	pll2_prediv2x = pll2_prediv2x_map[temp2];
+	b52_sensor_call(sensor, i2c_read, 0x3614, &temp1, 1);
+	b52_sensor_call(sensor, i2c_read, 0x3615, &temp2, 1);
+	pll2_mult = ((temp2 & 0x03) << 8) + temp1;
+	b52_sensor_call(sensor, i2c_read, 0x3612, &temp1, 1);
+	sys_pre_div = 1 + (temp1 & 0xF);
+	b52_sensor_call(sensor, i2c_read, 0x3612, &temp1, 1);
+	sys_div = sys_div_map[(temp1 & 0x70) >> 4];
+	sys_clk = mclk * 2 / pll2_prediv0 / pll2_prediv2x * pll2_mult / sys_pre_div * 2 / sys_div;
+	*rate = sys_clk * 4;
+
 	return 0;
 }
 static void OV13850r2a_write_i2c(struct b52_sensor *sensor, u16 reg, u8 val)
