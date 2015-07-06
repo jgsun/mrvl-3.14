@@ -306,6 +306,10 @@ void sdhci_reset(struct sdhci_host *host, u8 mask)
 		reg_clk_ctrl |= SDHCI_CLOCK_CARD_EN;
 		sdhci_writel(host, reg_clk_ctrl, SDHCI_CLOCK_CONTROL);
 	}
+#ifdef CONFIG_FLC_MMC
+	if (host->flc_host)
+		sdhci_writel(host, SDHCI_FLC_SW_RST, SDHCI_FLC_ARBITOR);
+#endif
 }
 
 static void sdhci_set_ios(struct mmc_host *mmc, struct mmc_ios *ios);
@@ -3737,6 +3741,14 @@ int sdhci_add_host(struct sdhci_host *host)
 		mmc_hostname(mmc), host->hw_name, dev_name(mmc_dev(mmc)),
 		(host->flags & SDHCI_USE_ADMA) ? "ADMA" :
 		(host->flags & SDHCI_USE_SDMA) ? "DMA" : "PIO");
+#ifdef CONFIG_FLC_MMC
+	if (host->flc_host) {
+		if (mmc->card && mmc_card_mmc(mmc->card)) {
+			if (host->flc_host->flc_init)
+				host->flc_host->flc_init(host->flc_host);
+		}
+	}
+#endif
 
 	return 0;
 

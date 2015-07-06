@@ -254,6 +254,15 @@
 #define   SDHCI_SPEC_200	1
 #define   SDHCI_SPEC_300	2
 
+#define SDHCI_FLC_ARBITOR		0x148
+#define  SDHCI_FLC_EN 0x1
+#define  SDHCI_FLC_HIGH_PRIORITY 0x1
+#define  SDHCI_FLC_ABORT_EN 0x2
+#define  SDHCI_FLC_INT_EN 0x2
+#define  SDHCI_FLC_ABORT_INT 0x4
+#define  SDHCI_FLC_HW_RESUME_EN 0x100
+#define  SDHCI_FLC_DADDR_MODE_BYTE 0x200
+#define  SDHCI_FLC_SW_RST 0x80000000
 /*
  * End of controller registers.
  */

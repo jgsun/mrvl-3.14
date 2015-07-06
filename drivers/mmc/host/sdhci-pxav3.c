@@ -1504,6 +1504,53 @@ static const struct of_device_id sdhci_pxav3_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, sdhci_pxav3_of_match);
 
+#ifdef CONFIG_FLC_MMC
+static int pxav3_flc_get_of_perperty(struct sdhci_host *host,
+		struct device *dev, struct sdhci_pxa_platdata *pdata)
+{
+	struct flc_host *flc;
+	struct platform_device *pdev;
+	struct resource *res;
+
+	pdev = container_of(dev, struct platform_device, dev);
+	pdev = to_platform_device(dev);
+
+	flc = get_flc_host();
+	if (flc == NULL) {
+		pr_err("fail to alloc flc_host\n");
+		return -ENOMEM;
+	}
+
+	/* get the resource for FLC */
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	if (res == NULL) {
+		dev_err(dev, "no memory resource specified for FLC\n");
+		return -ENOENT;
+	}
+	flc->flc_phys = (u32)(res->start);
+	flc->flc_kaddr = devm_ioremap_nocache(dev, res->start,
+				resource_size(res));
+
+	flc->flc_irq = platform_get_irq(pdev, 1);
+
+	/* get the resource for FLC */
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 2);
+	if (res == NULL) {
+		dev_err(dev, "no memory resource specified for MCK\n");
+		return -ENOENT;
+	}
+	flc->mck_kaddr = devm_ioremap_nocache(dev, res->start,
+				resource_size(res));
+
+	flc->mck_irq = platform_get_irq(pdev, 2);
+
+	/* links between flc_host and sdhci_host */
+	flc->parent = host;
+	host->flc_host = (void *)flc;
+	return 0;
+}
+#endif
+
 static void pxav3_get_of_perperty(struct sdhci_host *host,
 		struct device *dev, struct sdhci_pxa_platdata *pdata)
 {
@@ -1652,6 +1699,14 @@ static void pxav3_get_of_perperty(struct sdhci_host *host,
 		}
 		pdata->dtr_data = dtr_data;
 	}
+
+#ifdef CONFIG_FLC_MMC
+	if (of_property_read_bool(np, "marvell,flc_en")) {
+		/* parse FLC relate property */
+		pxav3_flc_get_of_perperty(host, dev, pdata);
+	}
+#endif
+
 }
 #endif
 

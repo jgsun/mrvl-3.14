@@ -225,7 +225,32 @@ struct sdhci_host {
 
 	bool sdio_irq_enabled;
 	bool boot_complete;
+#ifdef CONFIG_FLC_MMC
+	struct flc_host *flc_host;
+#endif
 
 	unsigned long private[0] ____cacheline_aligned;
 };
+
+#ifdef CONFIG_FLC_MMC
+struct flc_host {
+	struct sdhci_host *parent;
+
+	int flc_irq;		/* Device IRQ */
+	u32	flc_phys;	/* phys address */
+	void __iomem *flc_kaddr;	/* Mapped address */
+
+	int mck_irq;		/* Device IRQ */
+	void __iomem *mck_kaddr;	/* Mapped address */
+
+	int	(*flc_init)(struct flc_host *host);
+	int	(*flc_remove)(struct flc_host *host);
+	int	(*flc_suspend)(struct flc_host *host);
+	int	(*flc_resume)(struct flc_host *host);
+	int	(*flc_rpm_suspend)(struct flc_host *host);
+	int	(*flc_rpm_resume)(struct flc_host *host);
+};
+extern struct flc_host *get_flc_host(void);
+#endif
+
 #endif /* LINUX_MMC_SDHCI_H */

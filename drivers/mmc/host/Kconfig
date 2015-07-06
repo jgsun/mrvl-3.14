@@ -213,6 +213,18 @@ config MMC_SDHCI_SIRF
 
 	  If unsure, say N.
 
+config FLC_MMC
+	tristate "Marvell FLC Host Controller support"
+	help
+	  This selects the Marvell(R) FLC(Final Level Cache) Host Controller.
+
+config FLC_MMC_DEBUG
+	bool "FLC MMC debugging"
+	depends on FLC_MMC
+	help
+	  This is an option for use by developers; most people should
+	  say N Here. This enable FLC MMC driver debugging.
+
 config MMC_SDHCI_PXAV3
 	tristate "Marvell MMP2 SD Host Controller support (PXAV3)"
 	depends on CLKDEV_LOOKUP
