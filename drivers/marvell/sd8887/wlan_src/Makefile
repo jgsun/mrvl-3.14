@@ -87,6 +87,9 @@ export CONFIG_STATIC_LINK=y
 #32bit app over 64bit kernel support
 CONFIG_USERSPACE_32BIT_OVER_KERNEL_64BIT=y
 
+# SCHED scan$
+CONFIG_SCHED_SCAN_SUPPORT=y$
+
 #############################################################################
 # Select Platform Tools
 #############################################################################
@@ -228,6 +231,10 @@ endif
 
 ifdef CONFIG_MRVL_SKMALLOC_WIRELESS_EN
 	EXTRA_CFLAGS += -DSUPPER_KMALLOC
+endif
+
+ifeq ($(CONFIG_SCHED_SCAN_SUPPORT),y)
+	EXTRA_CFLAGS += -DSCHED_SCAN_SUPPORT
 endif
 
 #############################################################################
