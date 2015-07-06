@@ -144,12 +144,18 @@ static int __init __init_read_droinfo(void)
 	unsigned int uiparity = 0;
 	unsigned int uifusever = 0;
 	unsigned int uiskusetting = 0;
+	int ret = -1;
 
 #ifdef CONFIG_ARM64
-	smc_get_fuse_info(0xD0002000, (void *)&arg);
+	ret = smc_get_fuse_info(0xD0002000, (void *)&arg);
 #else
-	smc_get_fuse_info(0x90002000, (void *)&arg);
+	ret = smc_get_fuse_info(0x90002000, (void *)&arg);
 #endif
+	if (ret) {
+		pr_info("get fuse info failed\n");
+		return ret;
+	}
+
 	uimanupara_31_00 = arg.arg0;
 	uimanupara_63_32 = arg.arg1;
 	uimanupara_95_64 = arg.arg2;
