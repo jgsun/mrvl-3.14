@@ -701,7 +701,7 @@
 #include "88pm88x.dtsi"
 #include "88pm880.dtsi"
 #include "88pm88x_battery_common.dtsi"
-#include "88pm88x_battery_485760ar.dtsi"
+#include "88pm88x_battery_lt513.dtsi"
 #include "88pm880_pxa1936_aloe_v01.dtsi"
 #include "pxa1936-panel-r63315-l180_linlong.dtsi"
 #include "pxa1936-panel-nt35521-tft.dtsi"
