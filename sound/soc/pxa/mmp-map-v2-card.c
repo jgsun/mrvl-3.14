@@ -367,8 +367,8 @@ void map2_tdm_mic_shutdown(struct snd_pcm_substream *substream)
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_dai *codec_dai = rtd->codec_dai;
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
-	int tx[1] = {0};
-	int tx_num = 1;
+	int tx[2] = {0, 0};
+	int tx_num = 2;
 #endif
 
 #ifdef CONFIG_SND_TDM_STATIC_ALLOC
