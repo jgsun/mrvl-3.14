@@ -12,7 +12,7 @@
 		fastchg-cur = <1000 1000 1000>; /* LTR, STR, HTR */
 		fastchg-eoc = <120>;
 		fastchg-tout = <8>;
-		recharge-thr = <200>;
+		recharge-thr = <100>;
 		dcp-limit = <2400>;
 		status = "okay";
 	};
