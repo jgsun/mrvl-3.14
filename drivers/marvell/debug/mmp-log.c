@@ -198,8 +198,16 @@ static int __init mmp_log_buf_init(void)
 			pr_info("%s: no old log found\n", __func__);
 			*mmp_log_pos = 0;
 			*mmp_log_mag = LOG_MAGIC;
+		} else {
+			/* If the RAM is powered down, the value of log position is not reliable.
+			 * Check the log position here to avoid overstepping the boundary.
+			 */
+			if (*mmp_log_pos >= mmp_log_size) {
+				pr_info("The value of mmp_log_pos:%u, larger than mmp_log_size:%u\n",
+					*mmp_log_pos, mmp_log_size);
+				*mmp_log_pos = 0;
+			}
 		}
-
 		/* save the pre-console log into mmp log buffer */
 		register_console(&mmp_console);
 		unregister_console(&mmp_console);
