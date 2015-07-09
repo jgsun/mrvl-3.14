@@ -20,6 +20,7 @@
 #include <linux/regmap.h>
 #include <linux/atomic.h>
 #include <linux/reboot.h>
+#include <linux/spinlock.h>
 #include "88pm88x-reg.h"
 #include "88pm886-reg.h"
 #include "88pm880-reg.h"
@@ -196,6 +197,9 @@ struct pm88x_chip {
 	struct notifier_block reboot_notifier;
 	struct notifier_block cb_nb;
 	struct pm88x_dvc *dvc;
+
+	spinlock_t test_page_lock;
+	unsigned int test_page_user_cnt;
 };
 
 struct pm88x_debug_info {
@@ -245,6 +249,9 @@ int pm88x_reboot_notifier_callback(struct notifier_block *nb,
 int extern_pm88x_gpadc_set_current_generator(int gpadc_number, int on);
 int extern_pm88x_gpadc_get_volt(int gpadc_number, int *volt);
 int extern_pm88x_gpadc_set_bias_current(int gpadc_number, int bias);
+
+void hold_test_page(struct pm88x_chip *chip);
+void release_test_page(struct pm88x_chip *chip);
 
 /* dvc external interface */
 #ifdef CONFIG_MFD_88PM88X
