@@ -20,6 +20,7 @@ enum svc_versions {
 	SVC_1_11,
 	SVC_TSMC_1p8G,
 	SVC_TSMC_B0,
+	SVC_TSMC_B0_1p8G,
 	NO_SUPPORT,
 };
 
