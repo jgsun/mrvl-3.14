@@ -42,6 +42,11 @@ enum b52_sensor_type {
 	SAMSUNG_ASNY_SENSOR,
 };
 
+enum b52_sensor_gain_mode {
+	GAIN_Q4_MODE = 0,
+	GAIN_OV4689_MODE = 0x09,
+};
+
 enum b52_sensor_gain_type {
 	B52_SENSOR_AG = 0,
 	B52_SENSOR_DG,
@@ -198,6 +203,7 @@ struct b52_sensor_data {
 	 *NOTE: MIN range >= 0x10
 	 */
 #define B52_GAIN_UNIT (0x10)
+	enum b52_sensor_gain_mode gain_mode;
 	struct sensor_prop_range gain_range[B52_SENSOR_GAIN_MAX];
 	/*if numerator = 100, denominator = 0x10
 	 * iso = gain * 100 / 0x10 */

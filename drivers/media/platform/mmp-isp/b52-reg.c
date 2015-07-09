@@ -1321,6 +1321,7 @@ static int b52_cfg_isp_ms(const struct b52_sensor_data *data, int path)
 {
 	struct b52_sensor_cfg cfg;
 	int base = FW_P1_REG_BASE;
+	u8 gain_mode = data->gain_mode;
 
 	memset(&cfg, 0, sizeof(cfg));
 	cfg.min_expo = data->expo_range.min;
@@ -1350,7 +1351,10 @@ static int b52_cfg_isp_ms(const struct b52_sensor_data *data, int path)
 	 * vendor recommands to use Q4,
 	 * ISP also uses it to calculate stretch gain.
 	 */
-	b52_writeb(base + REG_FW_SSOR_GAIN_MODE, SSOR_GAIN_Q4);
+	if (gain_mode != 0)
+		b52_writeb(base + REG_FW_SSOR_GAIN_MODE, gain_mode);
+	else
+		b52_writeb(base + REG_FW_SSOR_GAIN_MODE, SSOR_GAIN_Q4);
 
 	pr_debug("%s:expo[%x,(%x,%x)], gain[%x,%x], vts %x, band(%x,%x)\n",
 		__func__, cfg.expo_ratio, cfg.min_expo, cfg.max_expo,
@@ -2739,6 +2743,7 @@ static int b52_set_aecagc_reg(struct v4l2_subdev *hsd, int p_num)
 {
 	u32 base;
 	u8 type;
+	u8 gain_mode;
 	u8 val;
 	int ret;
 	u8 gain_shift, expo_shift;
@@ -2753,13 +2758,17 @@ static int b52_set_aecagc_reg(struct v4l2_subdev *hsd, int p_num)
 	}
 	base = FW_P1_REG_BASE + p_num * FW_P1_P2_OFFSET;
 	type = sensor->drvdata->type;
+	gain_mode = sensor->drvdata->gain_mode;
 	gain_shift = sensor->drvdata->gain_shift;
 	expo_shift = sensor->drvdata->expo_shift;
 	/*
 	 * vendor recommands to use Q4,
 	 * ISP also uses it to calculate stretch gain.
 	 */
-	b52_writeb(base + REG_FW_SSOR_GAIN_MODE, SSOR_GAIN_Q4);
+	 if (gain_mode != 0)
+		b52_writeb(base + REG_FW_SSOR_GAIN_MODE, gain_mode);
+	 else
+		b52_writeb(base + REG_FW_SSOR_GAIN_MODE, SSOR_GAIN_Q4);
 
 	b52_writeb(base + REG_FW_SSOR_TYPE, type);
 	ret = b52_sensor_call(sensor, g_sensor_attr, &attr);
