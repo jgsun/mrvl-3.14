@@ -1974,7 +1974,7 @@ static int mv_udc_pullup(struct usb_gadget *gadget, int is_on)
 
 	udc->softconnect = (is_on != 0);
 
-	dev_dbg(&udc->dev->dev, "%s: softconnect %d, vbus_active %d\n",
+	dev_info(&udc->dev->dev, "%s: softconnect %d, vbus_active %d\n",
 			__func__, udc->softconnect, udc->vbus_active);
 
 	if (udc->driver && udc->softconnect && udc->vbus_active) {
@@ -3730,6 +3730,16 @@ static int mv_udc_probe(struct platform_device *pdev)
 		goto err_rx_opt_exit;
 	}
 #endif
+
+	if (udc->transceiver) {
+		retval = otg_set_peripheral(udc->transceiver->otg,
+						&udc->gadget);
+		if (retval) {
+			dev_err(&udc->dev->dev,
+				"unable to register peripheral to otg\n");
+			return retval;
+		}
+	}
 
 	dev_info(&pdev->dev, "successful probe UDC device %s clock gating.\n",
 		udc->clock_gating ? "with" : "without");
