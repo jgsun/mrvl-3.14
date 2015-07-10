@@ -18,9 +18,8 @@ enum fab {
 enum svc_versions {
 	SEC_SVC_1_01 = 0,
 	SVC_1_11,
-	SVC_TSMC_1p8G,
 	SVC_TSMC_B0,
-	SVC_TSMC_B0_1p8G,
+	SVC_TSMC_B0_NEW,
 	NO_SUPPORT,
 };
 

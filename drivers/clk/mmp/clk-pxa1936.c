@@ -997,8 +997,7 @@ static void pxa1936_axi_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 					(const char **)gc3d_parent_names, ARRAY_SIZE(gc3d_parent_names),
 					0, &gc3d_mix_config_pxa1956, &gc_lock);
 	} else {
-		if (get_helan3_svc_version() == SVC_TSMC_B0 ||
-			get_helan3_svc_version() == SVC_TSMC_B0_1p8G) {
+		if (get_helan3_svc_version() == SVC_TSMC_B0) {
 			gc3d_mix_config_pxa1936_TSMC_B0.reg_info.reg_clk_ctrl = pxa_unit->apmu_base + APMU_GC;
 			gc3d_mix_config_pxa1936_TSMC_B0.reg_info.reg_clk_xtc = pxa_unit->ciu_base + GPU_XTC;
 			clk = mmp_clk_register_mix(NULL, "gc3d_mix_clk",
@@ -1030,8 +1029,7 @@ static void pxa1936_axi_periph_clk_init(struct pxa1936_clk_unit *pxa_unit)
 					(const char **)gcsh_parent_names, ARRAY_SIZE(gcsh_parent_names),
 					0, &gcsh_mix_config_pxa1956, &gc_lock);
 	} else {
-		if (get_helan3_svc_version() == SVC_TSMC_B0 ||
-			get_helan3_svc_version() == SVC_TSMC_B0_1p8G) {
+		if (get_helan3_svc_version() == SVC_TSMC_B0) {
 			gcsh_mix_config_pxa1936_TSMC_B0.reg_info.reg_clk_ctrl = pxa_unit->apmu_base + APMU_GC;
 
 			clk = mmp_clk_register_mix(NULL, "gcsh_mix_clk",
@@ -2117,7 +2115,7 @@ static void __init pxa1936_clk_init(struct device_node *np)
 			clst0_core_params.max_cpurate = CORE_1p0G;
 			pr_info("<=1.5GHz SKU chip clst0 support max freq is 1057M when profile == (11 ~ 14)\n");
 		}
-	} else if (get_helan3_svc_version() == SVC_TSMC_1p8G) {
+	} else if ((get_helan3_svc_version() == SVC_1_11) && (max_freq_fused == CORE_1p8G)) {
 		if ((profile >= 13) && (ddr_mode == DDR_800M_2X))
 			panic("1.8GHz SKU chip Don't support DDR 800 2x mode when profile >= 13 , will panic.\n");
 
@@ -2125,7 +2123,7 @@ static void __init pxa1936_clk_init(struct device_node *np)
 			panic("1.8GHz SKU chip clst1 max freq doesn't support 1803M when profile >= 12\n");
 	} else if (get_helan3_svc_version() == SVC_TSMC_B0) {
 		pr_info("1.5GHz TSMC B0 chip clst0 support max freq is 1248M\n");
-	} else if (get_helan3_svc_version() == SVC_TSMC_B0_1p8G) {
+	} else if ((get_helan3_svc_version() == SVC_TSMC_B0) && (max_freq_fused == CORE_1p8G)) {
 		pr_info("1.8GHz TSMC B0 chip clst0 support max freq is 1248M\n");
 		pr_info("1.8GHz TSMC B0 chip clst1 support max freq is 1803M\n");
 	}
