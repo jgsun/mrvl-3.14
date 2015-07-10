@@ -1702,6 +1702,21 @@ static void pm88x_init_soc_cycles(struct pm88x_battery_info *info,
 		goto end;
 	}
 
+	/* if system reboot, use soc_from_saved */
+	if (system_may_reboot(info)) {
+		dev_info(info->dev,
+			 "---> %s: arrive here from reboot.\n", __func__);
+		if (saved_is_valid < 0) {
+			*initial_soc = soc_from_vbat_active;
+			info->ocv_is_reliable = false;
+		} else {
+			*initial_soc = soc_from_saved;
+			info->ocv_is_reliable = reliable_from_saved;
+		}
+		*initial_cycles = cycles_from_saved;
+		goto end;
+	}
+
 	/*
 	 * there are two cases:
 	 * a) plug into the charger cable first
@@ -1739,19 +1754,6 @@ static void pm88x_init_soc_cycles(struct pm88x_battery_info *info,
 		goto end;
 	}
 
-	if (system_may_reboot(info)) {
-		dev_info(info->dev,
-			 "---> %s: arrive here from reboot.\n", __func__);
-		if (saved_is_valid < 0) {
-			*initial_soc = soc_from_vbat_active;
-			info->ocv_is_reliable = false;
-		} else {
-			*initial_soc = soc_from_saved;
-			info->ocv_is_reliable = reliable_from_saved;
-		}
-		*initial_cycles = cycles_from_saved;
-		goto end;
-	}
 	dev_info(info->dev, "---> %s: arrive here from power on.\n", __func__);
 
 	/*
