@@ -1,5 +1,5 @@
 /*
- * Pxa1936(helan3) CPU idle driver.
+ * Helanx CPU idle driver.
  *
  * Copyright (C) 2014 Marvell Ltd.
  * Author: Xiaoguang Chen <chenxg@marvell.com>
@@ -197,7 +197,8 @@ static int __init check_platform(void)
 	struct device_node *np;
 
 	if (!(of_machine_is_compatible("marvell,pxa1936") ||
-			of_machine_is_compatible("marvell,pxa1956")))
+			of_machine_is_compatible("marvell,pxa1956") ||
+			of_machine_is_compatible("marvell,pxa1918")))
 		return -ENODEV;
 
 	np = of_find_matching_node(NULL, psci_of_match);
