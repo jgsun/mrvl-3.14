@@ -208,7 +208,7 @@ static struct regdump_region pmum_dump_region[] = {
 	{"APCR_CLUSTER0",       0x1080, 4, regdump_cond_true},
 	{"APCR_CLUSTER1",       0x1084, 4, regdump_cond_true},
 	{"APCR_PER",            0x1088, 4, regdump_cond_true},
-	{"SPRR",                0x3000, 4, regdump_cond_true},
+	{"SPRR",                0x3000, 4, regdump_cond_false},
 };
 
 static void __init mmp_pmum_regdump_init(void)
