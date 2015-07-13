@@ -521,18 +521,29 @@ void pxa1908_gic_raise_softirq(const struct cpumask *mask, unsigned int irq)
 	preempt_enable();
 }
 
+static const struct of_device_id mcpm_of_match[] __initconst = {
+	{ .compatible = "arm,mcpm",},
+	{},
+};
+
 static int __init pxa1908_lowpower_init(void)
 {
+	struct device_node *np;
 	u32 apcr;
 	u32 sccr;
 
 	if (!of_machine_is_compatible("marvell,pxa1908"))
 		return -ENODEV;
 
+	np = of_find_matching_node(NULL, mcpm_of_match);
+	if (!np || !of_device_is_available(np))
+		return -ENODEV;
+
 	pr_info("Initialize pxa1908 low power controller.\n");
 	pxa1908_reg_init();
 
 	mcpm_plat_power_register(&pxa1908_idle);
+
 	set_smp_cross_call(pxa1908_gic_raise_softirq);
 	/*
 	 * set DTCMSD, BBSD, MSASLPEN.
