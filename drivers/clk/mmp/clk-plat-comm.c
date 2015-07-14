@@ -257,6 +257,7 @@ int sdh_tunning_scaling2minfreq(struct platform_device *pdev)
 		if (unlikely(!clk[i])) {
 			clk[i] = devm_clk_get(dev, clk_name[i]);
 			if (IS_ERR_OR_NULL(clk[i])) {
+				clk[i] = NULL;
 				pr_err("failed to get clk %s\n", clk_name[i]);
 				return -1;
 			}
