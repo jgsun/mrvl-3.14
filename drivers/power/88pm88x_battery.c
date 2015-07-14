@@ -1561,13 +1561,13 @@ static void pm88x_cc_enable_bootup(struct pm88x_battery_info *info)
 	}
 
 	/* 1. base page 0x1f.0 = 1 ---> unlock test page */
-	regmap_write(info->chip->base_regmap, 0x1f, 0x1);
+	hold_test_page(info->chip);
 	/* 2. enable cc as default when boots up */
 	regmap_write(info->chip->test_regmap, 0x50, 0x01);
 	regmap_write(info->chip->test_regmap, 0x51, 0x6B);
 	regmap_write(info->chip->test_regmap, 0x58, 0x0B);
 	/* 3. base page 0x1f.0 = 0 --> lock the test page */
-	regmap_write(info->chip->base_regmap, 0x1f, 0x0);
+	release_test_page(info->chip);
 }
 
 static int pm88x_setup_fuelgauge(struct pm88x_battery_info *info)
@@ -1899,7 +1899,7 @@ static void pm88x_pre_setup_fuelgauge(struct pm88x_battery_info *info)
 		if (info->chip->chip_id == PM886_A0) {
 			pr_info("%s: fix up for the fuelgauge driver.\n", __func__);
 			/* 1. base page 0x1f.0 = 1 ---> unlock test page */
-			regmap_write(info->chip->base_regmap, 0x1f, 0x1);
+			hold_test_page(info->chip);
 			/* 2. tune ibat */
 			regmap_read(info->chip->test_regmap, 0x8f, &data);
 			/* if the bit [5:0] = 0, needs to rewrite to 0x22, b'10_0010 */
@@ -1913,7 +1913,7 @@ static void pm88x_pre_setup_fuelgauge(struct pm88x_battery_info *info)
 					 __func__, data);
 			}
 			/* 3. base page 0x1f.0 = 0 --> lock the test page */
-			regmap_write(info->chip->base_regmap, 0x1f, 0x0);
+			release_test_page(info->chip);
 		}
 		break;
 	default:

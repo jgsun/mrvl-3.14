@@ -476,7 +476,7 @@ static void strobe_flash(struct pm88x_led *led)
 					PM886_BST_VSET_MASK, PM88X_BST_VSET_5P25V);
 
 			/* unlock test page & force booster configuration */
-			regmap_write(chip->base_regmap, 0x1F, 0x1);
+			hold_test_page(chip);
 			regmap_write(chip->test_regmap, 0x40, 0x0);
 			regmap_write(chip->test_regmap, 0x41, 0x0);
 			regmap_write(chip->test_regmap, 0x42, 0x0);
@@ -502,7 +502,7 @@ static void strobe_flash(struct pm88x_led *led)
 					PM880_CFOUT_OC_EN_MASK, 0);
 
 			/* unlock test page & force booster configuration */
-			regmap_write(chip->base_regmap, 0x1F, 0x1);
+			hold_test_page(chip);
 			regmap_write(chip->test_regmap, 0x40, 0x0);
 			regmap_write(chip->test_regmap, 0x41, 0x0);
 			regmap_write(chip->test_regmap, 0x42, 0x0);
@@ -644,7 +644,7 @@ static void strobe_flash(struct pm88x_led *led)
 			}
 
 			/* lock test page */
-			regmap_write(chip->base_regmap, 0x1F, 0x0);
+			release_test_page(chip);
 			break;
 		default:
 			dev_err(led->cdev.dev, "Unsupported chip type %ld\n", chip->type);

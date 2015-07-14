@@ -550,7 +550,7 @@ static int pm88x_start_charging(struct pm88x_charger_info *info)
 	info->charging = 1;
 
 	/* open test page */
-	regmap_write(info->chip->base_regmap, 0x1F, 0x1);
+	hold_test_page(info->chip);
 
 	/*
 	 * override the status of the internal comparator after the 128ms filter,
@@ -573,7 +573,7 @@ static int pm88x_start_charging(struct pm88x_charger_info *info)
 	regmap_write(info->chip->test_regmap, 0x46, 0x00);
 
 	/* close test page */
-	regmap_write(info->chip->base_regmap, 0x1F, 0x00);
+	release_test_page(info->chip);
 
 	return 0;
 }
@@ -806,7 +806,7 @@ static int pm88x_charger_init(struct pm88x_charger_info *info)
 	case PM886:
 		if (info->chip->chip_id == PM886_A0) {
 			/* open test page */
-			regmap_write(info->chip->base_regmap, 0x1F, 0x1);
+			hold_test_page(info->chip);
 			/* change defaults to disable OV_VBAT */
 			regmap_write(info->chip->test_regmap, 0x50, 0x2A);
 			regmap_write(info->chip->test_regmap, 0x51, 0x0C);
@@ -819,7 +819,7 @@ static int pm88x_charger_init(struct pm88x_charger_info *info)
 			regmap_write(info->chip->test_regmap, 0x58, 0xbb);
 			regmap_write(info->chip->test_regmap, 0x59, 0x08);
 			/* close test page */
-			regmap_write(info->chip->base_regmap, 0x1F, 0x0);
+			release_test_page(info->chip);
 			/* disable OV_VBAT */
 			regmap_update_bits(info->chip->battery_regmap, PM88X_CHG_CONFIG3,
 					   PM88X_OV_VBAT_EN, 0);
@@ -972,7 +972,7 @@ int pm88x_set_ibat_offset(struct pm88x_chip *chip)
 	regmap_update_bits(chip->battery_regmap, PM88X_CC_CONFIG2, mask, data);
 	regmap_read(chip->battery_regmap, PM88X_IBAT_OFFVAL, &data);
 	/* open test page */
-	regmap_write(chip->base_regmap, 0x1F, 0x1);
+	hold_test_page(chip);
 	/* use ibat_offval as default */
 	regmap_write(chip->test_regmap, 0x52, 0x0C);
 	regmap_write(chip->test_regmap, 0x53, data);
@@ -983,7 +983,7 @@ int pm88x_set_ibat_offset(struct pm88x_chip *chip)
 	regmap_write(chip->test_regmap, 0x58, 0xBB);
 	regmap_write(chip->test_regmap, 0x59, 0xBB);
 	/* close test page */
-	regmap_write(chip->base_regmap, 0x1F, 0x0);
+	release_test_page(chip);
 	return 0;
 }
 

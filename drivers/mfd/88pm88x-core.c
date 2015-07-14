@@ -328,13 +328,13 @@ static void pm88x_verify_is_trimmed(struct pm88x_chip *chip)
 	}
 
 	/* unlock test page */
-	regmap_write(chip->base_regmap, 0x1f, 0x1);
+	hold_test_page(chip);
 
 	/* read trimming status */
 	regmap_read(chip->test_regmap, trimming_reg, &val);
 
 	/* lock test page */
-	regmap_write(chip->base_regmap, 0x1f, 0x0);
+	release_test_page(chip);
 
 	/* trimming value should not be zero */
 	if ((val & trimming_mask) == 0) {

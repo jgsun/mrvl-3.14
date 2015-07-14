@@ -487,11 +487,11 @@ static void pm88x_vbus_fixup(struct pm88x_vbus_info *info)
 		if (info->chip->chip_id == PM886_A0) {
 			pr_info("%s: fix up for the vbus driver.\n", __func__);
 			/* 1. base page 0x1f.0 = 1 --> unlock test page */
-			regmap_write(info->chip->base_regmap, 0x1f, 0x1);
+			hold_test_page(info->chip);
 			/* 2. test page 0x90.[4:0] = 0, reset trimming to mid point 0 */
 			regmap_update_bits(info->chip->test_regmap, 0x90, 0x1f << 0, 0);
 			/* 3. base page 0x1f.0 = 0 --> lock the test page */
-			regmap_write(info->chip->base_regmap, 0x1f, 0x0);
+			release_test_page(info->chip);
 		}
 		break;
 	default:
