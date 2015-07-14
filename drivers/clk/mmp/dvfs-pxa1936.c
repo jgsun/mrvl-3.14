@@ -1619,14 +1619,14 @@ void adjust_1p8g_svc(void)
 {
 	int cluster1_voltage = 0;
 
-	if (svc_version == SVC_TSMC_B0 && helan3_maxfreq == CORE_1p8G)
-		cluster1_voltage = tsmc_b0_1p8g_svc[uiprofile];
-	else if (svc_version == SVC_1_11 && helan3_maxfreq == CORE_1p8G)
-		cluster1_voltage = tsmc_a0_1p8g_svc[uiprofile];
-	else if (svc_version == SVC_TSMC_B0_NEW && helan3_maxfreq == CORE_1p8G)
-		cluster1_voltage = tsmc_b0_v17_1p8g_svc[uiprofile];
-
 	if (helan3_maxfreq == CORE_1p8G) {
+		if (svc_version == SVC_TSMC_B0)
+			cluster1_voltage = tsmc_b0_1p8g_svc[uiprofile];
+		else if (svc_version == SVC_1_11)
+			cluster1_voltage = tsmc_a0_1p8g_svc[uiprofile];
+		else if (svc_version == SVC_TSMC_B0_NEW)
+			cluster1_voltage = tsmc_b0_v17_1p8g_svc[uiprofile];
+
 		freqs_cmb[CORE1][VL_MAX - 1] = 1803000;
 		millivolts[VL_MAX - 1] = cluster1_voltage;
 	}
