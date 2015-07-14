@@ -1382,7 +1382,6 @@ wlan_bss_ioctl_bss_11d_check_channel(IN pmlan_adapter pmadapter,
 	mlan_status ret = MLAN_STATUS_SUCCESS;
 	mlan_ds_bss *bss = MNULL;
 	mlan_ssid_bssid *ssid_bssid = MNULL;
-	BSSDescriptor_t *pbss_desc = MNULL;
 
 	ENTER();
 
@@ -1391,21 +1390,13 @@ wlan_bss_ioctl_bss_11d_check_channel(IN pmlan_adapter pmadapter,
 
 	PRINTM(MINFO, "ssid: %s idx:%d\n", ssid_bssid->ssid.ssid,
 	       ssid_bssid->idx);
-
-	pbss_desc = &pmadapter->pscan_table[ssid_bssid->idx - 1];
-	if (!pbss_desc) {
-		PRINTM(MERROR, "Invalid scan table entry!\n");
-		LEAVE();
-		return MLAN_STATUS_FAILURE;
-	}
-
-	PRINTM(MINFO, "band:%d channel:%d\n",
-	       (t_u8)pbss_desc->bss_band, (t_u32)pbss_desc->channel);
+	PRINTM(MINFO, "band:%d channel:%d\n", (t_u8)ssid_bssid->bss_band,
+	       (t_u32)ssid_bssid->channel);
 
 	/* check if this channel is supported in the region */
 	if (!wlan_find_cfp_by_band_and_channel(pmadapter,
-					       (t_u8)pbss_desc->bss_band,
-					       (t_u32)pbss_desc->channel)) {
+					       (t_u8)ssid_bssid->bss_band,
+					       (t_u32)ssid_bssid->channel)) {
 		PRINTM(MERROR, "Unsupported Channel for region 0x%x\n",
 		       pmadapter->region_code);
 		ret = MLAN_STATUS_FAILURE;
@@ -2261,6 +2252,9 @@ wlan_pm_ioctl(IN pmlan_adapter pmadapter, IN pmlan_ioctl_req pioctl_req)
 	case MLAN_OID_PM_CFG_IEEE_PS:
 		switch (pioctl_req->action) {
 		case MLAN_ACT_SET:
+		/**Block ieee power save disable command when bt coex enable*/
+			if (pmadapter->coex_scan && !pm->param.ps_mode)
+				break;
 			if (pm->param.ps_mode)
 				pmadapter->ps_mode = Wlan802_11PowerModePSP;
 			else
@@ -3903,9 +3897,7 @@ wlan_misc_ioctl_warm_reset(IN pmlan_adapter pmadapter,
 							moal_spin_unlock))) {
 		wlan_free_mlan_buffer(pmadapter, pmbuf);
 	}
-	util_scalar_write(pmadapter->pmoal_handle, &pmadapter->rx_pkts_queued,
-			  0, pmadapter->callbacks.moal_spin_lock,
-			  pmadapter->callbacks.moal_spin_unlock);
+	pmadapter->rx_pkts_queued = 0;
 
 	/* Initialize adapter structure */
 	wlan_init_adapter(pmadapter);
@@ -5158,6 +5150,7 @@ wlan_find_bss(mlan_private *pmpriv, pmlan_ioctl_req pioctl_req)
 			bss->param.ssid_bssid.ft_cap =
 				pbss_desc->pmd_ie->ft_cap;
 		}
+		bss->param.ssid_bssid.bss_band = pbss_desc->bss_band;
 		/* index in bss list,start from 1 */
 		bss->param.ssid_bssid.idx = i + 1;
 	} else if (bss->param.ssid_bssid.ssid.ssid_len) {
@@ -5180,6 +5173,7 @@ wlan_find_bss(mlan_private *pmpriv, pmlan_ioctl_req pioctl_req)
 			bss->param.ssid_bssid.ft_cap =
 				pbss_desc->pmd_ie->ft_cap;
 		}
+		bss->param.ssid_bssid.bss_band = pbss_desc->bss_band;
 		/* index in bss list, start from 1 */
 		bss->param.ssid_bssid.idx = i + 1;
 	} else {

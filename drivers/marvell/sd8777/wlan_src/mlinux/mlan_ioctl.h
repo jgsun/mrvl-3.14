@@ -70,6 +70,10 @@ enum _mlan_ioctl_req_id {
 	MLAN_OID_UAP_CFG_WMM_PARAM = 0x00020015,
 #endif
 	MLAN_OID_BSS_11D_CHECK_CHANNEL = 0x00020016,
+#ifdef UAP_SUPPORT
+	MLAN_OID_UAP_SCAN_CHANNELS = 0x00020018,
+	MLAN_OID_UAP_CHANNEL = 0x00020019,
+#endif
 
 	/* Radio Configuration Group */
 	MLAN_IOCTL_RADIO_CFG = 0x00030000,
@@ -541,12 +545,14 @@ typedef struct _mlan_ssid_bssid {
 	t_u32 idx;
     /** Receive signal strength in dBm */
 	t_s32 rssi;
+    /**channel*/
+	t_u16 channel;
     /**mobility domain value*/
 	t_u16 ft_md;
     /**ft capability*/
 	t_u8 ft_cap;
-    /**channel*/
-	t_u16 channel;
+    /**band*/
+	t_u16 bss_band;
 } mlan_ssid_bssid;
 
 #ifdef UAP_SUPPORT
@@ -595,6 +601,12 @@ typedef struct _mlan_ssid_bssid {
 /** Maximum value of 4 byte configuration */
 #define MAX_VALID_DWORD         0x7FFFFFFF	/* (1 << 31) - 1 */
 
+/** setting for band_config - band=5GHZ */
+#define BAND_CONFIG_5GHZ        0x01
+/** default UAP BAND 2.4G */
+#define DEFAULT_UAP_BAND		0
+/** default UAP channel 6 */
+#define DEFAULT_UAP_CHANNEL		6
 /** Band config ACS mode */
 #define BAND_CONFIG_ACS_MODE    0x40
 /** Band config manual */
@@ -907,6 +919,27 @@ typedef struct _mlan_deauth_param {
     /** deauth reason */
 	t_u16 reason_code;
 } mlan_deauth_param;
+
+/** mlan_uap_scan_channels */
+typedef struct _mlan_uap_scan_channels {
+    /** flag for remove nop channel*/
+	t_u8 remove_nop_channel;
+	/** num of removed channel */
+	t_u8 num_remvoed_channel;
+    /** Number of channels in scan_channel_list */
+	t_u32 num_of_chan;
+    /** scan channel list in ACS mode */
+	scan_chan_list chan_list[MLAN_MAX_CHANNEL];
+} mlan_uap_scan_channels;
+
+/** mlan_uap_channel */
+typedef struct _mlan_uap_channel {
+    /** band cfg */
+	t_u8 band_cfg;
+    /** channel */
+	t_u8 channel;
+} mlan_uap_channel;
+
 #endif
 
 #ifdef WIFI_DIRECT_SUPPORT
@@ -955,6 +988,10 @@ typedef struct _mlan_ds_bss {
 		mlan_deauth_param deauth_param;
 	/** AP Wmm parameters for MLAN_OID_UAP_CFG_WMM_PARAM */
 		wmm_parameter_t ap_wmm_para;
+		/** ap scan channels for MLAN_OID_UAP_SCAN_CHANNELS*/
+		mlan_uap_scan_channels ap_scan_channels;
+	/** ap channel for MLAN_OID_UAP_CHANNEL*/
+		mlan_uap_channel ap_channel;
 #endif
 #if defined(STA_SUPPORT) && defined(UAP_SUPPORT)
 	/** BSS role for MLAN_OID_BSS_ROLE */
@@ -1496,6 +1533,18 @@ typedef struct _mlan_debug_info {
 	t_u16 bypass_pkt_count;
     /** Corresponds to scan_processing member of mlan_adapter */
 	t_u32 scan_processing;
+    /** Corresponds to mlan_processing member of mlan_adapter */
+	t_u32 mlan_processing;
+    /** Corresponds to main_lock_flag member of mlan_adapter */
+	t_u32 main_lock_flag;
+    /** Corresponds to main_process_cnt member of mlan_adapter */
+	t_u32 main_process_cnt;
+	/** Corresponds to delay_task_flag member of mlan_adapter */
+	t_u32 delay_task_flag;
+    /** mlan_rx_processing */
+	t_u32 mlan_rx_processing;
+    /** rx pkts queued */
+	t_u32 rx_pkts_queued;
     /** Number of host to card command failures */
 	t_u32 num_cmd_host_to_card_failure;
     /** Number of host to card sleep confirm failures */
@@ -1612,12 +1661,6 @@ typedef struct _mlan_debug_info {
     /**  dropped pkts */
 	t_u32 num_drop_pkts;
 #endif
-	/** mlan_processing */
-	t_u32 mlan_processing;
-    /** mlan_rx_processing */
-	t_u32 mlan_rx_processing;
-    /** rx pkts queued */
-	t_u32 rx_pkts_queued;
     /** mlan_adapter pointer */
 	t_void *mlan_adapter;
     /** mlan_adapter_size */
@@ -1964,7 +2007,11 @@ typedef struct _mlan_ds_power_cfg {
 #define HOST_SLEEP_COND_IPV6_PACKET     MBIT(31)
 
 /** Host sleep config conditions: Default */
+#ifdef SEC_ANDROID_PRODUCT
 #define HOST_SLEEP_DEF_COND     (HOST_SLEEP_COND_BROADCAST_DATA | HOST_SLEEP_COND_UNICAST_DATA | HOST_SLEEP_COND_MAC_EVENT | HOST_SLEEP_COND_IPV6_PACKET)
+#else
+#define HOST_SLEEP_DEF_COND     (HOST_SLEEP_COND_BROADCAST_DATA | HOST_SLEEP_COND_UNICAST_DATA | HOST_SLEEP_COND_MAC_EVENT)
+#endif
 /** Host sleep config GPIO : Default */
 #define HOST_SLEEP_DEF_GPIO     0xff
 /** Host sleep config gap : Default */

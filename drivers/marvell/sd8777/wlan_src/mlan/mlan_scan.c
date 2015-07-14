@@ -5050,6 +5050,7 @@ wlan_find_best_network(IN mlan_private *pmpriv,
 			preq_ssid_bssid->ft_md = preq_bss->pmd_ie->mdid;
 			preq_ssid_bssid->ft_cap = preq_bss->pmd_ie->ft_cap;
 		}
+		preq_ssid_bssid->bss_band = preq_bss->bss_band;
 	}
 
 	if (!preq_ssid_bssid->ssid.ssid_len) {

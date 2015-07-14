@@ -691,11 +691,12 @@ wlan_disable_host_int(pmlan_adapter pmadapter)
  *  @param pmadapter A pointer to mlan_adapter structure
  *  @param pmbuf      A pointer to the SDIO data/cmd buffer
  *  @param upld_typ  Type of rx packet
+ *  @param lock_flag  flag for spin_lock.
  *  @return          MLAN_STATUS_SUCCESS
  */
 static mlan_status
 wlan_decode_rx_packet(mlan_adapter *pmadapter, mlan_buffer *pmbuf,
-		      t_u32 upld_typ)
+		      t_u32 upld_typ, t_u8 lock_flag)
 {
 	t_u8 *cmd_buf;
 	t_u32 event;
@@ -708,19 +709,23 @@ wlan_decode_rx_packet(mlan_adapter *pmadapter, mlan_buffer *pmbuf,
 		pmbuf->data_len = (pmadapter->upld_len - INTF_HEADER_LEN);
 		pmbuf->data_offset += INTF_HEADER_LEN;
 		if (pmadapter->rx_work_flag) {
+			if (lock_flag)
+				pmadapter->callbacks.moal_spin_lock(pmadapter->
+								    pmoal_handle,
+								    pmadapter->
+								    rx_data_queue.
+								    plock);
 			util_enqueue_list_tail(pmadapter->pmoal_handle,
 					       &pmadapter->rx_data_queue,
-					       (pmlan_linked_list)pmbuf,
-					       pmadapter->callbacks.
-					       moal_spin_lock,
-					       pmadapter->callbacks.
-					       moal_spin_unlock);
-			util_scalar_increment(pmadapter->pmoal_handle,
-					      &pmadapter->rx_pkts_queued,
-					      pmadapter->callbacks.
-					      moal_spin_lock,
-					      pmadapter->callbacks.
-					      moal_spin_unlock);
+					       (pmlan_linked_list)pmbuf, MNULL,
+					       MNULL);
+			pmadapter->rx_pkts_queued++;
+			if (lock_flag)
+				pmadapter->callbacks.
+					moal_spin_unlock(pmadapter->
+							 pmoal_handle,
+							 pmadapter->
+							 rx_data_queue.plock);
 		} else {
 			wlan_handle_rx_packet(pmadapter, pmbuf);
 		}
@@ -837,7 +842,7 @@ wlan_receive_single_packet(mlan_adapter *pmadapter)
 		goto done;
 	}
 	pmadapter->mpa_rx_count[0]++;
-	wlan_decode_rx_packet(pmadapter, pmbuf, pkt_type);
+	wlan_decode_rx_packet(pmadapter, pmbuf, pkt_type, MTRUE);
 done:
 	if (ret != MLAN_STATUS_SUCCESS)
 		wlan_free_mlan_buffer(pmadapter, pmbuf);
@@ -895,6 +900,10 @@ wlan_receive_mp_aggr_buf(mlan_adapter *pmadapter)
 		ret = MLAN_STATUS_FAILURE;
 		goto done;
 	}
+	if (pmadapter->rx_work_flag)
+		pmadapter->callbacks.moal_spin_lock(pmadapter->pmoal_handle,
+						    pmadapter->rx_data_queue.
+						    plock);
 	if (!pmadapter->mpa_rx.buf && pmadapter->mpa_rx.pkt_cnt > 1) {
 		for (pind = 0; pind < pmadapter->mpa_rx.pkt_cnt; pind++) {
 			mbuf_deaggr = pmadapter->mpa_rx.mbuf_arr[pind];
@@ -908,7 +917,8 @@ wlan_receive_mp_aggr_buf(mlan_adapter *pmadapter)
 						  mbuf_deaggr->data_offset +
 						  2));
 			pmadapter->upld_len = pkt_len;
-			wlan_decode_rx_packet(pmadapter, mbuf_deaggr, pkt_type);
+			wlan_decode_rx_packet(pmadapter, mbuf_deaggr, pkt_type,
+					      MFALSE);
 		}
 	} else {
 		DBG_HEXDUMP(MIF_D, "SDIO MP-A Blk Rd", pmadapter->mpa_rx.buf,
@@ -936,7 +946,7 @@ wlan_receive_mp_aggr_buf(mlan_adapter *pmadapter)
 				pmadapter->upld_len = pkt_len;
 				/* Process de-aggr packet */
 				wlan_decode_rx_packet(pmadapter, mbuf_deaggr,
-						      pkt_type);
+						      pkt_type, MFALSE);
 			} else {
 				PRINTM(MERROR,
 				       "Wrong aggr packet: type=%d, len=%d, max_len=%d\n",
@@ -947,6 +957,10 @@ wlan_receive_mp_aggr_buf(mlan_adapter *pmadapter)
 			curr_ptr += pmadapter->mpa_rx.len_arr[pind];
 		}
 	}
+	if (pmadapter->rx_work_flag)
+		pmadapter->callbacks.moal_spin_unlock(pmadapter->pmoal_handle,
+						      pmadapter->rx_data_queue.
+						      plock);
 	pmadapter->mpa_rx_count[pmadapter->mpa_rx.pkt_cnt - 1]++;
 	MP_RX_AGGR_BUF_RESET(pmadapter);
 done:
@@ -1075,7 +1089,7 @@ rx_curr_single:
 		if (port != CTRL_PORT)
 			pmadapter->mpa_rx_count[0]++;
 
-		wlan_decode_rx_packet(pmadapter, pmbuf, pkt_type);
+		wlan_decode_rx_packet(pmadapter, pmbuf, pkt_type, MTRUE);
 	}
 	if (f_post_aggr_cur) {
 		PRINTM(MINFO, "Current packet aggregation.\n");
@@ -1564,11 +1578,8 @@ wlan_interrupt(pmlan_adapter pmadapter)
 		pcb->moal_spin_lock(pmadapter->pmoal_handle,
 				    pmadapter->pint_lock);
 		pmadapter->sdio_ireg |= sdio_ireg;
-		memcpy(pmadapter, pmadapter->last_mp_regs, pmadapter->mp_regs,
-		       sizeof(pmadapter->last_mp_regs));
 		pcb->moal_spin_unlock(pmadapter->pmoal_handle,
 				      pmadapter->pint_lock);
-
 	} else {
 		PRINTM(MMSG, "wlan_interrupt: sdio_ireg = 0x%x\n", sdio_ireg);
 	}
@@ -1608,7 +1619,6 @@ wlan_process_int_status(mlan_adapter *pmadapter)
 	t_u8 sdio_ireg;
 	mlan_buffer *pmbuf = MNULL;
 
-	t_u8 mp_regs[MAX_MP_REGS];
 	t_u8 port = 0;
 	t_u32 len_reg_l, len_reg_u;
 	t_u32 rx_blocks;
@@ -1627,7 +1637,6 @@ wlan_process_int_status(mlan_adapter *pmadapter)
 	pcb->moal_spin_lock(pmadapter->pmoal_handle, pmadapter->pint_lock);
 	sdio_ireg = pmadapter->sdio_ireg;
 	pmadapter->sdio_ireg = 0;
-	memcpy(pmadapter, mp_regs, pmadapter->last_mp_regs, sizeof(mp_regs));
 	pcb->moal_spin_unlock(pmadapter->pmoal_handle, pmadapter->pint_lock);
 
 	if (!sdio_ireg)
@@ -1636,8 +1645,10 @@ wlan_process_int_status(mlan_adapter *pmadapter)
 	if (sdio_ireg & DN_LD_HOST_INT_STATUS) {
 		if (pmadapter->mp_wr_bitmap & pmadapter->mp_data_port_mask)
 			pmadapter->mp_invalid_update++;
-		pmadapter->mp_wr_bitmap = (t_u32)mp_regs[WR_BITMAP_L];
-		pmadapter->mp_wr_bitmap |= ((t_u32)mp_regs[WR_BITMAP_U]) << 8;
+		pmadapter->mp_wr_bitmap =
+			(t_u32)pmadapter->mp_regs[WR_BITMAP_L];
+		pmadapter->mp_wr_bitmap |=
+			((t_u32)pmadapter->mp_regs[WR_BITMAP_U]) << 8;
 		bit_count =
 			bitcount(pmadapter->mp_wr_bitmap & pmadapter->
 				 mp_data_port_mask);
@@ -1666,7 +1677,7 @@ wlan_process_int_status(mlan_adapter *pmadapter)
 		/* Check if firmware has attach buffer at command port and
 		   update just that in wr_bit_map. */
 		pmadapter->mp_wr_bitmap |=
-			(t_u32)mp_regs[WR_BITMAP_L] & CTRL_PORT_MASK;
+			(t_u32)pmadapter->mp_regs[WR_BITMAP_L] & CTRL_PORT_MASK;
 		if (pmadapter->mp_wr_bitmap & CTRL_PORT_MASK)
 			pmadapter->cmd_sent = MFALSE;
 	}
@@ -1674,8 +1685,10 @@ wlan_process_int_status(mlan_adapter *pmadapter)
 	PRINTM(MINFO, "cmd_sent=%d, data_sent=%d\n", pmadapter->cmd_sent,
 	       pmadapter->data_sent);
 	if (sdio_ireg & UP_LD_HOST_INT_STATUS) {
-		pmadapter->mp_rd_bitmap = (t_u32)mp_regs[RD_BITMAP_L];
-		pmadapter->mp_rd_bitmap |= ((t_u32)mp_regs[RD_BITMAP_U]) << 8;
+		pmadapter->mp_rd_bitmap =
+			(t_u32)pmadapter->mp_regs[RD_BITMAP_L];
+		pmadapter->mp_rd_bitmap |=
+			((t_u32)pmadapter->mp_regs[RD_BITMAP_U]) << 8;
 		PRINTM(MINTR, "UPLD: rd_bitmap=0x%08x\n",
 		       pmadapter->mp_rd_bitmap);
 
@@ -1688,8 +1701,8 @@ wlan_process_int_status(mlan_adapter *pmadapter)
 			}
 			len_reg_l = rd_len_p0_l + (port << 1);
 			len_reg_u = rd_len_p0_u + (port << 1);
-			rx_len = ((t_u16)mp_regs[len_reg_u]) << 8;
-			rx_len |= (t_u16)mp_regs[len_reg_l];
+			rx_len = ((t_u16)pmadapter->mp_regs[len_reg_u]) << 8;
+			rx_len |= (t_u16)pmadapter->mp_regs[len_reg_l];
 			PRINTM(MINFO, "RX: port=%d rx_len=%u\n", port, rx_len);
 			rx_blocks =
 				(rx_len + MLAN_SDIO_BLOCK_SIZE -
@@ -1749,7 +1762,8 @@ wlan_process_int_status(mlan_adapter *pmadapter)
 				goto term_cmd53;
 			}
 #ifndef SDIO_MULTI_PORT_RX_AGGR
-			wlan_decode_rx_packet(pmadapter, pmbuf, upld_typ);
+			wlan_decode_rx_packet(pmadapter, pmbuf, upld_typ,
+					      MTRUE);
 #endif
 		}
 		/* We might receive data/sleep_cfm at the same time */

@@ -421,6 +421,7 @@ mlan_status woal_set_get_sys_config(moal_private *priv,
 mlan_status woal_set_get_ap_wmm_para(moal_private *priv, t_u16 action,
 				     wmm_parameter_t *ap_wmm_para);
 int woal_uap_set_ap_cfg(moal_private *priv, t_u8 *data, int len);
+int woal_set_uap_ht_tx_cfg(moal_private *priv, t_u8 band_cfg, t_u8 en);
 mlan_status woal_uap_set_11n_status(mlan_uap_bss_param *sys_cfg, t_u8 action);
 #ifdef UAP_WEXT
 void woal_ioctl_get_uap_info_resp(moal_private *priv, mlan_ds_get_info *info);

@@ -1570,10 +1570,12 @@ done:
  *    @param handle       MOAL handle
  *    @param data         Source data
  *    @param size         data length
+ *    @param wait_option  wait option
  *    @return             MLAN_STATUS_SUCCESS--success, otherwise--fail
  */
 static t_u32
-woal_process_hostcmd_cfg(moal_handle *handle, t_u8 *data, t_size size)
+woal_process_hostcmd_cfg(moal_handle *handle, t_u8 *data, t_size size,
+			 t_u8 wait_option)
 {
 	mlan_status ret = MLAN_STATUS_SUCCESS;
 	t_u8 *pos = data;
@@ -1619,7 +1621,7 @@ woal_process_hostcmd_cfg(moal_handle *handle, t_u8 *data, t_size size)
 
 			/* fire the hostcommand from here */
 			woal_priv_hostcmd(handle->priv[0], buf, CMD_BUF_LEN,
-					  MOAL_CMD_WAIT);
+					  wait_option);
 			memset(buf + strlen(CMD_STR), 0,
 			       CMD_BUF_LEN - strlen(CMD_STR));
 			ptr = buf + strlen(CMD_STR) + sizeof(t_u32);
@@ -1701,10 +1703,11 @@ woal_request_init_user_conf_callback(const struct firmware *firmware,
  *    @brief WOAL set user defined init data and param
  *
  *    @param handle       MOAL handle structure
+ *    @param wait_option  wait option
  *    @return             MLAN_STATUS_SUCCESS--success, otherwise--fail
  */
 static t_u32
-woal_set_user_init_data(moal_handle *handle, int type)
+woal_set_user_init_data(moal_handle *handle, int type, t_u8 wait_option)
 {
 	mlan_status ret = MLAN_STATUS_FAILURE;
 	t_u8 *cfg_data = NULL;
@@ -1885,7 +1888,8 @@ woal_set_user_init_data(moal_handle *handle, int type)
 			   type == INIT_HOSTCMD_CFG_DATA ||
 			   type == COUNTRY_POWER_TABLE) {
 			if (MLAN_STATUS_SUCCESS !=
-			    woal_process_hostcmd_cfg(handle, cfg_data, len)) {
+			    woal_process_hostcmd_cfg(handle, cfg_data, len,
+						     wait_option)) {
 				PRINTM(MERROR,
 				       "Can't process hostcmd config file\n");
 				goto done;
@@ -1936,9 +1940,15 @@ woal_add_card_dpc(moal_handle *handle)
 		}
 	}
 	register_inetaddr_notifier(&woal_notifier);
+#ifdef MFG_CMD_SUPPORT
+	if (mfg_mode == MLAN_INIT_PARA_ENABLED)
+		goto done;
+#endif
+
 	if (init_cfg) {
 		if (MLAN_STATUS_SUCCESS !=
-		    woal_set_user_init_data(handle, INIT_CFG_DATA)) {
+		    woal_set_user_init_data(handle, INIT_CFG_DATA,
+					    MOAL_CMD_WAIT)) {
 			PRINTM(MFATAL, "Set user init data and param failed\n");
 			ret = MLAN_STATUS_FAILURE;
 			goto err;
@@ -1946,7 +1956,8 @@ woal_add_card_dpc(moal_handle *handle)
 	}
 	if (txpwrlimit_cfg) {
 		if (MLAN_STATUS_SUCCESS !=
-		    woal_set_user_init_data(handle, TXPWRLIMIT_CFG_DATA)) {
+		    woal_set_user_init_data(handle, TXPWRLIMIT_CFG_DATA,
+					    MOAL_CMD_WAIT)) {
 			PRINTM(MFATAL,
 			       "Set user tx power limit data and param failed\n");
 			ret = MLAN_STATUS_FAILURE;
@@ -1955,7 +1966,8 @@ woal_add_card_dpc(moal_handle *handle)
 	}
 	if (init_hostcmd_cfg) {
 		if (MLAN_STATUS_SUCCESS !=
-		    woal_set_user_init_data(handle, INIT_HOSTCMD_CFG_DATA)) {
+		    woal_set_user_init_data(handle, INIT_HOSTCMD_CFG_DATA,
+					    MOAL_CMD_WAIT)) {
 			PRINTM(MFATAL,
 			       "Set user init hostcmd data and param failed\n");
 			ret = MLAN_STATUS_FAILURE;
@@ -1963,6 +1975,9 @@ woal_add_card_dpc(moal_handle *handle)
 		}
 	}
 
+#ifdef MFG_CMD_SUPPORT
+done:
+#endif
 err:
 	if (ret != MLAN_STATUS_SUCCESS) {
 		PRINTM(MERROR, "Failed to add interface\n");
@@ -3202,10 +3217,12 @@ woal_mlan_debug_info(moal_private *priv)
 	}
 	PRINTM(MERROR, "------------mlan_debug_info-------------\n");
 	PRINTM(MERROR, "mlan_processing =%d\n", info.mlan_processing);
+	PRINTM(MERROR, "main_lock_flag =%d\n", info.main_lock_flag);
+	PRINTM(MERROR, "main_process_cnt =%d\n", info.main_process_cnt);
+	PRINTM(MERROR, "delay_task_flag =%d\n", info.delay_task_flag);
 	PRINTM(MERROR, "mlan_rx_processing =%d\n", info.mlan_rx_processing);
 	PRINTM(MERROR, "rx_pkts_queued=%d\n", info.rx_pkts_queued);
 	PRINTM(MERROR, "tx_pkts_queued=%d\n", info.tx_pkts_queued);
-
 	PRINTM(MERROR, "num_cmd_timeout = %d\n", info.num_cmd_timeout);
 	PRINTM(MERROR, "dbg.num_cmd_timeout = %d\n", info.dbg_num_cmd_timeout);
 	PRINTM(MERROR, "Timeout cmd id = 0x%x, act = 0x%x\n",
@@ -4685,6 +4702,11 @@ woal_reassociation_thread(void *data)
 				priv->set_asynced_essid_flag = MFALSE;
 				continue;
 			}
+	    /** avoid on going scan from other thread */
+			if (handle->scan_pending_on_block) {
+				reassoc_timer_req = MTRUE;
+				break;
+			}
 
 			/* The semaphore is used to avoid reassociation thread
 			   and wlan_set_scan/wlan_set_essid interrupting each
@@ -5244,6 +5266,9 @@ woal_dump_mlan_drv_info(moal_private *priv, t_u8 *buf)
 	}
 	ptr += sprintf(ptr, "------------mlan_debug_info-------------\n");
 	ptr += sprintf(ptr, "mlan_processing =%d\n", info.mlan_processing);
+	ptr += sprintf(ptr, "main_lock_flag =%d\n", info.main_lock_flag);
+	ptr += sprintf(ptr, "main_process_cnt =%d\n", info.main_process_cnt);
+	ptr += sprintf(ptr, "delay_task_flag =%d\n", info.delay_task_flag);
 	ptr += sprintf(ptr, "mlan_rx_processing =%d\n",
 		       info.mlan_rx_processing);
 	ptr += sprintf(ptr, "rx_pkts_queued =%d\n", info.rx_pkts_queued);
@@ -5516,7 +5541,11 @@ woal_create_dump_dir(moal_handle *phandle, char *dir_buf, int buf_size)
 
 	moal_get_system_time(phandle, &sec, &usec);
 	memset(dir_buf, 0, buf_size);
+#ifdef SEC_ANDROID_PRODUCT
 	sprintf(dir_buf, "%s%u", "/data/log/dump_", sec);
+#else
+	sprintf(dir_buf, "%s%u", "/data/dump_", sec);
+#endif
 
 	dentry = kern_path_create(AT_FDCWD, dir_buf, &path, 1);
 	if (IS_ERR(dentry)) {
@@ -6148,6 +6177,20 @@ woal_request_country_power_table(moal_private *priv, char *country)
 
 	handle = priv->phandle;
 
+#ifdef SEC_ANDROID_PRODUCT
+	if (!strlen(country)) {
+		PRINTM(MIOCTL, "Recover original power table\n");
+		if (MLAN_STATUS_SUCCESS !=
+		    woal_set_user_init_data(handle, TXPWRLIMIT_CFG_DATA,
+			    		    MOAL_IOCTL_WAIT)) {
+			PRINTM(MFATAL, 
+			       "Download power table to firmware failed\n");
+			ret = MLAN_STATUS_FAILURE;
+		}
+		LEAVE();
+		return ret;
+	}
+#endif
 	/* Replace XX with ISO 3166-1 alpha-2 country code */
 	strncpy(strstr(country_name, "XX"), country, strlen(country));
 
@@ -6169,7 +6212,8 @@ woal_request_country_power_table(moal_private *priv, char *country)
 				     sizeof(file_path) - strlen(file_path));
 
 	if (MLAN_STATUS_SUCCESS !=
-	    woal_set_user_init_data(handle, COUNTRY_POWER_TABLE)) {
+	    woal_set_user_init_data(handle, COUNTRY_POWER_TABLE,
+				    MOAL_IOCTL_WAIT)) {
 		PRINTM(MFATAL, "Download power table to firmware failed\n");
 		ret = MLAN_STATUS_FAILURE;
 	}

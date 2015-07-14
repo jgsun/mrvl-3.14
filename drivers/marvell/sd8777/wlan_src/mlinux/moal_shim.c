@@ -1646,8 +1646,10 @@ moal_recv_event(IN t_void *pmoal_handle, IN pmlan_event pmevent)
 				 * wpa_supplicant 2.x */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 31) || defined(COMPAT_WIRELESS)
 			if (pmevent->event_len > ETH_ALEN) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0)
 				/* set station info filled flag */
 				sinfo.filled |= STATION_INFO_ASSOC_REQ_IES;
+#endif
 				/* get the assoc request ies and length */
 				sinfo.assoc_req_ies =
 					(const t_u8 *)(pmevent->event_buf +

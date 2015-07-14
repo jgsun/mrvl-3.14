@@ -4202,9 +4202,9 @@ woal_cancel_scan(moal_private *priv, t_u8 wait_option)
 	mlan_ioctl_req *req = NULL;
 	mlan_status ret = MLAN_STATUS_SUCCESS;
 	moal_handle *handle = priv->phandle;
-	moal_private *scan_priv = handle->scan_priv;
 #ifdef STA_CFG80211
 	unsigned long flags;
+	moal_private *scan_priv = handle->scan_priv;
 #endif
 
 	/* If scan is in process, cancel the scan command */

@@ -1616,6 +1616,8 @@ typedef struct _mlan_adapter {
 	t_void *pmain_proc_lock;
     /** mlan_processing */
 	t_u32 mlan_processing;
+    /** main_process_cnt */
+	t_u32 main_process_cnt;
     /** mlan_rx_processing */
 	t_u32 mlan_rx_processing;
     /** rx_proc_lock for main_rx_process */
@@ -1623,7 +1625,7 @@ typedef struct _mlan_adapter {
     /** rx work enable flag */
 	t_u8 rx_work_flag;
 	/* number of rx pkts queued */
-	mlan_scalar rx_pkts_queued;
+	t_u16 rx_pkts_queued;
     /** more task flag */
 	t_u32 more_task_flag;
     /** delay task flag */
@@ -1647,7 +1649,10 @@ typedef struct _mlan_adapter {
 
     /** Firmware release number */
 	t_u32 fw_release_number;
-
+    /** firmware version */
+	t_u8 fw_ver;
+    /** uap firmware version */
+	t_u8 uap_fw_ver;
     /** Number of antenna used */
 	t_u16 number_of_antenna;
 
@@ -1679,8 +1684,6 @@ typedef struct _mlan_adapter {
 	t_u32 mp_update[SDIO_MP_AGGR_DEF_PKT_LIMIT * 2];
 	/** Invalid port update count */
 	t_u32 mp_invalid_update;
-    /** last SDIO multiple port group registers */
-	t_u8 last_mp_regs[MAX_MP_REGS];
     /** Array to store values of SDIO multiple port group registers */
 	t_u8 *mp_regs;
     /** allocated buf to read SDIO multiple port group registers */

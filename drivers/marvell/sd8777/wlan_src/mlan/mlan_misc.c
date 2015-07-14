@@ -427,6 +427,10 @@ wlan_get_info_debug_info(IN pmlan_adapter pmadapter,
 		debug_info->port_open = pmpriv->port_open;
 		debug_info->bypass_pkt_count = pmadapter->bypass_pkt_count;
 		debug_info->scan_processing = pmadapter->scan_processing;
+		debug_info->mlan_processing = pmadapter->mlan_processing;
+		debug_info->main_lock_flag = pmadapter->main_lock_flag;
+		debug_info->main_process_cnt = pmadapter->main_process_cnt;
+		debug_info->delay_task_flag = pmadapter->delay_task_flag;
 		debug_info->num_cmd_host_to_card_failure
 			= pmadapter->dbg.num_cmd_host_to_card_failure;
 		debug_info->num_cmd_sleep_cfm_host_to_card_failure
@@ -534,10 +538,7 @@ wlan_get_info_debug_info(IN pmlan_adapter pmadapter,
 #endif
 		debug_info->mlan_processing = pmadapter->mlan_processing;
 		debug_info->mlan_rx_processing = pmadapter->mlan_rx_processing;
-		debug_info->rx_pkts_queued =
-			util_scalar_read(pmadapter->pmoal_handle,
-					 &pmadapter->rx_pkts_queued, MNULL,
-					 MNULL);
+		debug_info->rx_pkts_queued = pmadapter->rx_pkts_queued;
 		debug_info->mlan_adapter = pmadapter;
 		debug_info->mlan_adapter_size = sizeof(mlan_adapter);
 		debug_info->mlan_priv_num = pmadapter->priv_num;

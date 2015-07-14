@@ -847,8 +847,10 @@ woal_cfg80211_beacon_config(moal_private *priv,
 	    (sys_config.protocol == PROTOCOL_WPA))
 		enable_11n = MFALSE;
 	if (!enable_11n) {
+		woal_set_uap_ht_tx_cfg(priv, sys_config.band_cfg, MFALSE);
 		woal_uap_set_11n_status(&sys_config, MLAN_ACT_DISABLE);
 	} else {
+		woal_set_uap_ht_tx_cfg(priv, sys_config.band_cfg, MTRUE);
 		woal_uap_set_11n_status(&sys_config, MLAN_ACT_ENABLE);
 		woal_set_get_tx_bf_cap(priv, MLAN_ACT_GET,
 				       &sys_config.tx_bf_cap);
@@ -1765,7 +1767,7 @@ woal_cfg80211_del_station(struct wiphy *wiphy, struct net_device *dev,
 		PRINTM(MMSG, "wlan: deauth station " MACSTR "\n",
 		       MAC2STR(mac_addr));
 #ifdef WIFI_DIRECT_SUPPORT
-		if (!priv->phandle->is_go_timer_set &&
+		if (!priv->phandle->is_go_timer_set ||
 		    priv->bss_type != MLAN_BSS_TYPE_WIFIDIRECT)
 #endif
 			woal_deauth_station(priv, (u8 *)mac_addr);
@@ -1833,9 +1835,14 @@ woal_uap_cfg80211_get_station(struct wiphy *wiphy, struct net_device *dev,
 			PRINTM(MIOCTL, "Get station: " MACSTR " RSSI=%d\n",
 			       MAC2STR(mac),
 			       (int)info->param.sta_list.info[i].rssi);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0)
+			stainfo->filled = BIT(NL80211_STA_INFO_INACTIVE_TIME) |
+				BIT(NL80211_STA_INFO_SIGNAL);
+#else
 			stainfo->filled =
 				STATION_INFO_INACTIVE_TIME |
 				STATION_INFO_SIGNAL;
+#endif
 			stainfo->inactive_time = 0;
 			stainfo->signal = info->param.sta_list.info[i].rssi;
 			ret = 0;
