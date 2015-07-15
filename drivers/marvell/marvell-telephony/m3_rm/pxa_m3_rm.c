@@ -932,12 +932,6 @@ static int pxa_m3rm_probe(struct platform_device *pdev)
 	struct device_node *np = dev->of_node;
 
 	m3rm_dev = &pdev->dev;
-	gps_lna_gpio = of_get_named_gpio(np, "gpslna", 0);
-	if (gps_lna_gpio > 0) {
-		if (gpio_is_valid(gps_lna_gpio))
-			gpio_direction_output(gps_lna_gpio, 0);
-	}
-	pr_info("m3 get gps_lna_gpio gps_lna_gpio =%d\n", gps_lna_gpio);
 
 	m3_pctrl.pinctrl = devm_pinctrl_get(m3rm_dev);
 	if (IS_ERR(m3_pctrl.pinctrl))
@@ -1027,6 +1021,17 @@ static int pxa_m3rm_probe(struct platform_device *pdev)
 		cpuid = CPUID_INVALID; /* set invalid CPU ID by default */
 		m3_ip_ver = 3;
 		hw_mode = 1;
+	}
+
+	if (3 == m3_ip_ver) {
+		gps_lna_gpio = of_get_named_gpio(np, "gpslna", 0);
+		if (gps_lna_gpio > 0) {
+			if (gpio_is_valid(gps_lna_gpio)) {
+				if (!gpio_request(gps_lna_gpio, "gpslna"))
+					gpio_direction_output(gps_lna_gpio, 0);
+			}
+		}
+		pr_info("m3 get gps_lna_gpio gps_lna_gpio =%d\n", gps_lna_gpio);
 	}
 
 	if (of_property_read_u32(np, "pmicver", &pmic_ver))
