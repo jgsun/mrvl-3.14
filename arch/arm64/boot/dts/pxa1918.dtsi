@@ -248,8 +248,12 @@
 
 			sdh2: sdh@d4281000 {
 				compatible = "marvell,pxav3-mmc-v2";
-				reg = <0xd4281000 0x120>;
-				interrupts = <0 39 0x4>;
+				reg = <0xd4281000 0x150>,
+				      <0xd427f000 0x150>,
+				      <0xc0100000 0x1024>;
+				interrupts = <0 39 0x4>,
+					     <0 93 0x4>,
+					     <0 43 0x4>;
 				clocks = <&soc_clocks PXA1U88_CLK_SDH2
 					  &soc_clocks PXA1U88_CLK_SDH_AXI
 					  &soc_clocks PXA1U88_CLK_SDH2_DUMMY
@@ -258,6 +262,7 @@
 					  >;
 				clock-names = "sdh-base-clk", "sdh-axi-clk", "sdh-fclk-tuned", "cpu", "ddr";
 				lpm-qos = <PM_QOS_CPUIDLE_BLOCK_AXI>;
+				marvell,flc_en;
 				status = "disabled";
 			};
 

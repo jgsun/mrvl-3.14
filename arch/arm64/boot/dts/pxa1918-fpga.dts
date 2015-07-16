@@ -127,12 +127,41 @@
 			sdh2: sdh@d4281000 {
 				bus-width = <8>;
 				non-removable;
-				marvell,sdh-quirks = <(SDHCI_QUIRK_BROKEN_CARD_DETECTION)>;
-				marvell,sdh-quirks2 = <(SDHCI_QUIRK2_BROKEN_HS200)>;
-				marvell,sdh-host-caps = <(MMC_CAP_1_8V_DDR)>;
-				marvell,sdh-host-caps2 = <(MMC_CAP2_DISABLE_BLK_ASYNC)>;
+				marvell,sdh-quirks = <(
+						SDHCI_QUIRK_MULTIBLOCK_READ_ACMD12 |
+						SDHCI_QUIRK_BROKEN_ADMA |
+						SDHCI_QUIRK_BROKEN_CARD_DETECTION
+						)>;
+				marvell,sdh-quirks2 = <(
+						SDHCI_QUIRK2_HOST_NO_CMD23 |
+						SDHCI_QUIRK2_TUNING_ADMA_BROKEN |
+						SDHCI_QUIRK2_BROKEN_HS200 |
+						SDHCI_QUIRK2_TIMEOUT_SHORT
+						)>;
+				/* marvell,sdh-host-caps = <(MMC_CAP_1_8V_DDR)>; */
+				marvell,sdh-host-caps-disable = <(MMC_CAP_UHS_SDR104
+	| MMC_CAP_UHS_DDR50 | MMC_CAP_UHS_SDR50	| MMC_CAP_UHS_SDR25 | MMC_CAP_UHS_SDR12
+						)>;
+				marvell,sdh-host-caps2 = <(
+	/*					MMC_CAP2_DISABLE_BLK_ASYNC | */
+						MMC_CAP2_BOOTPART_NOACC |
+						MMC_CAP2_SKIP_SD |
+						MMC_CAP2_SKIP_SDIO
+						)>;
+				marvell,sdh-flags = <(
+						PXA_FLAG_NEW_RX_CFG_REG |
+						PXA_FLAG_SD_8_BIT_CAPABLE_SLOT |
+						PXA_FLAG_ENABLE_CLOCK_GATING
+						| PXA_FLAG_TX_SEL_BUS_CLK
+						)>;
+		/* prop "sdh-dtr-data": <timing preset_rate src_rate tx_delay rx_delay sdclk_sel0 sdclk_sel1 fakeclk_en> */
+				marvell,sdh-dtr-data = <PXA_MMC_TIMING_LEGACY PXA_SDH_DTR_26M PXA_SDH_DTR_52M 0 0 0 0 0>,
+						<PXA_MMC_TIMING_MMC_HS PXA_SDH_DTR_52M PXA_SDH_DTR_104M 0 0 0 0 0>,
+						<PXA_MMC_TIMING_UHS_DDR50 PXA_SDH_DTR_52M PXA_SDH_DTR_104M 0 0 0 0 0>,
+						<PXA_MMC_TIMING_MMC_HS200 PXA_SDH_DTR_156M PXA_SDH_DTR_156M 0 0 3 0 0>,
+						<PXA_MMC_TIMING_MAX PXA_SDH_DTR_PS_NONE PXA_SDH_DTR_104M 0 0 0 0 0>;
 				status = "okay";
-			 };
+			};
 
 			dsi: dsi@d420b800 {
 				marvell,phy-name = "mmp_dsi1";
