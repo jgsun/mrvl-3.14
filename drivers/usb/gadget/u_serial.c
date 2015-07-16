@@ -699,7 +699,9 @@ static int gs_start_io(struct gs_port *port)
 
 	/* unblock any pending writes into our circular buffer */
 	if (started) {
-		tty_wakeup(port->port.tty);
+		if (port->port.tty)
+			tty_wakeup(port->port.tty);
+
 	} else {
 		gs_free_requests(ep, head, &port->read_allocated);
 		gs_free_requests(gser->in, &port->write_pool,
