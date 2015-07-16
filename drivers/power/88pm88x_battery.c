@@ -1731,13 +1731,15 @@ static void pm88x_init_soc_cycles(struct pm88x_battery_info *info,
 	if (info->chip->powerup & 0x2) {
 		dev_info(info->dev, "%s: chg wakeup\n", __func__);
 		if (saved_is_valid < 0) {
-			if ((soc_from_vbat_active - soc_from_vbat_slp) > 0)
-				*initial_soc = soc_from_vbat_active;
-			else
-				*initial_soc = soc_from_vbat_slp;
+			*initial_soc = soc_from_vbat_active;
 			info->ocv_is_reliable = false;
 		} else if ((soc_from_vbat_active - soc_from_vbat_slp) > 0) {
 			*initial_soc = soc_from_vbat_active;
+		} else if (abs(soc_from_vbat_active - soc_from_vbat_slp) > PM88X_MUL_FAC1000(40)) {
+			if (abs(soc_from_vbat_active - soc_from_saved) > PM88X_MUL_FAC1000(20))
+				*initial_soc = soc_from_vbat_active;
+			else
+				*initial_soc = soc_from_saved;
 		} else {
 			battery_is_changed = check_battery_change(info, soc_from_vbat_slp,
 							  soc_from_saved);
