@@ -265,6 +265,9 @@ static void OV13850r2a_Lenc_Decoder(uint8_t *pdata, uint8_t *ppara)
 static int OV13850r2a_OTP_access_start(struct b52_sensor *sensor)
 {
 	int temp;
+	/* need stream on sensor before read OTP data*/
+	OV13850r2a_write_i2c(sensor, 0x0100, 0x01);
+
 	temp = OV13850r2a_read_i2c(sensor, 0x5002);
 	OV13850r2a_write_i2c(sensor, 0x5002, (0x00 & 0x02) | (temp & (~0x02)));
 
@@ -287,6 +290,8 @@ static int OV13850r2a_OTP_access_end(struct b52_sensor *sensor)
 
 	temp = OV13850r2a_read_i2c(sensor, 0x5002);
 	OV13850r2a_write_i2c(sensor, 0x5002, (0x02 & 0x02) | (temp & (~0x02)));
+
+	OV13850r2a_write_i2c(sensor, 0x0100, 0x00);
 	return 0;
 }
 
