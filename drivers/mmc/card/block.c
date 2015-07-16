@@ -649,6 +649,18 @@ static inline int mmc_blk_part_switch(struct mmc_card *card,
 	if (main_md->part_curr == md->part_type)
 		return 0;
 
+	if (md->part_type == 0)	{
+		pr_info("%s: switch to user partition!",
+			mmc_hostname(card->host));
+	} else {
+		pr_info("%s: switch to NO-user partition:%d!",
+			mmc_hostname(card->host), md->part_type);
+#ifdef CONFIG_FLC_MMC
+		/* Hacking code, only for debug purpose */
+		BUG_ON(mmc_card_mmc(card));
+#endif
+	}
+
 	if (mmc_card_mmc(card)) {
 		u8 part_config = card->ext_csd.part_config;
 
