@@ -51,6 +51,7 @@
 /* Controller enable HW bus clock gating by default */
 #define SDHCI_QUIRK2_BUS_CLK_GATE_ENABLED		(1<<12)
 #define MMC_CAP_1_8V_DDR        (1 << 11)
+#define MMC_CAP2_BOOTPART_NOACC	(1 << 0)	/* Boot partition no access */
 #define MMC_CAP2_HS200_1_8V_SDR				(1 << 5) /* can support */
 #define MMC_CAP2_HS200_1_2V_SDR				(1 << 6) /* can support */
 #define MMC_CAP2_DISABLE_BLK_ASYNC			(1 << 20)
@@ -67,6 +68,9 @@
 #define MMC_CAP_UHS_DDR50	(1 << 19)	/* Host supports UHS DDR50 mode */
 
 #define SDHCI_QUIRK_INVERTED_WRITE_PROTECT              (1<<16)
+
+/* Controller uses Auto CMD12 command to stop the transfer */
+#define SDHCI_QUIRK_MULTIBLOCK_READ_ACMD12             (1<<28)
 
 #define SDHCI_QUIRK2_HOST_NO_CMD23			(1<<1)
 
