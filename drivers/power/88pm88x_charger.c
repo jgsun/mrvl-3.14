@@ -454,6 +454,7 @@ static int cable_type_to_psy_type(int charger_cable_type)
 	case POWER_SUPPLY_TYPE_USB:
 	case POWER_SUPPLY_TYPE_USB_DCP:
 	case POWER_SUPPLY_TYPE_USB_CDP:
+	case POWER_SUPPLY_TYPE_UPS:
 		return charger_cable_type;
 	case POWER_SUPPLY_TYPE_UNKNOWN:
 	default:
@@ -621,6 +622,10 @@ static void pm88x_charger_set_supply_type(struct pm88x_charger_info *info,
 		break;
 	case POWER_SUPPLY_TYPE_USB_CDP:
 		info->limit_cur = 1500;
+		info->type_is_valid = true;
+		break;
+	case POWER_SUPPLY_TYPE_UPS:
+		info->limit_cur = 500;
 		info->type_is_valid = true;
 		break;
 	case POWER_SUPPLY_TYPE_UNKNOWN:

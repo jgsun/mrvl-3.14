@@ -96,9 +96,10 @@ static enum power_supply_type map_charger_type(unsigned int type)
 		return POWER_SUPPLY_TYPE_USB_DCP;
 	case CDP_CHARGER:
 		return POWER_SUPPLY_TYPE_USB_CDP;
+	case NONE_STANDARD_CHARGER:
+		return POWER_SUPPLY_TYPE_UPS;
 	case SDP_CHARGER:
 	case DEFAULT_CHARGER:
-	case NONE_STANDARD_CHARGER:
 	default:
 		return POWER_SUPPLY_TYPE_USB;
 	}
@@ -2954,8 +2955,6 @@ EXPORT_SYMBOL(mv_udc_unregister_client);
 
 static void call_charger_notifier(struct mv_udc *udc)
 {
-	udc->charger_type = map_charger_type(udc->charger_type);
-
 	/* notify the interested guy the charger type is ready */
 	power_supply_changed(&udc->udc_psy);
 }
@@ -3375,7 +3374,7 @@ static int mv_udc_psy_get_property(struct power_supply *psy,
 		val->intval = udc->vbus_active;
 		break;
 	case POWER_SUPPLY_PROP_TYPE:
-		val->intval = udc->charger_type;
+		val->intval = map_charger_type(udc->charger_type);
 		break;
 	default:
 		return -EINVAL;
