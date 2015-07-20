@@ -279,10 +279,8 @@ static int memory_block_change_state(struct memory_block *mem,
 	return ret;
 }
 
-/* The device lock serializes operations on memory_subsys_[online|offline] */
-static int memory_subsys_online(struct device *dev)
+static int memory_block_online(struct memory_block *mem)
 {
-	struct memory_block *mem = to_memory_block(dev);
 	int ret;
 
 	if (mem->state == MEM_ONLINE)
@@ -302,6 +300,55 @@ static int memory_subsys_online(struct device *dev)
 	mem->online_type = -1;
 
 	return ret;
+}
+
+/* address should be section aligned */
+int memory_add_and_online(u64 addr, int size)
+{
+	int nid;
+	int section_size = PAGES_PER_SECTION << PAGE_SHIFT;
+	unsigned long phys_start_pfn, phys_end_pfn;
+	unsigned int start_sec, end_sec;
+	struct mem_section *section;
+	struct memory_block *mem;
+	int i, ret = 0;
+
+	WARN_ON(size % section_size);
+
+	nid = memory_add_physaddr_to_nid(addr);
+	ret = add_memory(nid, addr, size);
+	WARN_ON_ONCE(ret);
+
+	/* do the online action */
+	phys_start_pfn = __phys_to_pfn(addr);
+	phys_end_pfn = __phys_to_pfn(addr + size - 1);
+	start_sec = pfn_to_section_nr(phys_start_pfn);
+	end_sec = pfn_to_section_nr(phys_end_pfn);
+
+	for (i = start_sec; i <= end_sec; i++) {
+		phys_start_pfn = i << PFN_SECTION_SHIFT;
+		section = __pfn_to_section(phys_start_pfn);
+		mem = find_memory_block(section);
+		if (mem) {
+			ret |= memory_block_online(mem);
+			if (ret)
+				pr_err("%s: online section %d, start_pfn %lx failed\n",
+					__func__, i, phys_start_pfn);
+		} else
+			pr_err("%s: can't find memblock for pfn %lx\n",
+				 __func__, phys_start_pfn);
+
+	}
+
+	return ret;
+}
+
+/* The device lock serializes operations on memory_subsys_[online|offline] */
+static int memory_subsys_online(struct device *dev)
+{
+	struct memory_block *mem = to_memory_block(dev);
+
+	return memory_block_online(mem);
 }
 
 static int memory_subsys_offline(struct device *dev)
