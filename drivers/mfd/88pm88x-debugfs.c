@@ -837,6 +837,52 @@ static const struct file_operations pm88x_debug_fops = {
 	.owner = THIS_MODULE,
 };
 
+static ssize_t pm88x_onkey_debug_read(struct file *file, char __user *user_buf,
+				      size_t count, loff_t *ppos)
+{
+	int ret, len;
+	char *buf;
+
+	buf = kzalloc(300, GFP_KERNEL);
+	if (!buf) {
+		pr_err("Cannot allocate buffer.\n");
+		return -ENOMEM;
+	}
+
+	len = pm88x_onkey_display_status(buf);
+	ret = simple_read_from_buffer(user_buf, count, ppos, buf, len);
+
+	kfree(buf);
+	return ret;
+}
+
+static ssize_t pm88x_onkey_debug_write(struct file *file, const char __user *user_buf,
+				       size_t count, loff_t *ppos)
+{
+	int ret, val;
+	char arg;
+
+	ret = sscanf(user_buf, "-%c %d", &arg, &val);
+	if (ret != 2) {
+		pr_err("Invalid parameters, please check.\n");
+		goto out;
+	}
+
+	ret = pm88x_onkey_config_status(arg, val);
+	if (ret < 0)
+		pr_err("Error in configuring onkey status!\n");
+
+out:
+	return count;
+}
+
+static const struct file_operations pm88x_onkey_debug_fops = {
+	.open = simple_open,
+	.read = pm88x_onkey_debug_read,
+	.write = pm88x_onkey_debug_write,
+	.owner = THIS_MODULE,
+};
+
 static int pm88x_debug_probe(struct platform_device *pdev)
 {
 	struct dentry *file;
@@ -883,6 +929,10 @@ static int pm88x_debug_probe(struct platform_device *pdev)
 		goto err;
 	file = debugfs_create_file("pm88x_debug", (S_IRUGO | S_IWUSR | S_IWGRP),
 		pm88x_dir, chip, &pm88x_debug_fops);
+	if (!file)
+		goto err;
+	file = debugfs_create_file("onkey_debug", (S_IRUGO | S_IWUSR | S_IWGRP),
+		pm88x_dir, chip, &pm88x_onkey_debug_fops);
 	if (!file)
 		goto err;
 	return 0;

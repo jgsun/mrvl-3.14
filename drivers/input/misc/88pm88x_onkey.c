@@ -81,6 +81,19 @@ struct pm88x_onkey_info {
 	int hwrst_type;
 };
 
+static struct pm88x_onkey_info *g_info;
+
+static char *long_onkey_type[3] = {
+	"LONG ONKEY RTC",
+	"DETECTION1 (power off)",
+	"DETECTION2 (reset)"
+};
+
+static char *hw_rst_type[2] = {
+	"DETECTION1 (reset)",
+	"DETECTION2 (power off)"
+};
+
 static int pm88x_config_gpio(struct pm88x_onkey_info *info)
 {
 	int gpio_mode;
@@ -251,6 +264,66 @@ static int pm88x_onkey_dt_init(struct device_node *np,
 	return 0;
 }
 
+int pm88x_onkey_display_status(char *buf)
+{
+	int len;
+
+	len = sprintf(buf, "\nONKEY status:\n");
+	len += sprintf(buf + len, "GPIO number: %d\n", g_info->gpio_number);
+	len += sprintf(buf + len, "long onkey detection type: %s\n",
+		       long_onkey_type[g_info->long_onkey_type]);
+	len += sprintf(buf + len, "hardware reset detection type: %s\n",
+		       hw_rst_type[g_info->hwrst_type - 1]);
+	len += sprintf(buf + len, "long onkey press time: %ds\n", g_info->long_key_press_time);
+	len += sprintf(buf + len, "onkey hardware reset debounce period: %ds\n",
+		       g_info->hwrst_db_period ? 7 : 2);
+	len += sprintf(buf + len, "long onkey reset status: %s\n",
+		       g_info->disable_long_key_rst ? "disable" : "enable");
+
+	return len;
+}
+
+int pm88x_onkey_config_status(char arg, int val)
+{
+	switch (arg) {
+	case 'l':
+		if (val < 0 || val > 2)
+			goto out;
+		g_info->long_onkey_type = val;
+		pr_info("long onkey detection type is set to: %s\n", long_onkey_type[val]);
+		break;
+	case 'h':
+		if (val < 1 || val > 2)
+			goto out;
+		g_info->hwrst_type = val;
+		pr_info("hardware reset detection type is set to: %s\n", hw_rst_type[val - 1]);
+		break;
+	case 't':
+		if (val < 1 || val > 15)
+			goto out;
+		g_info->long_key_press_time = val;
+		pr_info("long onkey press time is set to: %ds\n", val);
+		break;
+	case 'd':
+		if (val < 0 || val > 1)
+			goto out;
+		g_info->hwrst_db_period = val;
+		pr_info("hardware reset debounce period is set to: %ds\n", val ? 7 : 2);
+		break;
+	default:
+		goto out;
+	}
+
+	pm88x_config_gpio(g_info);
+	pm88x_config_long_onkey(g_info);
+
+	return 0;
+
+out:
+	pr_err("Invalid parameter, please check.\n");
+	return -EINVAL;
+}
+
 static int pm88x_onkey_probe(struct platform_device *pdev)
 {
 
@@ -298,6 +371,8 @@ static int pm88x_onkey_probe(struct platform_device *pdev)
 		err = -ENODEV;
 		goto out_register;
 	}
+
+	g_info = info;
 
 	err = devm_request_threaded_irq(&pdev->dev, info->irq, NULL,
 					pm88x_onkey_handler,

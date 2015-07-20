@@ -347,4 +347,18 @@ static inline int pm88x_gpadc_debug_write(struct pm88x_chip *chip, char *buf,
 	return 0;
 }
 #endif
+
+#ifdef CONFIG_INPUT_88PM88X_ONKEY
+extern int pm88x_onkey_display_status(char *buf);
+extern int pm88x_onkey_config_status(char arg, int val);
+#else
+static inline int pm88x_onkey_display_status(char *buf)
+{
+	return 0;
+}
+static inline int pm88x_onkey_config_status(char arg, int val)
+{
+	return 0;
+}
+#endif
 #endif /* __LINUX_MFD_88PM88X_H */
