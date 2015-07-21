@@ -87,6 +87,7 @@ static void do_pxa_reset(enum reboot_mode mode, const char *cmd)
 
 	if (cmd && (!strcmp(cmd, "recovery")
 		|| !strcmp(cmd, "bootloader") || !strcmp(cmd, "boot")
+		|| !strcmp(cmd, "fobm")
 		|| !strcmp(cmd, "product") || !strcmp(cmd, "prod")
 		|| !strcmp(cmd, "fastboot") || !strcmp(cmd, "fast"))) {
 		for (i = 0, backup = 0; i < 4; i++) {
