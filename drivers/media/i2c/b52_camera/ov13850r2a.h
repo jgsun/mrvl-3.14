@@ -235,7 +235,6 @@ static struct regval_tab OV13850R2A_13M_res_init[] = {
 	{0x5b09, 0x02},
 	{0x5e00, 0x00},
 	{0x5e10, 0x1c},
-	{0x3503, 0x23},
 
 };
 
@@ -372,7 +371,7 @@ struct b52_sensor_data b52_ov13850r2a_13M = {
 	},
 	.vts_range = {0X0ba0, 0x7fff},
 	.gain_range = {
-		[B52_SENSOR_AG] = {0x0010, 0x007c},
+		[B52_SENSOR_AG] = {0x0010, 0x00f8},
 		[B52_SENSOR_DG] = {0x0010, 0x0010},
 	},
 	.expo_range = {0x00010, 0xb90},
