@@ -137,6 +137,12 @@
 	battery {
 		bat-ntc-support;
 		bat-temp-monitor-en;
+		/*
+		 * series resistor connected to BAT_ID.
+		 * when we use ntc-table, this value should be added.
+		 * if there is no such resistor, set it to 0 or delete it.
+		 */
+		ntc-series-ohm = <510>;
 		gpadc-det-no = <1>;
 		gpadc-temp-no = <1>;
 
