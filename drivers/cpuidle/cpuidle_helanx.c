@@ -48,8 +48,8 @@ struct cpuidle_driver arm64_idle_driver = {
 	},
 	.states[POWER_MODE_CORE_POWERDOWN] = {
 		.enter = arm64_enter_state,
-		.exit_latency = 20,
-		.target_residency = 40,
+		.exit_latency = 350,
+		.target_residency = 700,
 		.flags = CPUIDLE_FLAG_TIME_VALID |
 			 CPUIDLE_FLAG_TIMER_STOP,
 		.name = "C2",
