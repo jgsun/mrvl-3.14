@@ -13,8 +13,8 @@
 
 #include <media/b52-sensor.h>
 
-#define bg_ratio_typical 0x1c0
-#define rg_ratio_typical 0x1c0
+#define bg_ratio_typical 0x400
+#define rg_ratio_typical 0x400
 
 struct regval_tab ov5648_res_init[] = {
 /* initial setting, PCLK = 85.8 MHZ, MIPI = 429 Mbps/lane, full size output: 2592*1944, 15fps */
@@ -104,8 +104,8 @@ struct regval_tab ov5648_res_init[] = {
 	{0x3814, 0x11},
 	{0x3815, 0x11},
 	{0x3817, 0x00},
-	{0x3820, 0x40},
-	{0x3821, 0x06},
+	{0x3820, 0x46},
+	{0x3821, 0x00},
 	{0x3826, 0x03},
 	{0x3829, 0x00},
 	{0x382b, 0x0b},
@@ -220,8 +220,8 @@ struct regval_tab ov5648_res_5M[] = {
 	{0x3813, 0x06},
 	{0x3814, 0x11},
 	{0x3815, 0x11},
-	{0x3820, 0x40},
-	{0x3821, 0x06},
+	{0x3820, 0x46},
+	{0x3821, 0x00},
 	{0x4004, 0x04},
 	{0x0100, 0x01},
 };
@@ -288,10 +288,10 @@ struct regval_tab ov5648_stream_off[] = {
 };
 
 struct regval_tab ov5648_vflip[] = {
-	{0x3820, 0x40, 0x06},
+	{0x3820, 0x46, 0x06},
 };
 struct regval_tab ov5648_hflip[] = {
-	{0x3821, 0x06, 0x06},
+	{0x3821, 0x00, 0x06},
 };
 
 struct b52_sensor_i2c_attr ov5648_i2c_attr[] = {
@@ -391,7 +391,7 @@ struct b52_sensor_data b52_ov5648 = {
 	},
 	.vts_range = {0x07d0, 0x7fff},
 	.gain_range = {
-		[B52_SENSOR_AG] = {0x0010, 0x00f8},
+		[B52_SENSOR_AG] = {0x0010, 0x00a0},
 		[B52_SENSOR_DG] = {0x0010, 0x0010},
 	},
 	.expo_range = {0x00010, 0x7c0},/* VTS - 16 lines */
