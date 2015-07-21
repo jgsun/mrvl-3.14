@@ -2117,7 +2117,7 @@ static struct pm88x_irq_desc {
 static int pm88x_battery_dt_init(struct device_node *np,
 				 struct pm88x_battery_info *info)
 {
-	int ret, size, rows, i, index = 0;
+	int ret, size, rows, i, index = 0, series_ohm = 0;
 	const __be32 *values;
 
 	if (of_get_property(np, "bat-ntc-support", NULL))
@@ -2169,6 +2169,11 @@ static int pm88x_battery_dt_init(struct device_node *np,
 	if (ret)
 		return ret;
 
+	ret = of_property_read_u32(np, "ntc-series-ohm", &series_ohm);
+	/* error is ignored, use the default value 0 initialized before */
+	if (ret)
+		pr_info("%s: ntc-series-ohm not used\n", __func__);
+
 	values = of_get_property(np, "ntc-table", &size);
 	if (!values) {
 		pr_warn("No NTC table for %s\n", np->name);
@@ -2186,6 +2191,7 @@ static int pm88x_battery_dt_init(struct device_node *np,
 
 	for (i = 0; i < rows; i++) {
 		info->temp_ohm_table[i].ohm = be32_to_cpup(values + index++);
+		info->temp_ohm_table[i].ohm += series_ohm;
 		info->temp_ohm_table[i].temp = be32_to_cpup(values + index++);
 	}
 
