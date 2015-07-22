@@ -185,6 +185,67 @@ int pm88x_parse_dt(struct device_node *np, struct pm88x_chip *chip)
 	return 0;
 }
 
+static void check_eod_sod_reason(struct pm88x_chip *chip)
+{
+	char *sod_reason;
+	char *eod_reason;
+	u16 powerdown;
+	u8 powerup;
+
+	powerdown = (chip->powerdown1 & 0xff) | ((chip->powerdown2 & 0xff) << 8);
+	powerup = chip->powerup & 0xff;
+
+	switch (powerdown) {
+	case 0x0:
+		eod_reason = "software reboot";
+		goto out;
+	case 0x4:
+		eod_reason = "software power down";
+		break;
+	case 0x20:
+		eod_reason = "long onkey press";
+		break;
+	case 0x200: /* UV_VBAT */
+		eod_reason = "battery cut off";
+		break;
+	case 0x400: /* hw reset */
+	case 0x2000:
+		eod_reason = "hardware reset";
+		break;
+	case 0x1000:
+		eod_reason = "long onkey rtc detection";
+		break;
+	default:
+		eod_reason = "uncared reason";
+		break;
+	}
+	pr_info("System is powered down by \"%s\".\n", eod_reason);
+
+	switch (powerup) {
+	case 0x1:
+		sod_reason = "onkey press";
+		break;
+	case 0x2:
+		sod_reason = "charger plug in";
+		break;
+	case 0x10:
+		sod_reason = "alarm expiration";
+		break;
+	case 0x20:
+		sod_reason = "fault wakeup";
+		break;
+	default:
+		sod_reason = "uncared reason";
+		break;
+	}
+	pr_info("System is powerd up by \"%s\".\n", sod_reason);
+
+	return;
+
+out:
+	pr_info("System is rebooted by \"%s\".\n", eod_reason);
+	return;
+}
 
 static void parse_powerup_down_log(struct pm88x_chip *chip)
 {
@@ -429,6 +490,7 @@ int pm88x_post_init_chip(struct pm88x_chip *chip)
 		return ret;
 	}
 	parse_powerup_down_log(chip);
+	check_eod_sod_reason(chip);
 
 	return 0;
 }
