@@ -177,7 +177,7 @@ struct pm88x_battery_info {
 
 	int  soc_low_th_cycle;
 	int  soc_high_th_cycle;
-
+	int fixup_init_soc;
 	int cc_fixup;
 	bool valid_cycle;
 };
@@ -1007,8 +1007,8 @@ static int pm88x_battery_calc_ccnt(struct pm88x_battery_info *info,
 		ccnt_val->last_cc = 0;
 	}
 
-	/* keep updating the last_cc */
-	if (!ccnt_val->bypass_cc)
+	/* wait until initial ramp up ends */
+	if (!ccnt_val->bypass_cc || !info->fixup_init_soc)
 		ccnt_val->soc = ccnt_val->last_cc * 100 / (PM88X_DIV_FAC1000(ccnt_val->max_cc));
 	else
 		dev_info(info->dev, "%s: CC is bypassed.\n", __func__);
@@ -1132,6 +1132,43 @@ static void correct_soc_by_temp(struct pm88x_battery_info *info,
 	}
 }
 
+static int pm88x_battery_fixup_init_soc(struct pm88x_battery_info *info,
+					struct ccnt *ccnt_val, int chg_status)
+{
+	/*
+	 * normalize according to charging status:
+	 * there is following corner case:
+	 * in charging scenario,
+	 * but the soc_saved < soc_from_vbat_active
+	 * then there is no need to ramp up, fixup_init_soc = 0;
+	 */
+	switch (chg_status) {
+	case POWER_SUPPLY_STATUS_CHARGING:
+		if (info->fixup_init_soc > 0)
+			info->fixup_init_soc = 0;
+		break;
+	case POWER_SUPPLY_STATUS_DISCHARGING:
+		if (info->fixup_init_soc < 0)
+			info->fixup_init_soc = 0;
+		break;
+	default:
+		info->fixup_init_soc = 0;
+		break;
+	}
+
+	/* ramp up accordingly */
+	if (info->fixup_init_soc > 0) {
+		/* saved value is larger, decrease.. */
+		ccnt_val->soc -= PM88X_CAP_FAC1000;
+		info->fixup_init_soc--;
+	} else if (info->fixup_init_soc < 0) {
+		ccnt_val->soc += PM88X_CAP_FAC1000;
+		info->fixup_init_soc++;
+	}
+
+	return info->fixup_init_soc;
+}
+
 /* correct SoC according to user scenario */
 static void pm88x_battery_correct_soc(struct pm88x_battery_info *info,
 				      struct ccnt *ccnt_val)
@@ -1150,6 +1187,11 @@ static void pm88x_battery_correct_soc(struct pm88x_battery_info *info,
 	 * not use the info->bat_parmas.soc
 	 */
 	chg_status = pm88x_battery_get_charger_status(info);
+
+	/* the initial capacity is ramping up */
+	if (pm88x_battery_fixup_init_soc(info, ccnt_val, chg_status))
+		return;
+
 	old_soc = ccnt_val->soc;
 	switch (chg_status) {
 	case POWER_SUPPLY_STATUS_CHARGING:
@@ -1635,6 +1677,21 @@ static int pm88x_battery_init_calc_ccnt(struct pm88x_battery_info *info,
 	return soc_to_save;
 }
 
+/*
+ * if actually, the soc_from_vbat_slp needs to be used,
+ * save the delta into fixup_init_soc
+ *
+ * -- this function is used for battery is relaxed only
+ */
+static void ramp_soc_with_saved(struct pm88x_battery_info *info,
+				      int soc_from_vbat_slp,
+				      int soc_from_saved)
+{
+	info->fixup_init_soc = PM88X_DIV_FAC1000(soc_from_saved - soc_from_vbat_slp);
+	dev_info(info->dev, "%s: init_soc_delta = %d\n", __func__, info->fixup_init_soc);
+	return;
+}
+
 static void pm88x_init_soc_cycles(struct pm88x_battery_info *info,
 				 struct ccnt *ccnt_val,
 				 int *initial_soc, int *initial_cycles)
@@ -1795,11 +1852,11 @@ static void pm88x_init_soc_cycles(struct pm88x_battery_info *info,
 
 	/* battery unchanged */
 	*initial_cycles = cycles_from_saved;
+	*initial_soc = soc_from_saved;
 	dev_info(info->dev, "----> %s: battery is unchanged:\n", __func__);
 	dev_info(info->dev, "\t\t slp_cnt = %d\n", slp_cnt);
 
 	if (slp_cnt < info->sleep_counter_th) {
-		*initial_soc = soc_from_saved;
 		info->ocv_is_reliable = reliable_from_saved;
 		dev_info(info->dev,
 			 "---> %s: battery is unchanged, and not relaxed:\n",
@@ -1815,12 +1872,11 @@ static void pm88x_init_soc_cycles(struct pm88x_battery_info *info,
 	soc_in_good_range = check_soc_range(info, PM88X_DIV_FAC1000(soc_from_vbat_slp));
 	dev_info(info->dev, "soc_in_good_range = %d\n", soc_in_good_range);
 	if (soc_in_good_range) {
-		*initial_soc = soc_from_vbat_slp;
+		ramp_soc_with_saved(info, soc_from_vbat_slp, soc_from_saved);
 		info->ocv_is_reliable = true;
 		dev_info(info->dev,
-			 "OCV is in good range, use soc_from_vbat_slp.\n");
+			 "OCV is in good range, ramp up toward soc_from_vbat_slp.\n");
 	} else {
-		*initial_soc = soc_from_saved;
 		info->ocv_is_reliable = reliable_from_saved;
 		dev_info(info->dev,
 			 "OCV is in bad range, use soc_from_saved.\n");
