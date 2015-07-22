@@ -496,6 +496,16 @@ static int update_lenc(struct b52_sensor *sensor, int addr, u8 *lenc)
 static int update_awb_gain(struct b52_sensor *sensor, int r_gain,
 				int g_gain, int b_gain)
 {
+	int temp;
+
+	/* OV13850 use Manual White Balance gain to compensate the
+	 * difference between each modules and make them closer.
+	 * So we need enable it, before apply the MWB gain.
+	 */
+	temp = OV13850r2a_read_i2c(sensor, 0x5001);
+	temp = 0x02 | temp; /* enable MWB gain */
+	OV13850r2a_write_i2c(sensor, 0x5001, temp);
+
 	if (r_gain >= 0x400) {
 		OV13850r2a_write_i2c(sensor, 0x5056, r_gain >> 8);
 		OV13850r2a_write_i2c(sensor, 0x5057, r_gain & 0x00ff);

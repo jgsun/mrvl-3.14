@@ -21,8 +21,12 @@
 #define OTP_DRV_LSC_GROUP_COUNT  3
 #define OTP_DRV_LSC_SIZE  62
 #define OTP_DRV_LSC_REG_ADDR  0x5200
-#define bg_ratio_typical 0x400
-#define rg_ratio_typical 0x400
+/*
+ * The typical value should always in line with the golden module,
+ * otherwise with lead raw data abnormal.
+ */
+#define rg_ratio_typical 0x12f
+#define bg_ratio_typical 0x11f
 
 /* raw10,XVCLK=24Mhz, SCLK=4x120Mhz, MIPI 640Mbps, DACCLK=240Mhz */
 struct regval_tab ov13850_8M_res_init[] = {
@@ -138,7 +142,7 @@ struct regval_tab ov13850_8M_res_init[] = {
 	{0x4d04, 0x66},
 	{0x4d05, 0x65},
 	{0x5000, 0x0e},
-	{0x5001, 0x01},
+	{0x5001, 0x03}, /*enable Manual White Balance gain for WB OTP*/
 	{0x5002, 0x07},
 	{0x5013, 0x40},
 	{0x501c, 0x00},

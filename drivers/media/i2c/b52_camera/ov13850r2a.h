@@ -23,8 +23,6 @@
 #define OTP_DRV_LSC_REG_ADDR  0x5200
 #define OTP_DRV_VCM_GROUP_COUNT  3
 #define OTP_DRV_VCM_SIZE  3
-#define MODULE_INFO_LEN 6
-#define MODULE_INFO_PREFIX "0x"
 /*
  * The typical value should always in line with the golden module,
  * otherwise with lead raw data abnormal.
@@ -211,7 +209,7 @@ static struct regval_tab OV13850R2A_13M_res_init[] = {
 	{0x4d05, 0x65},
 	{0x4d0b, 0x00},
 	{0x5000, 0x0e},
-	{0x5001, 0x01},
+	{0x5001, 0x03}, /*enable Manual White Balance gain for WB OTP*/
 	{0x5002, 0x07},
 	{0x5013, 0x40},
 	{0x501c, 0x00},
