@@ -212,7 +212,7 @@
 				marvell,overlay-id = <1>;
 				marvell,default-pixfmt = <0x109>;
 				marvell,buffer-num = <3>;
-				marvell,fb-mem = <0x17000000>;
+				marvell,fb-mem = <0xc000000>;
 				status = "okay";
                         };
 
