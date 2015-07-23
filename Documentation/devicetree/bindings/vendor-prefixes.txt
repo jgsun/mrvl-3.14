@@ -105,3 +105,5 @@ wm	Wondermedia Technologies, Inc.
 xlnx	Xilinx
 focaltech	focaltech
 simple-bus
+epl	ELAN
+pwm-backlight
