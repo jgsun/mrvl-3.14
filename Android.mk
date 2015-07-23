@@ -30,13 +30,14 @@ SECURITY_REGION_SIZE_MB ?= 8
 KERNEL_LOAD := $(shell /bin/bash -c 'printf "0x%08x" \
                $$[$(SECURITY_REGION_SIZE_MB) * 0x100000 + $(TEXT_OFFSET)]')
 
-PRIVATE_KERNEL_ARGS := -C kernel ARCH=$(ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE)
+KERNEL_SRC_PATH := $(call my-dir)
+PRIVATE_KERNEL_ARGS := -C $(KERNEL_SRC_PATH) ARCH=$(ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE)
 
 PRIVATE_OUT := $(abspath $(PRODUCT_OUT)/root)
 
 KERNEL_DTB_FILE ?= $(TARGET_DEVICE).dtb
 
-KERNEL_SCRIPT_UPDATE := $(TOP)/kernel/scripts/config --file $(KERNEL_OUTPUT)/.config
+KERNEL_SCRIPT_UPDATE := $(KERNEL_SRC_PATH)/scripts/config --file $(KERNEL_OUTPUT)/.config
 
 #dtb padded to 128k
 DTB_PADDING_BOOTIMG_SIZE := 131072
@@ -51,7 +52,7 @@ endif
 
 # only do this if we are buidling out of tree
 ifneq ($(KERNEL_OUTPUT),)
-ifneq ($(KERNEL_OUTPUT), $(abspath $(TOP)/kernel))
+ifneq ($(KERNEL_OUTPUT), $(abspath $(KERNEL_SRC_PATH)))
 PRIVATE_KERNEL_ARGS += O=$(KERNEL_OUTPUT)
 endif
 else
@@ -60,9 +61,9 @@ endif
 
 build-kernel: $(KERNEL_IMAGE)
 
-LOCAL_PATH := kernel/scripts/dtc
+LOCAL_PATH := $(KERNEL_SRC_PATH)/scripts/dtc
 include $(CLEAR_VARS)
-LOCAL_C_INCLUDES := kernel/scripts/dtc/libfdt
+LOCAL_C_INCLUDES := $(KERNEL_SRC_PATH)/scripts/dtc/libfdt
 LOCAL_SRC_FILES := \
 	srcpos.c \
 	fstree.c \
@@ -142,7 +143,7 @@ $(KERNEL_OUTPUT)/arch/$(ARCH)/boot/$(KERNEL_IMAGE): FORCE
 
 # only do this if we are buidling out of tree
 ifneq ($(KERNEL_OUTPUT),)
-ifneq ($(KERNEL_OUTPUT), $(abspath $(TOP)/kernel))
+ifneq ($(KERNEL_OUTPUT), $(abspath $(KERNEL_SRC_PATH)))
 	@mkdir -p $(KERNEL_OUTPUT)
 	@mkdir -p $(KERNEL_OUTPUT)/root
 endif
@@ -154,9 +155,9 @@ else
 	echo "KERNEL_DEFCONFIG is "+$(KERNEL_DEFCONFIG)+"PRIVATE_KERNEL_ARGS is "+$(PRIVATE_KERNEL_ARGS)
 	$(MAKE) $(PRIVATE_KERNEL_ARGS) $(KERNEL_DEFCONFIG)
 ifeq ($(TARGET_USES_64_BIT_BINDER),true)
-	$(TOP)/kernel/scripts/config --file $(KERNEL_OUTPUT)/.config -d CONFIG_ANDROID_BINDER_IPC_32BIT
+        $(KERNEL_SRC_PATH)/scripts/config --file $(KERNEL_OUTPUT)/.config -d CONFIG_ANDROID_BINDER_IPC_32BIT
 else
-	$(TOP)/kernel/scripts/config --file $(KERNEL_OUTPUT)/.config -e CONFIG_ANDROID_BINDER_IPC_32BIT
+	$(KERNEL_SRC_PATH)/scripts/config --file $(KERNEL_OUTPUT)/.config -e CONFIG_ANDROID_BINDER_IPC_32BIT
 endif
 ifeq ($(HAVE_SECURITY_TZ_FEATURE),true)
 	$(KERNEL_SCRIPT_UPDATE) -e CONFIG_TZ_HYPERVISOR
@@ -248,9 +249,9 @@ ifeq ($(HAVE_SECURITY_TZ_FEATURE),true)
 	$(KERNEL_SCRIPT_UPDATE) -e CONFIG_TZ_HYPERVISOR
 endif
 ifeq ($(TARGET_USES_64_BIT_BINDER),true)
-	$(TOP)/kernel/scripts/config --file $(KERNEL_OUTPUT)/.config -d CONFIG_ANDROID_BINDER_IPC_32BIT
+	$(KERNEL_SRC_PATH)/scripts/config --file $(KERNEL_OUTPUT)/.config -d CONFIG_ANDROID_BINDER_IPC_32BIT
 else
-	$(TOP)/kernel/scripts/config --file $(KERNEL_OUTPUT)/.config -e CONFIG_ANDROID_BINDER_IPC_32BIT
+	$(KERNEL_SRC_PATH)/scripts/config --file $(KERNEL_OUTPUT)/.config -e CONFIG_ANDROID_BINDER_IPC_32BIT
 
 ifneq ($(BOARD_BUILTIN_SD8XXX),)
 ifneq ($(filter $(BOARD_BUILTIN_SD8XXX),$(SUPPORTED_SD8XXX_CHIPS)),)
@@ -290,7 +291,7 @@ endif
 menuconfig-kernel:
 # only do this if we are buidling out of tree
 ifneq ($(KERNEL_OUTPUT),)
-ifneq ($(KERNEL_OUTPUT), $(abspath $(TOP)/kernel))
+ifneq ($(KERNEL_OUTPUT), $(abspath $(KERNEL_SRC_PATH)))
 	@mkdir -p $(KERNEL_OUTPUT)
 endif
 endif
