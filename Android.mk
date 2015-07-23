@@ -4,6 +4,7 @@
 # Give other modules a nice, symbolic name to use as a dependent
 # Yes, there are modules that cannot build unless the kernel has
 # been built. Typical (only?) example: loadable kernel modules.
+ifneq ($(TARGET_USE_KERNEL_310),true)
 .PHONY: build-kernel clean-kernel
 
 KERNEL_OUTPUT := $(abspath $(PRODUCT_OUT)/obj/kernel)
@@ -303,3 +304,4 @@ clean clobber : clean-kernel
 clean-kernel:
 	$(MAKE) $(PRIVATE_KERNEL_ARGS) clean
 #endif
+endif
