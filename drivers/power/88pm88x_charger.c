@@ -25,6 +25,7 @@
 #include <linux/mfd/88pm886.h>
 #include <linux/delay.h>
 #include <linux/of_device.h>
+#include <linux/time.h>
 
 #define MY_PSY_NAME		"88pm88x-charger"
 
@@ -448,7 +449,25 @@ static bool is_charger_info_invalid(struct pm88x_charger_info *info)
 		return false;
 }
 
-static int cable_type_to_psy_type(int charger_cable_type)
+/* check whether healthd has been loaded */
+static bool is_boot_completed(void)
+{
+	static bool completed;
+	struct timespec uptime;
+
+	if (!completed) {
+		get_monotonic_boottime(&uptime);
+		/* if uptime is greater than 40s, we think healthd has been loaded */
+		if (uptime.tv_sec > 40) {
+			completed = true;
+			pr_info("%s: boot completed\n", __func__);
+		}
+	}
+
+	return completed;
+}
+
+static int cable_type_to_psy_type(struct pm88x_charger_info *info, int charger_cable_type)
 {
 	switch (charger_cable_type) {
 	case POWER_SUPPLY_TYPE_USB:
@@ -457,7 +476,6 @@ static int cable_type_to_psy_type(int charger_cable_type)
 	case POWER_SUPPLY_TYPE_UPS:
 		return charger_cable_type;
 	case POWER_SUPPLY_TYPE_UNKNOWN:
-	default:
 		/*
 		 * power supply type is not supposed to be changed,
 		 * however it can be changed in our design.
@@ -466,6 +484,11 @@ static int cable_type_to_psy_type(int charger_cable_type)
 		 * whose type is valid will be used. so we have convert
 		 * it to a valid one.
 		 */
+		if (info->cable_online && is_boot_completed())
+			return charger_cable_type;
+		else
+			return POWER_SUPPLY_TYPE_USB;
+	default:
 		return POWER_SUPPLY_TYPE_USB;
 	}
 }
@@ -484,7 +507,7 @@ static int pm88x_charger_set_property(struct power_supply *psy,
 		pm88x_change_chg_status(info, val->intval);
 		break;
 	case POWER_SUPPLY_PROP_TYPE:
-		psy->type = cable_type_to_psy_type(val->intval);
+		psy->type = cable_type_to_psy_type(info, val->intval);
 		info->charger_cable_type = val->intval;
 		pm88x_charger_set_supply_type(info, psy);
 		break;

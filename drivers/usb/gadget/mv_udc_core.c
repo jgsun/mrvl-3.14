@@ -98,8 +98,9 @@ static enum power_supply_type map_charger_type(unsigned int type)
 		return POWER_SUPPLY_TYPE_USB_CDP;
 	case NONE_STANDARD_CHARGER:
 		return POWER_SUPPLY_TYPE_UPS;
-	case SDP_CHARGER:
 	case DEFAULT_CHARGER:
+		return POWER_SUPPLY_TYPE_UNKNOWN;
+	case SDP_CHARGER:
 	default:
 		return POWER_SUPPLY_TYPE_USB;
 	}
