@@ -419,7 +419,7 @@ static int S5K4H5_update_otp(struct v4l2_subdev *sd,
 					otp->user_otp->full_otp_len);
 		return 0;
 	}
-	if (otp->otp_type ==  SENSOR_TO_ISP) {
+	if (otp->otp_type ==  MODULE_TO_ISP) {
 		module_id = otp->user_otp->module_data;
 		ret = S5K4H5_read_data(sd, otp);
 		if (otp->user_otp->module_data_len > 0)

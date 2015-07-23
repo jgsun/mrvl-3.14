@@ -813,7 +813,6 @@ static int b52isp_idi_create(struct b52isp *b52isp)
 }
 
 
-
 /******************************* ISP Path Block *******************************/
 static int b52isp_path_hw_open(struct isp_block *block)
 {

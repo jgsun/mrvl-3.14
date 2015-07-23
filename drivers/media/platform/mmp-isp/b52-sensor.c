@@ -1617,6 +1617,8 @@ static long b52_sensor_ioctl(struct v4l2_subdev *sd,
 	case VIDIOC_PRIVATE_B52ISP_SENSOR_OTP:
 		sensor->otp.user_otp = (struct sensor_otp *)arg;
 		sensor->otp.otp_type = sensor->otp.user_otp->otp_type;
+		if (sensor->otp.otp_type == SENSOR_TO_ISP)
+			ret = b52_sensor_reinit(sensor);
 		ret = b52_sensor_call(sensor, update_otp, &sensor->otp);
 		sensor->otp.user_otp = NULL;
 		break;

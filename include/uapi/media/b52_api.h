@@ -80,6 +80,7 @@ enum OTP_TYPE {
 	ISP_TO_SENSOR = 3,
 	VERIFY_CRC = 4,
 	GEN_CRC = 5,
+	MODULE_TO_ISP = 6,
 };
 struct sensor_otp {
 	enum OTP_TYPE	otp_type;
