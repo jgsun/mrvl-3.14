@@ -1,13 +1,7 @@
 /*
  * Lock-less NULL terminated single linked list
  *
- * The basic atomic operation of this list is cmpxchg on long.  On
- * architectures that don't have NMI-safe cmpxchg implementation, the
- * list can NOT be used in NMI handlers.  So code that uses the list in
- * an NMI handler should depend on CONFIG_ARCH_HAVE_NMI_SAFE_CMPXCHG.
- *
- * Copyright 2010,2011 Intel Corp.
- *   Author: Huang Ying <ying.huang@intel.com>
+ * modified from <lib/llist.c>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version
