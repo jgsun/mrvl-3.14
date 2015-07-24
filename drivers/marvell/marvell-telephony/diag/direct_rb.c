@@ -16,18 +16,17 @@
 */
 
 #include <linux/spinlock.h>
-#include <linux/skbuff.h>
+#include <linux/list.h>
 #include <linux/mutex.h>
 #include <linux/workqueue.h>
 #include <linux/wait.h>
-#include <linux/pm_wakeup.h>
+#include <linux/device.h>
 #include <linux/kernel.h>
 #include <linux/errno.h>
 #include <linux/delay.h>
 #include <linux/version.h>
 #include <linux/module.h>
 #include <linux/miscdevice.h>
-#include <linux/netdevice.h>	/* dev_kfree_skb_any */
 #include <linux/workqueue.h>
 #include <linux/poll.h>
 #include <linux/cdev.h>
@@ -49,6 +48,12 @@ struct direct_rbctl direct_rbctl;
 static dev_t dev_nr;
 static int direct_dump_flag;
 
+struct buffer_item {
+	struct list_head entry;
+	unsigned len;
+	char buf[];
+};
+
 struct direct_rbctl {
 	int refcount;
 	struct cdev dev;
@@ -56,9 +61,9 @@ struct direct_rbctl {
 	struct shm_rbctl *rbctl;
 	bool is_ap_recv_empty;
 
-	struct sk_buff_head rx_q;	/* rx packet queue */
-	unsigned long rx_q_size;
-	int max_rx_q_size;
+	struct list_head rx_q;	/* rx packet queue */
+	unsigned rx_q_size;
+	unsigned max_rx_q_size;
 
 	struct workqueue_struct *rx_wq; /* rx workqueue */
 	struct work_struct rx_work; /* rx work */
@@ -115,8 +120,19 @@ static inline bool direct_rb_schedule_rx(struct direct_rbctl *dir_ctl)
 	return ret;
 }
 
+static inline struct buffer_item *alloc_buffer_item(unsigned len, gfp_t flags)
+{
+	struct buffer_item *item = kmalloc(sizeof(*item) + len, flags);
+	if (!item)
+		return NULL;
+
+	item->len = len;
+	INIT_LIST_HEAD(&item->entry);
+	return item;
+}
+
 static inline bool rx_enqueue(struct direct_rbctl *dir_ctl,
-	struct sk_buff *skb, bool force)
+	struct buffer_item *item, bool force)
 {
 	bool ret = false;
 
@@ -132,23 +148,22 @@ static inline bool rx_enqueue(struct direct_rbctl *dir_ctl,
 		ret = false;
 	} else {
 		/* add to rx queue */
-		skb_queue_tail(&dir_ctl->rx_q, skb);
-		dir_ctl->rx_q_size += skb->len;
+		list_add_tail(&item->entry, &dir_ctl->rx_q);
+		dir_ctl->rx_q_size += item->len;
 		ret = true;
 	}
 
 	return ret;
 }
 
-static inline struct sk_buff *rx_dequeue(struct direct_rbctl *dir_ctl)
+static inline struct buffer_item *rx_dequeue(struct direct_rbctl *dir_ctl)
 {
 	/* delete message from queue */
-	struct sk_buff *skb = skb_dequeue(&dir_ctl->rx_q);
-	if (unlikely(!skb))
-		return NULL;
-	dir_ctl->rx_q_size -= skb->len;
-
-	return skb;
+	struct buffer_item *item =
+		list_first_entry(&dir_ctl->rx_q, struct buffer_item, entry);
+	list_del(&item->entry);
+	dir_ctl->rx_q_size -= item->len;
+	return item;
 }
 
 static int msocketDirectDump_open(struct inode *inode, struct file *filp)
@@ -247,7 +262,7 @@ static void direct_rb_rx_worker(struct work_struct *work)
 	struct shm_rbctl *rbctl = dir_ctl->rbctl;
 	struct shm_skctl *skctl = rbctl->skctl_va;
 	struct direct_rb_skhdr *hdr;
-	struct sk_buff *skb;
+	struct buffer_item *item;
 	int slot;
 	unsigned long flags;
 	int packet_count;
@@ -277,24 +292,22 @@ static void direct_rb_rx_worker(struct work_struct *work)
 			goto error_length;
 		}
 
-		skb = alloc_skb(hdr->length, GFP_KERNEL);
-		if (!skb) {
+		item = alloc_buffer_item(hdr->length, GFP_KERNEL);
+		if (!item) {
 			/* don't known how to do better, just return */
 			pr_err_ratelimited("%s: out of memory.\n", __func__);
 			break;
 		}
-
-		memcpy(skb_put(skb, hdr->length),
-			(char *)hdr + sizeof(*hdr), hdr->length);
+		memcpy(item->buf, (char *)hdr + sizeof(*hdr), hdr->length);
 
 		spin_lock_irqsave(&dir_ctl->rb_rx_lock, flags);
-		if (!rx_enqueue(dir_ctl, skb, false)) {
+		if (!rx_enqueue(dir_ctl, item, false)) {
 			/*
 			 * OK, our rx queue is already full
 			 * break out, and wait cp to interrupt again?
 			 */
 			spin_unlock_irqrestore(&dir_ctl->rb_rx_lock, flags);
-			kfree_skb(skb);
+			kfree(item);
 			break;
 		}
 
@@ -340,7 +353,7 @@ static int direct_rb_open(struct inode *inode, struct file *filp)
 	dir_ctl->stat_broadcast_msg = 0;
 	dir_ctl->rx_q_size = 0;
 	dir_ctl->max_rx_q_size = max_rx_q_size;
-	skb_queue_head_init(&dir_ctl->rx_q);
+	INIT_LIST_HEAD(&dir_ctl->rx_q);
 exit:
 	spin_unlock_irqrestore(&dir_ctl->rb_rx_lock, flags);
 	return 0;
@@ -354,8 +367,13 @@ static int direct_rb_close(struct inode *inode, struct file *filp)
 	spin_lock_irqsave(&rbctl->rb_rx_lock, flags);
 	if (rbctl->refcount > 0)
 		rbctl->refcount--;
-	if (rbctl->refcount == 0)
-		skb_queue_purge(&rbctl->rx_q);
+	if (rbctl->refcount == 0) {
+		struct buffer_item *item;
+		while (!list_empty(&rbctl->rx_q)) {
+			item = rx_dequeue(rbctl);
+			kfree(item);
+		}
+	}
 	spin_unlock_irqrestore(&rbctl->rb_rx_lock, flags);
 	return 0;
 }
@@ -414,14 +432,14 @@ static ssize_t direct_rb_read(struct file *file, char __user *buf,
 		       size_t len, loff_t *ppos)
 {
 	struct direct_rbctl *dir_ctl = &direct_rbctl;
-	struct sk_buff *skb;
+	struct buffer_item *item;
 	int rc = -EFAULT;
 	unsigned long flags;
 	ssize_t packet_len;
 
 	spin_lock_irqsave(&dir_ctl->rb_rx_lock, flags);
 
-	while (skb_queue_empty(&dir_ctl->rx_q)) {
+	while (list_empty(&dir_ctl->rx_q)) {
 		dir_ctl->is_ap_recv_empty = true;
 
 		/* release the lock before wait */
@@ -438,24 +456,24 @@ static ssize_t direct_rb_read(struct file *file, char __user *buf,
 	}
 
 	/* delete message from queue */
-	skb = rx_dequeue(dir_ctl);
+	item = rx_dequeue(dir_ctl);
 
 	/* release the lock */
 	spin_unlock_irqrestore(&dir_ctl->rb_rx_lock, flags);
 
-	if (copy_to_user(buf, skb->data, skb->len)) {
+	if (copy_to_user(buf, item->buf, item->len)) {
 		pr_err("%s: copy_to_user failed.\n", __func__);
 		dir_ctl->stat_rx_fail++;
 		/* push back the packet? */
-		dev_kfree_skb_any(skb);
+		kfree(item);
 		return rc;
 	}
 
 	/* save packet length before advancing reader pointer */
-	packet_len = skb->len;
-	trace_drb_recv(skb->len);
+	packet_len = item->len;
+	trace_drb_recv(item->len);
 
-	dev_kfree_skb_any(skb);
+	kfree(item);
 
 	dir_ctl->stat_rx_got++;
 
@@ -469,7 +487,7 @@ static unsigned int direct_rb_poll(struct file *filp, poll_table *wait)
 
 	poll_wait(filp, &dir_ctl->rb_rx_wq, wait);
 
-	if (!skb_queue_empty(&dir_ctl->rx_q))
+	if (!list_empty(&dir_ctl->rx_q))
 		mask |= POLLIN | POLLRDNORM;
 
 	if (cp_is_synced && !shm_is_xmit_full(dir_ctl->rbctl))
@@ -496,7 +514,7 @@ static void direct_rb_broadcast_msg(unsigned proc)
 	struct direct_rbctl *dir_ctl = &direct_rbctl;
 	unsigned long flags;
 
-	struct sk_buff *skb;
+	struct buffer_item *item;
 	int msg_size;
 
 	struct diagmsgheader *pDiagMsgHeader;
@@ -509,23 +527,22 @@ static void direct_rb_broadcast_msg(unsigned proc)
 
 	msg_size = sizeof(struct diagmsgheader);
 
-	skb = alloc_skb(msg_size, GFP_ATOMIC);
+	item = alloc_buffer_item(msg_size, GFP_ATOMIC);
 
-	if (!skb) {
+	if (!item) {
 		pr_err("%s: alloc_skb error\n", __func__);
 		spin_unlock_irqrestore(&dir_ctl->rb_rx_lock, flags);
 		return;
 	}
 
-	pDiagMsgHeader =
-		(struct diagmsgheader *)skb_put(skb, msg_size);
+	pDiagMsgHeader = (struct diagmsgheader *)item->buf;
 	pDiagMsgHeader->diagHeader.packetlen =
 		sizeof(pDiagMsgHeader->procId);
 	pDiagMsgHeader->diagHeader.seqNo = 0;
 	pDiagMsgHeader->diagHeader.msgType = proc;
 	pDiagMsgHeader->procId = proc;
 
-	rx_enqueue(dir_ctl, skb, true);
+	rx_enqueue(dir_ctl, item, true);
 
 	if (dir_ctl->is_ap_recv_empty) {
 		dir_ctl->is_ap_recv_empty = false;
