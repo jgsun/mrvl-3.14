@@ -37,6 +37,8 @@ struct vm_area_struct;
 #define ___GFP_OTHER_NODE	0x800000u
 #define ___GFP_WRITE		0x1000000u
 #define ___GFP_CMA		0x20000000u
+#define ___GFP_FLC_C		0x40000000u
+#define ___GFP_FLC_NC		0x80000000u
 /* If the above are modified, __GFP_BITS_SHIFT may need updating */
 
 /*
@@ -95,6 +97,8 @@ struct vm_area_struct;
 #define __GFP_KMEMCG	((__force gfp_t)___GFP_KMEMCG) /* Allocation comes from a memcg-accounted resource */
 #define __GFP_WRITE	((__force gfp_t)___GFP_WRITE)	/* Allocator intends to dirty page */
 #define __GFP_CMA	((__force gfp_t)___GFP_CMA)	/* Allocator intends to cma page */
+#define __GFP_FLC_C	((__force gfp_t)___GFP_FLC_C)   /*Allocator intends to flc page locked in DRAM*/
+#define __GFP_FLC_NC	((__force gfp_t)___GFP_FLC_NC)  /*Allocator intends to flc non-cacheable page */
 
 /*
  * This may seem redundant, but it's a way of annotating false positives vs.
@@ -102,7 +106,8 @@ struct vm_area_struct;
  */
 #define __GFP_NOTRACK_FALSE_POSITIVE (__GFP_NOTRACK)
 
-#define __GFP_BITS_SHIFT 25	/* Room for N __GFP_FOO bits */
+#define __GFP_BITS_SHIFT 28	/* Room for N __GFP_FOO bits */
+
 #define __GFP_BITS_MASK ((__force gfp_t)((1 << __GFP_BITS_SHIFT) - 1))
 
 /* This equals 0, but use constants in case they ever change */
@@ -160,6 +165,12 @@ struct vm_area_struct;
 /* 4GB DMA on some platforms */
 #define GFP_DMA32	__GFP_DMA32
 
+/*
+ * Flgas - used by FLC configured platform, indicates fast memory.
+ * Allocator will first try FLC-locked memory then Non-FLC memory
+ */
+#define GFP_FAST	(__GFP_FLC_C | __GFP_FLC_NC)
+
 /* Convert GFP flags to their corresponding migrate type */
 static inline int allocflags_to_migratetype(gfp_t gfp_flags)
 {
@@ -189,6 +200,16 @@ static inline int allocflags_to_migratetype(gfp_t gfp_flags)
 #define OPT_ZONE_DMA32 ZONE_DMA32
 #else
 #define OPT_ZONE_DMA32 ZONE_NORMAL
+#endif
+
+#ifdef CONFIG_FLC
+#ifdef CONFIG_ZONE_DMA32
+#define OPT_ZONE_NFLC ZONE_DMA32
+#elif defined(CONFIG_ZONE_DMA)
+#define OPT_ZONE_NFLC ZONE_DMA
+#endif
+#else
+#define OPT_ZONE_NFLC ZONE_NORMAL
 #endif
 
 /*
@@ -261,7 +282,13 @@ static inline enum zone_type gfp_zone(gfp_t flags)
 	enum zone_type z;
 	int bit = (__force int) (flags & GFP_ZONEMASK);
 
-	z = (GFP_ZONE_TABLE >> (bit * ZONES_SHIFT)) &
+#ifdef CONFIG_FLC
+	/* only allocate from Non-FLC memory region for __GFP_FLC_NC flag */
+	if (flags & __GFP_FLC_NC)
+		z = OPT_ZONE_NFLC;
+	else
+#endif
+		z = (GFP_ZONE_TABLE >> (bit * ZONES_SHIFT)) &
 					 ((1 << ZONES_SHIFT) - 1);
 	VM_BUG_ON((GFP_ZONE_BAD >> bit) & 1);
 	return z;
