@@ -623,8 +623,8 @@ static struct mmp_clk_mix_clk_table gc3d_pptbl[] = {
 };
 
 static struct mmp_clk_mix_clk_table gc3d_pptbl_pxa1936_TSMC_B0[] = {
-	{.rate = 156000000, .parent_index = 1, .xtc = 0x00000044, },
-	{.rate = 312000000, .parent_index = 1, .xtc = 0x00000044, },
+	{.rate = 156000000, .parent_index = 1, .xtc = 0x00000144, },
+	{.rate = 312000000, .parent_index = 1, .xtc = 0x00000144, },
 	{.rate = 416000000, .parent_index = 0, .xtc = 0x00055544, },
 	{.rate = 528000000, .parent_index = 2, .xtc = 0x00055544, },
 	{.rate = 624000000, .parent_index = 1, .xtc = 0x00055555, },
