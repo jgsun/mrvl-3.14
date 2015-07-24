@@ -43,6 +43,7 @@
 #include <linux/pm_qos.h>
 #include <linux/dma-mapping.h>
 #include <linux/pinctrl/consumer.h>
+#include <linux/flc.h>
 #include <dt-bindings/mmc/pxa_sdhci.h>
 #include <marvell/emmc_rsv.h>
 
@@ -1558,6 +1559,7 @@ static int pxav3_flc_get_of_perperty(struct sdhci_host *host,
 	/* links between flc_host and sdhci_host */
 	flc->parent = host;
 	host->flc_host = (void *)flc;
+	set_flc_dev(dev);
 	return 0;
 }
 #endif

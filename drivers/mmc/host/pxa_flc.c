@@ -37,6 +37,9 @@
 
 #define FLC_REG_ERR (0xFFFFFFFF)
 
+struct device *flc_dev;
+bool flc_available __read_mostly;
+
 /*
  * flc_size_to_area_length_reg & flc_size_offset_check:
  *   convert size to Reg MMAP/MMAP_NC "area length region"
@@ -68,6 +71,11 @@ static const u64 flc_a_l_table[] = {
 };
 
 #define FLC_A_L_TABLE_SIZE ARRAY_SIZE(flc_a_l_table)
+
+void set_flc_dev(struct device *dev)
+{
+	flc_dev = dev;
+}
 
 static u32 flc_size_to_area_length_reg(u64 size)
 {
@@ -237,15 +245,17 @@ struct flc_host *get_flc_host(void)
 	return pxa_flc;
 }
 
-static int flc_cache_hotplug(u64 addr, int size, bool on)
+static int flc_memory_hotplug(u64 addr, int size, bool on)
 {
 	int ret = -1;
-#ifdef CONFIG_MEMORY_HOTPLUG
-	if (on)
+
+	if (on) {
 		ret = memory_add_and_online(addr, size);
-#else
-	WARN(1, "FLC cache is not hotplug\n");
-#endif
+		if (!ret)
+			flc_available = true;
+		else
+			WARN(1, "FLC memory hotplug failed\n");
+	}
 	return ret;
 }
 
@@ -436,7 +446,7 @@ static int pxa_flc_init(struct flc_host *flc)
 
 	flc_mck_init(flc);
 
-	flc_cache_hotplug(FLC_START, FLC_SIZE, true);
+	flc_memory_hotplug(FLC_START, FLC_SIZE, true);
 
 	return ret;
 }
