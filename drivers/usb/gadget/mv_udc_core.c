@@ -1873,7 +1873,7 @@ static int mv_udc_vbus_session(struct usb_gadget *gadget, int is_active)
 
 	udc->vbus_active = (is_active != 0);
 
-	dev_dbg(&udc->dev->dev, "%s: softconnect %d, vbus_active %d\n",
+	dev_info(&udc->dev->dev, "%s: softconnect %d, vbus_active %d\n",
 		__func__, udc->softconnect, udc->vbus_active);
 
 	schedule_work(&udc->event_work);
