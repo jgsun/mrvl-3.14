@@ -1922,10 +1922,7 @@ static int sdhci_pxav3_suspend(struct device *dev)
 	int ret;
 	struct sdhci_host *host = dev_get_drvdata(dev);
 
-	pm_runtime_get_sync(dev);
 	ret = sdhci_suspend_host(host);
-	pm_runtime_mark_last_busy(dev);
-	pm_runtime_put_autosuspend(dev);
 
 	return ret;
 }
@@ -1935,10 +1932,7 @@ static int sdhci_pxav3_resume(struct device *dev)
 	int ret;
 	struct sdhci_host *host = dev_get_drvdata(dev);
 
-	pm_runtime_get_sync(dev);
 	ret = sdhci_resume_host(host);
-	pm_runtime_mark_last_busy(dev);
-	pm_runtime_put_autosuspend(dev);
 
 	return ret;
 }
