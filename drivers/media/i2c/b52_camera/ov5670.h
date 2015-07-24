@@ -306,7 +306,6 @@ struct regval_tab ov5670_fmt_raw10[] = {
 
 struct regval_tab ov5670_res_5M[] = {
 	{0x0100, 0x00},
-	{0x3501, 0x7b},/*exposore M*/
 	{0x3623, 0x00},/*analog control*/
 	{0x366e, 0x10},/*analog control*/
 	{0x370b, 0x1b},/*sensor control*/
@@ -338,7 +337,6 @@ struct regval_tab ov5670_res_5M[] = {
 
 struct regval_tab ov5670_res_quarter_5M[] = {
 	{0x0100, 0x00},
-	{0x3501, 0x3d},/* exposure M*/
 	{0x3623, 0x00},/* analog control*/
 	{0x366e, 0x08},/*analog control*/
 	{0x370b, 0x1b},/*sensor control*/
