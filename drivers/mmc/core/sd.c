@@ -955,6 +955,7 @@ static int mmc_sd_init_card(struct mmc_host *host, u32 ocr,
 	BUG_ON(!host);
 	WARN_ON(!host->claimed);
 
+reinit:
 	err = mmc_sd_get_cid(host, ocr, cid, &rocr);
 	if (err)
 		return err;
@@ -1010,9 +1011,10 @@ static int mmc_sd_init_card(struct mmc_host *host, u32 ocr,
 	/* Initialization sequence for UHS-I cards */
 	if (rocr & SD_ROCR_S18A) {
 		err = mmc_sd_init_uhs_card(card);
-		if (err)
-			goto free_card;
-
+		if (err) {
+			host->caps &= ~(MMC_CAP_UHS_SDR104 | MMC_CAP_UHS_SDR50);
+			goto reinit;
+		}
 		/* Card is an ultra-high-speed card */
 		mmc_card_set_uhs(card);
 	} else {
