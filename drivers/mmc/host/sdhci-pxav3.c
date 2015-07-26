@@ -1249,8 +1249,10 @@ static int pxav3_execute_tuning_dvfs(struct sdhci_host *host, u32 opcode)
 	if (pxav3_check_pretuned(host, pretuned)) {
 		/* Tuning is forbidden after boot completed */
 		if (host->boot_complete &&
-				host->mmc->card && mmc_card_sd(host->mmc->card))
+				host->mmc->card && mmc_card_sd(host->mmc->card)) {
+			host->mmc->caps &= ~(MMC_CAP_UHS_SDR104 | MMC_CAP_UHS_SDR50);
 			return -EPERM;
+		}
 		pr_warn("%s: no valid pretuned data, start real tuning\n",
 			mmc_hostname(host->mmc));
 	} else {
