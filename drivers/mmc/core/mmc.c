@@ -1168,12 +1168,13 @@ reinit:
 			err = card->host->ops->execute_tuning(card->host,
 				MMC_SEND_TUNING_BLOCK_HS200);
 			mmc_host_clk_release(card->host);
-		}
-		if (err) {
-			pr_warning("%s: tuning execution failed\n",
-				   mmc_hostname(card->host));
-			host->caps2 &= ~MMC_CAP2_HS200;
-			goto reinit;
+			if (err) {
+				pr_warn("%s: tuning execution failed\n",
+						mmc_hostname(card->host));
+				host->caps2 &= ~MMC_CAP2_HS200;
+				card->host->card = NULL;
+				goto reinit;
+			}
 		}
 
 		ext_csd_bits = (bus_width == MMC_BUS_WIDTH_8) ?
