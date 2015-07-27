@@ -1221,6 +1221,10 @@ static int pxav3_check_pretuned(struct sdhci_host *host,
 	return 0;
 }
 
+int __weak dvfs_thermal_update_level(int level)
+{
+	return level;
+}
 static int pxav3_execute_tuning_dvfs(struct sdhci_host *host, u32 opcode)
 {
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
@@ -1233,6 +1237,7 @@ static int pxav3_execute_tuning_dvfs(struct sdhci_host *host, u32 opcode)
 	unsigned long *bitmap;
 	int bitmap_size = sizeof(*bitmap) * BITS_TO_LONGS(tuning_range);
 	int dvfs_level = pdata->dvfs_level_max;
+	int dvfs_level_updated;
 	int dvfs_level_min;
 
 	/*
@@ -1285,12 +1290,16 @@ static int pxav3_execute_tuning_dvfs(struct sdhci_host *host, u32 opcode)
 		 * lock to prevent race condition.
 		 */
 
-		atomic_set(&cur_dvfs_level, dvfs_level);
+		dvfs_level_updated = dvfs_thermal_update_level(dvfs_level);
+		if (dvfs_level_updated != dvfs_level)
+			pr_warn("%s: dvfs level updated from %d to %d by thermal\n",
+					mmc_hostname(host->mmc), dvfs_level, dvfs_level_updated);
+		atomic_set(&cur_dvfs_level, dvfs_level_updated);
 		#ifdef CONFIG_PXA_DVFS
 		hwdvc_notifier_register(&dvfs_notifier); /* debug use */
 		#endif
 		is_dvfs_request_ok = 0;
-		pxa_sdh_request_dvfs_level(host, dvfs_level);
+		pxa_sdh_request_dvfs_level(host, dvfs_level_updated);
 		if (is_dvfs_request_ok != 1) {
 			pr_err("%s: drequest dvfs level %d fail and tuning stop\n",
 				mmc_hostname(host->mmc), dvfs_level);
