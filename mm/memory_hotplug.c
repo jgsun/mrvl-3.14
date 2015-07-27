@@ -784,15 +784,36 @@ static void generic_online_page(struct page *page)
 static int online_pages_range(unsigned long start_pfn, unsigned long nr_pages,
 			void *arg)
 {
-	unsigned long i;
+	u64 i, j;
+	unsigned long s_pfn, e_pfn, count, end_pfn = start_pfn + nr_pages - 1;
 	unsigned long onlined_pages = *(unsigned long *)arg;
 	struct page *page;
-	if (PageReserved(pfn_to_page(start_pfn)))
-		for (i = 0; i < nr_pages; i++) {
-			page = pfn_to_page(start_pfn + i);
-			(*online_page_callback)(page);
-			onlined_pages++;
-		}
+	phys_addr_t start, end;
+
+	pr_debug("%s: start_pfn 0x%lx, nr_pages %ld\n", __func__, start_pfn, nr_pages);
+
+	/* Only online the pages in memory range exclude the reserved range */
+	for_each_free_mem_range(j, NUMA_NO_NODE, &start, &end, NULL) {
+		s_pfn = __phys_to_pfn(start);
+		e_pfn = __phys_to_pfn(end);
+
+		if(e_pfn < start_pfn)
+			continue;
+		if(s_pfn > end_pfn)
+			break;
+
+		start_pfn = max(s_pfn, start_pfn);
+		count = min(e_pfn, end_pfn) - start_pfn + 1;
+
+		pr_debug("%s: start_pfn 0x%lx, count %ld\n", __func__, start_pfn, count);
+		if (PageReserved(pfn_to_page(start_pfn)))
+			for (i = 0; i < count; i++) {
+				page = pfn_to_page(start_pfn + i);
+				(*online_page_callback)(page);
+				onlined_pages++;
+			}
+	}
+
 	*(unsigned long *)arg = onlined_pages;
 	return 0;
 }
