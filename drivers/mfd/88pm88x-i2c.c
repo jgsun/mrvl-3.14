@@ -22,6 +22,8 @@
 #include <linux/mfd/88pm88x.h>
 #include <linux/clk/mmpfuse.h>
 
+__attribute__((weak)) bool buck1slp_is_ever_changed = false;
+
 static int pm88x_i2c_probe(struct i2c_client *client,
 		       const struct i2c_device_id *id)
 {
