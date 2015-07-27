@@ -2679,8 +2679,15 @@ static void sdhci_tuning_timer(unsigned long data)
 static void sdhci_cmd_irq(struct sdhci_host *host, u32 intmask)
 {
 	BUG_ON(intmask == 0);
-
+#ifdef CONFIG_FLC_MMC
+	if (!host->cmd && host->flc_host && (intmask & SDHCI_INT_RESPONSE)) {
+		pr_debug_ratelimited("%s transfer is interrupted by FLC\n",
+			mmc_hostname(host->mmc));
+		return;
+	} else if (!host->cmd) {
+#else
 	if (!host->cmd) {
+#endif
 		pr_err("%s: Got command interrupt 0x%08x even "
 			"though no command operation was in progress.\n",
 			mmc_hostname(host->mmc), (unsigned)intmask);
