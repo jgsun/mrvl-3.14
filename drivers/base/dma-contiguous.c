@@ -32,11 +32,15 @@
 #include <linux/swap.h>
 #include <linux/mm_types.h>
 #include <linux/dma-contiguous.h>
+#include <linux/flc.h>
 
 struct cma {
 	unsigned long	base_pfn;
 	unsigned long	count;
 	unsigned long	*bitmap;
+#ifdef CONFIG_FLC
+	unsigned long	*bitmap_flc;
+#endif
 };
 
 struct cma *dma_contiguous_default_area;
@@ -143,11 +147,24 @@ int __init cma_activate_area(struct cma *cma)
 	unsigned long base_pfn = cma->base_pfn, pfn = base_pfn;
 	unsigned i = cma->count >> pageblock_order;
 	struct zone *zone;
+#ifdef CONFIG_FLC
+	unsigned long count = ALIGN(cma->count, FLC_ENTRY_SIZE_PER_PAGE);
+	int bitmap_flc_size = BITS_TO_LONGS(count >> FLC_ENTRY_ORDER) * sizeof(long);
+#endif
 
 	cma->bitmap = kzalloc(bitmap_size, GFP_KERNEL);
 
 	if (!cma->bitmap)
 		return -ENOMEM;
+
+#ifdef CONFIG_FLC
+	if (flc_dev && (cma == flc_dev->cma_area)) {
+		cma->bitmap_flc = kzalloc(bitmap_flc_size, GFP_KERNEL |
+							   __GFP_FLC_NC);
+		if (!cma->bitmap_flc)
+			return -ENOMEM;
+	}
+#endif
 
 	WARN_ON_ONCE(!pfn_valid(pfn));
 	zone = page_zone(pfn_to_page(pfn));
@@ -398,6 +415,131 @@ static int cma_bitmap_show(struct device *dev)
 	return 0;
 }
 
+#ifdef CONFIG_FLC
+static DEFINE_MUTEX(cma_flc_mutex);
+static void bitmap_set_flc(struct cma *cma, int pageno, int nr)
+{
+	/* flc bitmap start */
+	int i, start, end, req = 0;
+	phys_addr_t phys;
+	unsigned long count;
+	unsigned long *map;
+
+	if (!cma->bitmap_flc)
+		return;
+
+	map = cma->bitmap_flc;
+
+	start = pageno >> FLC_ENTRY_ORDER;
+	end = (pageno + nr - 1) >> FLC_ENTRY_ORDER;
+
+	count = ALIGN(cma->count, FLC_ENTRY_SIZE_PER_PAGE) >> FLC_ENTRY_ORDER;
+
+	mutex_lock(&cma_flc_mutex);
+	for (i = start; i <= end; i++) {
+		phys = __pfn_to_phys(i);
+		if (i == find_next_bit(cma->bitmap_flc, count, i)) {
+			pr_debug("%s: bitmap_flc index %d was already set\n",
+				 __func__, i);
+			/*check if the 32KB cacheline is really locked, if not lock again?*/
+			if (flc_mnt_req(phys, FLC_ENTRY_ORDER, FLC_CHK_STATE_REQ))
+				req = FLC_ALLOC_REQ | FLC_ALLOC_LOCK;
+		} else {
+			bitmap_set(map, i, 1);
+			pr_debug("%s: bitmap_flc set index %d\n", __func__, i);
+			/* allocate and lock the cacheline in FLC controller */
+			req = FLC_ALLOC_REQ | FLC_ALLOC_LOCK;
+		}
+		if (req)
+			flc_mnt_req(phys, FLC_ENTRY_ORDER, req);
+	}
+	mutex_unlock(&cma_flc_mutex);
+
+	for (i = BIT_WORD(start); i <= BIT_WORD(end); i++)
+		pr_debug("%s: dump bitmap_flc[%d] = 0x%lx\n", __func__, i, *(map + i));
+}
+
+static void bitmap_clear_flc(struct cma *cma, int pageno, int nr)
+{
+	int i, start, end, set, startbit;
+	unsigned long count;
+	phys_addr_t phys;
+
+	if (!cma->bitmap_flc)
+		return;
+
+	/* flc bitmap start */
+	start = pageno >> FLC_ENTRY_ORDER;
+	end = (pageno + nr - 1) >> FLC_ENTRY_ORDER;
+
+	count = ALIGN(cma->count, FLC_ENTRY_SIZE_PER_PAGE) >> FLC_ENTRY_ORDER;
+
+	mutex_lock(&cma_flc_mutex);
+	for (i = start; i <= end; i++) {
+		startbit = i << 3;
+		set = find_next_bit(cma->bitmap, cma->count, startbit);
+		/* there's still some page in 32KB was inuse */
+		if ((set >= startbit) && (set < (startbit + 8)))
+			continue;
+		if (i != find_next_bit(cma->bitmap_flc, count, i)) {
+			pr_err("%s: Attention: bit %d was expected to be set 1!\n",
+				__func__, i);
+			panic("FLC bitmap meet error\n");
+		}
+		bitmap_clear(cma->bitmap_flc, i, 1);
+		pr_debug("%s: bitmap_flc clear index %d\n", __func__, i);
+		/*unlock the cacheline in FLC controller */
+		phys = __pfn_to_phys(i);
+		flc_mnt_req(phys, FLC_ENTRY_ORDER, FLC_UNLOCK_REQ);
+	}
+
+	mutex_unlock(&cma_flc_mutex);
+}
+
+/*
+ * the page which would be in order size for checking
+ * ret 1 when allocated && locked, which neeed to do free_contig_range
+ * else return 0, do normal page free process;
+ */
+static int bitmap_check_flc_allocated(struct cma *cma, int pageno, int nr)
+{
+	int start, end, index;
+	unsigned long count;
+	int allocated = 1, locked = 1;
+
+	/* if not flc area, return true for later process */
+	if (!cma->bitmap_flc)
+		return 1;
+
+	pr_debug("%s: pfn %lx, num %d\n", __func__, pageno + cma->base_pfn, nr);
+
+	count = ALIGN(cma->count, FLC_ENTRY_SIZE_PER_PAGE) >> FLC_ENTRY_ORDER;
+
+	mutex_lock(&cma_flc_mutex);
+
+	start = pageno >> FLC_ENTRY_ORDER;
+	end = (pageno + nr - 1) >> FLC_ENTRY_ORDER;
+	index = find_next_zero_bit(cma->bitmap_flc, count, start);
+	if ((index >= start) && (index <= end)) {
+		pr_debug("%s: start %d, end %d, index %d was not locked\n",
+			 __func__, start, end, index);
+		/* index was not locked in FLC area */
+		locked = 0;
+		goto out;
+	}
+
+	index = find_next_zero_bit(cma->bitmap, cma->count, pageno);
+	if ((index >= pageno) && (index < (pageno + nr))) {
+		pr_debug("%s: start %d, end %d, index_pfn %lx was not allocated\n",
+			 __func__, pageno, pageno + nr - 1 , index + cma->base_pfn);
+		/* index was not allocated from dma_alloc_from_contiguous */
+		allocated = 0;
+	}
+out:
+	mutex_unlock(&cma_flc_mutex);
+	return allocated && locked;
+}
+#endif
 /**
  * dma_alloc_from_contiguous() - allocate pages from contiguous area
  * @dev:   Pointer to device for which the allocation is performed.
@@ -443,6 +585,11 @@ struct page *dma_alloc_from_contiguous(struct device *dev, int count,
 		ret = alloc_contig_range(pfn, pfn + count, MIGRATE_CMA);
 		if (ret == 0) {
 			bitmap_set(cma->bitmap, pageno, count);
+#ifdef CONFIG_FLC
+			if (cma->bitmap_flc)
+				bitmap_set_flc((void *)cma, pageno, count);
+#endif
+
 			page = pfn_to_page(pfn);
 			break;
 		} else if (ret != -EBUSY) {
@@ -491,9 +638,26 @@ bool dma_release_from_contiguous(struct device *dev, struct page *pages,
 
 	VM_BUG_ON(pfn + count > cma->base_pfn + cma->count);
 
+#ifdef CONFIG_FLC
+	/*when the page was:
+	 *(1)FLC uncacheable memory;
+	 *(2)FLC cacheable memory allocated and locked;
+	 *do free_contig_range.
+	 */
+	if (!bitmap_check_flc_allocated((void *)cma, pfn - cma->base_pfn, count))
+		return false;
+	pr_debug("%s--->(page %p), pfn(%lx), base_pfn(%lx), count %d\n",
+		 __func__, (void *)pages, pfn, cma->base_pfn, count);
+#endif
+
 	mutex_lock(&cma_mutex);
 	bitmap_clear(cma->bitmap, pfn - cma->base_pfn, count);
 	free_contig_range(pfn, count);
+
+#ifdef CONFIG_FLC
+	if (cma->bitmap_flc)
+		bitmap_clear_flc((void *)cma, pfn - cma->base_pfn, count);
+#endif
 	mutex_unlock(&cma_mutex);
 
 	return true;
