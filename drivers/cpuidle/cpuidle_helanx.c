@@ -94,9 +94,6 @@ struct cpuidle_driver arm64_idle_driver = {
 		.disabled = 1,
 	},
 	.states[POWER_MODE_SYS_SLEEP_VCTCXO] = {
-		.disabled = 1,
-	},
-	.states[POWER_MODE_SYS_SLEEP_VCTCXO_OFF] = {
 		.enter = arm64_enter_state,
 		.exit_latency = 600,
 		.target_residency = 1200,
@@ -104,6 +101,9 @@ struct cpuidle_driver arm64_idle_driver = {
 			 CPUIDLE_FLAG_TIMER_STOP,
 		.name = "D1",
 		.desc = "D1: Chip idle state",
+	},
+	.states[POWER_MODE_SYS_SLEEP_VCTCXO_OFF] = {
+		.disabled = 1,
 	},
 
 	.state_count = 13,
