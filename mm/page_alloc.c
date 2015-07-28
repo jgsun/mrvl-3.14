@@ -64,6 +64,9 @@
 #ifdef CONFIG_CMA
 #include <linux/dma-contiguous.h>
 #endif
+#ifdef CONFIG_FLC
+#include <linux/flc.h>
+#endif
 
 #include <asm/sections.h>
 #include <asm/tlbflush.h>
@@ -2926,6 +2929,19 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	struct mem_cgroup *memcg = NULL;
 	int classzone_idx;
 
+#ifdef CONFIG_FLC_CACHE_LOCK
+	/*
+	 * if ___GFP_FLC_C and ___GFP_FLC_NC both specified,
+	 * first try to return locked pages, if failed, try to
+	 * return non-FLC pages
+	 */
+	if ((gfp_mask & __GFP_FLC_C) && flc_available) {
+		page =  dma_alloc_from_contiguous(flc_dev, (1 << order), order);
+		if (page || !(gfp_mask & __GFP_FLC_NC))
+			return page;
+	}
+#endif
+
 	/*
 	 * Limit the page allocation of "movable" when cma is enabled, make
 	 * "movable" only valid when it's capable of cma.
@@ -3038,6 +3054,17 @@ EXPORT_SYMBOL(get_zeroed_page);
 
 void __free_pages(struct page *page, unsigned int order)
 {
+#ifdef CONFIG_FLC_CACHE_LOCK
+	/*
+	 * pages maybe allocated with __GFP_FLC_C which was allocated from
+	 * dma_alloc_from_contiguous(), so firstly try to do page free by
+	 * dma_release_from_contiguous in which the flc allocated/lock status
+	 * will be checked, then choose the correct path to free.
+	 */
+	if (flc_available && dma_release_from_contiguous(flc_dev, page, (1 << order)))
+		return;
+#endif
+
 	if (put_page_testzero(page)) {
 		if (order == 0)
 			free_hot_cold_page(page, false);
