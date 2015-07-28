@@ -164,7 +164,7 @@ struct pm88x_chip *pm88x_init_chip(struct i2c_client *client)
 	chip->test_page_addr = client->addr + 7;
 
 	/* initialize the lock for test page as early as possible */
-	spin_lock_init(&chip->test_page_lock);
+	mutex_init(&chip->test_page_lock);
 
 	dev_set_drvdata(chip->dev, chip);
 	i2c_set_clientdata(chip->client, chip);
@@ -974,36 +974,16 @@ int pm88x_reboot_notifier_callback(struct notifier_block *this,
 
 void hold_test_page(struct pm88x_chip *chip)
 {
-	bool open_test_page = false;
+	mutex_lock(&chip->test_page_lock);
 
-	spin_lock(&chip->test_page_lock);
-	if (chip->test_page_user_cnt == 0)
-		open_test_page = true;
-	chip->test_page_user_cnt++;
-	spin_unlock(&chip->test_page_lock);
-
-	if (open_test_page) {
-		dev_info(chip->dev, "enable to get access to test page.\n");
-		regmap_write(chip->base_regmap, 0x1f, 0x1);
-	} else {
-		dev_info(chip->dev, "test page has got ready to be accesssed.\n");
-	}
+	dev_info(chip->dev, "enable to get access to test page.\n");
+	regmap_write(chip->base_regmap, 0x1f, 0x1);
 }
 
 void release_test_page(struct pm88x_chip *chip)
 {
-	bool close_test_page = false;
+	dev_info(chip->dev, "disable to get access to test page.\n");
+	regmap_write(chip->base_regmap, 0x1f, 0x0);
 
-	spin_lock(&chip->test_page_lock);
-	chip->test_page_user_cnt--;
-	if (chip->test_page_user_cnt == 0)
-		close_test_page = true;
-	spin_unlock(&chip->test_page_lock);
-
-	if (close_test_page) {
-		dev_info(chip->dev, "disable to get access to test page.\n");
-		regmap_write(chip->base_regmap, 0x1f, 0x0);
-	} else {
-		dev_info(chip->dev, "test page is in using by other modules.\n");
-	}
+	mutex_unlock(&chip->test_page_lock);
 }

@@ -198,8 +198,7 @@ struct pm88x_chip {
 	struct notifier_block cb_nb;
 	struct pm88x_dvc *dvc;
 
-	spinlock_t test_page_lock;
-	unsigned int test_page_user_cnt;
+	struct mutex test_page_lock;
 };
 
 struct pm88x_debug_info {
