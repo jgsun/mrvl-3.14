@@ -301,6 +301,9 @@ static int get_saved_regs(void)
 	void *cpu_base;
 	int i, j, num = 0;
 	if (!base) {
+                if (!share_addr)
+                        return 0;
+
 		base = map_address(share_addr, share_len);
 		if (!base)
 			BUG_ON("map_address failed!\n");
