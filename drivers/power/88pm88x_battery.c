@@ -1059,9 +1059,11 @@ static void pm88x_battery_correct_low_temp(struct pm88x_battery_info *info,
 		temp_is_fine = true;
 	}
 
-	/* bit 0, 0xc0 register in gpadc page: cleared in boot up stage */
+	/* bit 0, 0xc0 register in gpadc page: cleared in room temperature */
 	if (info->bat_params.temp < 0)
 		regmap_update_bits(info->chip->gpadc_regmap, 0xc0, 0x1, 0x1);
+	else
+		regmap_update_bits(info->chip->gpadc_regmap, 0xc0, 0x1, 0x0);
 
 	/*
 	 * now the temperature resumes back,
@@ -1748,14 +1750,17 @@ static void pm88x_init_soc_cycles(struct pm88x_battery_info *info,
 	 */
 	regmap_read(info->chip->gpadc_regmap, 0xc0, &ever_low_temp);
 	if (ever_low_temp & 0x1) {
-		if (soc_from_saved == 0)
-			*initial_soc = 1;
-		else
-			*initial_soc = soc_from_saved;
+		if (pm88x_get_batt_temp(info) < 0) {
+			if (soc_from_saved == 0)
+				*initial_soc = 1000;
+			else
+				*initial_soc = soc_from_saved;
+		} else {
+			*initial_soc = soc_from_vbat_active;
+			/* clear this flag */
+			regmap_update_bits(info->chip->gpadc_regmap, 0xc0, 0x1, 0);
+		}
 		*initial_cycles = cycles_from_saved;
-
-		/* clear this flag */
-		regmap_update_bits(info->chip->gpadc_regmap, 0xc0, 0x1, 0);
 		goto end;
 	}
 
