@@ -54,6 +54,7 @@ struct mv_camera_dev {
 	struct msc2_mmu_dev *sc2_mmu;
 	struct mcam_frame_stat frame_state;	/* Frame state counter */
 	enum mcam_state state;
+	struct completion dma_no_stream;
 	struct v4l2_pix_format_mplane mp;
 	struct vb2_alloc_ctx *vb_alloc_ctx;
 	enum v4l2_mbus_type bus_type;
@@ -63,6 +64,8 @@ struct mv_camera_dev {
 	struct list_head buffers;	/* Available frames */
 	struct msc2_buffer *mbuf;
 	struct msc2_buffer *mbuf_shadow;
+	u32	tid[VIDEO_MAX_PLANES];
+	u32	num_tid;
 #define CF_SINGLE_BUF	0
 #define CF_FRAME_SOF0	1
 #define CF_FRAME_OVERFLOW	2

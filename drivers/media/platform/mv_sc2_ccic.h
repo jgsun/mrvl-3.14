@@ -56,7 +56,7 @@
 #define REG_CTRL0	0x3c	/* Control 0 */
 #define	  C0_ENABLE	  0x00000001	/* Makes the whole thing go */
 /* Mask for all the format bits */
-#define	  C0_DF_MASK	  0x08fffffc	/* Bits 2-23 */
+#define	  C0_DF_MASK	  0x08dffffc
 /* RGB ordering */
 #define	  C0_RGB4_RGBX	  0x00000000
 #define	  C0_RGB4_XRGB	  0x00000004

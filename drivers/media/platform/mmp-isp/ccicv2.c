@@ -88,7 +88,7 @@ static inline int ccic_dma_fill_buf(struct ccic_dma *ccic_dma,
 		ccic_dma->ccic_dma->ops->set_addr(ccic_dma->ccic_dma, (u8)i,
 			(u32)ispvb->ch_info[i].daddr);
 
-	dma_dev->ops->shadow_ready(dma_dev);
+	dma_dev->ops->shadow_ready(dma_dev, 1);
 
 	return ret;
 }

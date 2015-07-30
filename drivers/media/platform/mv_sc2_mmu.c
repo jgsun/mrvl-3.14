@@ -218,9 +218,11 @@ static int msc2_ch_enable(struct msc2_mmu_dev *sc2_dev, u32 tid)
 	return 0;
 }
 
+#define MSC2_CH_WAIT_CNT 1000
 static int msc2_ch_disable(struct msc2_mmu_dev *sc2_dev, u32 tid)
 {
 	int ch;
+	int i = 0;
 
 	ch = tid_to_ch(sc2_dev, tid);
 	if (ch == -1) {
@@ -231,24 +233,6 @@ static int msc2_ch_disable(struct msc2_mmu_dev *sc2_dev, u32 tid)
 
 	if (sc2_dev->ch_status[ch] == MSC2_CH_DISABLE)
 		return 0;
-
-	msc2_mmu_disable_ch(sc2_dev, ch);
-	sc2_dev->ch_status[ch] = MSC2_CH_DISABLE;
-
-	return 0;
-}
-
-#define MSC2_CH_WAIT_CNT 1000
-static int msc2_ch_reset(struct msc2_mmu_dev *sc2_dev, u32 tid)
-{
-	int ch;
-	int i = 0;
-
-	ch = tid_to_ch(sc2_dev, tid);
-	if (ch == -1) {
-		dev_warn(sc2_dev->dev, "No such channel: %d to reset\n", tid);
-		return -ENODEV;
-	}
 
 	msc2_mmu_disable_ch(sc2_dev, ch);
 
@@ -273,7 +257,7 @@ static int msc2_chs_reset(struct msc2_mmu_dev *sc2_dev,
 
 	spin_lock_irqsave(&sc2_dev->msc2_lock, flags);
 	for (i = 0; i < nr_chs; i++) {
-		ret = msc2_ch_reset(sc2_dev, tid[i]);
+		ret = msc2_ch_disable(sc2_dev, tid[i]);
 		if (ret < 0) {
 			spin_unlock_irqrestore(&sc2_dev->msc2_lock, flags);
 			return ret;
@@ -300,7 +284,8 @@ static int msc2_chs_enable(struct msc2_mmu_dev *sc2_dev,
 		}
 	}
 	/* set clock as dynamic gate for power optimization */
-	msc2_mmu_reg_write(sc2_dev, REG_SC2_AXICLK_CG, 0x0);
+	if (!msc2_mmu_reg_read(sc2_dev, REG_SC2_AXICLK_CG))
+		msc2_mmu_reg_write(sc2_dev, REG_SC2_AXICLK_CG, 0x0);
 	spin_unlock_irqrestore(&sc2_dev->msc2_lock, flags);
 	return 0;
 }

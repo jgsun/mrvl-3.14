@@ -217,6 +217,8 @@ size_find:
 	memcpy(plane->dscr_cpu, entry, cnt * sizeof(struct m4u_dscr));
 	plane->dscr_cpu[0].dma_addr += offset;
 	plane->dscr_cpu[0].dma_size -= offset;
+	if (PAGE_ALIGN(size) < plane->dscr_cpu[cnt-1].dma_size)
+		plane->dscr_cpu[cnt-1].dma_size = PAGE_ALIGN(size);
 	plane->bdt.dscr_cpu = plane->dscr_cpu;
 	plane->bdt.dscr_cnt = cnt;
 	plane->bdt.bpd = sizeof(struct m4u_dscr);

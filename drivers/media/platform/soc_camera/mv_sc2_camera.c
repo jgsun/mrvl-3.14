@@ -113,8 +113,6 @@ static const struct soc_mbus_pixelfmt ccic_formats[] = {
 	},
 };
 
-
-
 static int mccic_queue_setup(struct vb2_queue *vq,
 			const struct v4l2_format *fmt,
 			u32 *count, u32 *num_planes,
@@ -188,7 +186,6 @@ static int mccic_vb2_prepare(struct vb2_buffer *vb)
 	if (mcam_dev->buffer_mode == B_DMA_CONTIG) {
 		/* no sure the below code is necessary */
 		/* TBD: To Debug */
-		WARN(!list_empty(&mbuf->queue), "Buffer %p on queue!\n", vb);
 		size = vb2_plane_size(vb, 0);
 		vb2_set_plane_payload(vb, 0, size);
 		ret = 0;
@@ -356,6 +353,8 @@ static int msc2_setup_buffer(struct mv_camera_dev *mcam_dev)
 			break;
 		}
 	} else if (mcam_dev->buffer_mode == B_DMA_SG) {
+		u32 i;
+
 		switch (mcam_dev->mp.pixelformat) {
 		case V4L2_PIX_FMT_YUV422P:
 		case V4L2_PIX_FMT_YUV420:
@@ -448,7 +447,15 @@ static int msc2_setup_buffer(struct mv_camera_dev *mcam_dev)
 		}
 		msc2_mmu->ops->config_ch(msc2_mmu, mbuf->ch_info,
 					mbuf->vb2_buf.num_planes);
+
+		mcam_dev->num_tid = mbuf->vb2_buf.num_planes;
+		for (i = 0; i < mcam_dev->num_tid; i++)
+			mcam_dev->tid[i] = mbuf->ch_info[i].tid;
+		WARN_ON(msc2_mmu->ops->enable_ch(msc2_mmu, mcam_dev->tid, mcam_dev->num_tid));
+
 	}
+	dma_dev->ops->shadow_ready(dma_dev, 1);
+
 	return 0;
 }
 
@@ -498,7 +505,6 @@ static int mccic_vb2_start_streaming(struct vb2_queue *vq, unsigned int count)
 	struct mv_camera_dev *mcam_dev = ici->priv;
 	struct ccic_dma_dev *dma_dev = mcam_dev->dma_dev;
 	struct ccic_ctrl_dev *ctrl_dev = mcam_dev->ctrl_dev;
-	struct msc2_mmu_dev *msc2_mmu = mcam_dev->sc2_mmu;
 	struct device *dev = &mcam_dev->pdev->dev;
 	unsigned long flags = 0;
 	int ret;
@@ -532,30 +538,10 @@ static int mccic_vb2_start_streaming(struct vb2_queue *vq, unsigned int count)
 /* +	/\* ccic_reg_set_bit(mcam_dev, REG_CTRL1, C1_PWRDWN) *\/ */
 
 	msc2_setup_buffer(mcam_dev);
-
-	if (mcam_dev->buffer_mode == B_DMA_CONTIG) {
-		/* nothing to do here */
-	} else if (mcam_dev->buffer_mode == B_DMA_SG) {
-		u32 i, tid[mcam_dev->mbuf->vb2_buf.num_planes];
-		for (i = 0; i < mcam_dev->mbuf->vb2_buf.num_planes; i++)
-			tid[i] = mcam_dev->mbuf->ch_info[i].tid;
-		ret = msc2_mmu->ops->enable_ch(msc2_mmu, tid,
-					mcam_dev->mbuf->vb2_buf.num_planes);
-		if (ret) {
-			dma_dev->ops->ccic_disable(dma_dev);
-			ctrl_dev->ops->irq_mask(ctrl_dev, 0);
-			spin_unlock_irqrestore(&mcam_dev->mcam_lock, flags);
-			return ret;
-		}
-	} else {
-		spin_unlock_irqrestore(&mcam_dev->mcam_lock, flags);
-		return -EINVAL;
-	}
-
-	dma_dev->ops->shadow_ready(dma_dev);
 	ctrl_dev->ops->irq_mask(ctrl_dev, 1);
 	dma_dev->ops->ccic_enable(dma_dev);
 	mcam_dev->state = S_STREAMING;
+	reinit_completion(&mcam_dev->dma_no_stream);
 
 	spin_unlock_irqrestore(&mcam_dev->mcam_lock, flags);
 	return 0;
@@ -573,35 +559,30 @@ static int mccic_vb2_stop_streaming(struct vb2_queue *vq)
 	unsigned long flags = 0;
 
 	spin_lock_irqsave(&mcam_dev->mcam_lock, flags);
-
 	mcam_dev->state = S_IDLE;
+	dma_dev->ops->shadow_ready(dma_dev, 0);
+	spin_unlock_irqrestore(&mcam_dev->mcam_lock, flags);
+
+	wait_for_completion(&mcam_dev->dma_no_stream);
+
+	spin_lock_irqsave(&mcam_dev->mcam_lock, flags);
 	dma_dev->ops->ccic_disable(dma_dev);
 	ctrl_dev->ops->irq_mask(ctrl_dev, 0);
 	ctrl_dev->ops->config_mbus(ctrl_dev, mcam_dev->bus_type,
 					mcam_dev->mbus_flags, 0);
-	if (mcam_dev->buffer_mode == B_DMA_CONTIG) {
-		/* nothing to do here */
-	} else if (mcam_dev->buffer_mode == B_DMA_SG) {
-		u32 i, tid[mcam_dev->mbuf->vb2_buf.num_planes];
-		for (i = 0; i < mcam_dev->mbuf->vb2_buf.num_planes; i++)
-			tid[i] = mcam_dev->mbuf->ch_info[i].tid;
-		msc2_mmu->ops->disable_ch(msc2_mmu, tid,
-					mcam_dev->mbuf->vb2_buf.num_planes);
-	} else {
-		spin_unlock_irqrestore(&mcam_dev->mcam_lock, flags);
-		return -EINVAL;
-	}
+	if (mcam_dev->buffer_mode == B_DMA_SG)
+		msc2_mmu->ops->disable_ch(msc2_mmu, mcam_dev->tid, mcam_dev->num_tid);
 
 	INIT_LIST_HEAD(&mcam_dev->buffers);
 	mcam_dev->mbuf = NULL;
 	mcam_dev->mbuf_shadow = NULL;
+	spin_unlock_irqrestore(&mcam_dev->mcam_lock, flags);
 
-	/* reset the ccic ??? */
+	mccic_release_sc2_chs(mcam_dev, mcam_dev->mp.num_planes);
+
 	dev_dbg(icd->parent, "Release %d frames, %d singles, %d delivered\n",
 		mcam_dev->frame_state.frames, mcam_dev->frame_state.singles,
 		mcam_dev->frame_state.delivered);
-	spin_unlock_irqrestore(&mcam_dev->mcam_lock, flags);
-	mccic_release_sc2_chs(mcam_dev, mcam_dev->mp.num_planes);
 
 	return 0;
 }
@@ -1033,6 +1014,9 @@ static int mccic_set_fmt(struct soc_camera_device *icd,
 	/* bytesperline is only used in jpeg mode, using plane[0]'s value */
 	dma_dev->bytesperline = pix_mp->plane_fmt[0].bytesperline;
 	dma_dev->code = mf.code;
+	dev_info(icd->parent, "%s, num %d:%dx%d\n", __func__,
+			 pix_mp->num_planes, mf.width, mf.height);
+
 
 	return 0;
 }
@@ -1313,30 +1297,14 @@ static irqreturn_t dma_irq_handler(struct ccic_dma_dev *dma_dev, u32 irqs)
 	struct mv_camera_dev *mcam_dev = dma_dev->priv;
 	struct device *dev = &mcam_dev->pdev->dev;
 
-	/*
-	 * In OVERFLOW, we don't touch bufferQ, so no need to grab buffer
-	 * lock.
-	 */
 	if (irqs & IRQ_OVERFLOW) {
-		/*
-		 * In case of overflow, the 1st thing to do is to tell HW
-		 * stop working by clear ready bit. But can't reset MMU
-		 * right now, because it's possible that the subsequent
-		 * buffer already start been DMAed on. So just make a mark
-		 * here and do error handling in drop frame IRQ.
-		 */
-		dma_dev->ops->shadow_empty(dma_dev);
 		set_bit(CF_FRAME_OVERFLOW, &mcam_dev->flags);
 		irqs &= ~IRQ_OVERFLOW;
 		dev_warn(dev, "irq overflow!\n");
 	}
 
 	spin_lock(&mcam_dev->mcam_lock);
-	/*
-	 * It's possible that SOF comes together with EOF, the sequence to
-	 * handle them depends on whether DMA is active, this can be tell
-	 * by checking the Start-Of-Frame flag.
-	 */
+
 	if (test_bit(CF_FRAME_SOF0, &mcam_dev->flags))
 		goto handle_eof;
 	else
@@ -1344,48 +1312,44 @@ static irqreturn_t dma_irq_handler(struct ccic_dma_dev *dma_dev, u32 irqs)
 
 handle_sof:
 	if (irqs & IRQ_SOF0) {
-		set_bit(CF_FRAME_SOF0, &mcam_dev->flags);
 		irqs &= ~IRQ_SOF0;
-		if (!test_bit(CF_FRAME_OVERFLOW, &mcam_dev->flags)) {
+
+		if (test_bit(CF_FRAME_SOF0, &mcam_dev->flags))
+			dev_warn(dev, "miss EOF\n");
+
+		if (mcam_dev->state == S_STREAMING)
 			msc2_setup_buffer(mcam_dev);
-			dma_dev->ops->shadow_ready(dma_dev);
-		}
-		goto handle_eof;
+
+		set_bit(CF_FRAME_SOF0, &mcam_dev->flags);
 	}
-	/* SHADOW_NOT_READY is mutual exclusive with SOF */
+
 	if (irqs & IRQ_SHADOW_NOT_RDY) {
-		clear_bit(CF_FRAME_SOF0, &mcam_dev->flags);
-		if (test_bit(CF_FRAME_OVERFLOW, &mcam_dev->flags) &&
-			(mcam_dev->buffer_mode == B_DMA_SG)) {
-			/* If overflow happens, reset MMU here */
-			u32 i, tid[mcam_dev->mbuf->vb2_buf.num_planes];
-			for (i = 0; i < mcam_dev->mbuf->vb2_buf.num_planes;
-				 i++)
-				tid[i] = mcam_dev->mbuf->ch_info[i].tid;
-			mcam_dev->sc2_mmu->ops->reset_ch(mcam_dev->sc2_mmu, tid, i);
-			WARN_ON(mcam_dev->sc2_mmu->ops->enable_ch(
-				mcam_dev->sc2_mmu, tid, i));
-			clear_bit(CF_FRAME_OVERFLOW, &mcam_dev->flags);
-		} else
+		irqs &= ~IRQ_SHADOW_NOT_RDY;
+
+		if (mcam_dev->state == S_STREAMING)
 			msc2_setup_buffer(mcam_dev);
-		dma_dev->ops->shadow_ready(dma_dev);
+		else
+			complete(&mcam_dev->dma_no_stream);
 	}
 
 handle_eof:
 	if (irqs & IRQ_EOF0) {
-		clear_bit(CF_FRAME_SOF0, &mcam_dev->flags);
 		irqs &= ~IRQ_EOF0;
+
 		if (!test_bit(CF_FRAME_OVERFLOW, &mcam_dev->flags))
 			mccic_frame_complete(mcam_dev);
+		else
+			clear_bit(CF_FRAME_OVERFLOW, &mcam_dev->flags);
+
+		clear_bit(CF_FRAME_SOF0, &mcam_dev->flags);
 	}
 
-	if (irqs & IRQ_EOF0)
-		goto handle_eof;
-	if (irqs & IRQ_SOF0)
+	if (irqs & (IRQ_SOF0 | IRQ_SHADOW_NOT_RDY))
 		goto handle_sof;
+
 	spin_unlock(&mcam_dev->mcam_lock);
 
-	if (irqs)
+	if (irqs & (~ALLIRQS))
 		return IRQ_NONE;
 	else
 		return IRQ_HANDLED;
@@ -1439,6 +1403,7 @@ static int mv_camera_probe(struct platform_device *pdev)
 	INIT_LIST_HEAD(&mcam_dev->buffers);
 	spin_lock_init(&mcam_dev->mcam_lock);
 	mutex_init(&mcam_dev->s_mutex);
+	init_completion(&mcam_dev->dma_no_stream);
 
 	/* TBD mccic_init_clk(ccic_dev); */
 	/* 3. setup soc_host */

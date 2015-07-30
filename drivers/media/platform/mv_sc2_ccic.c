@@ -429,8 +429,9 @@ static int ccic_hw_setup_image(struct ccic_dma_dev *dma_dev)
 		break;
 	case V4L2_PIX_FMT_NV12:
 	case V4L2_PIX_FMT_NV21:
+		/*set UV pitch to 0*/
 		widthy = width;
-		widthuv = width / 2;
+		widthuv = 0;
 		break;
 	case V4L2_PIX_FMT_SBGGR8:
 		widthy = width;
@@ -505,6 +506,9 @@ static int ccic_hw_setup_image(struct ccic_dma_dev *dma_dev)
 	 * Make sure it knows we want to use hsync/vsync.
 	 */
 	ccic_reg_write_mask(ccic_dev, REG_CTRL0, C0_SIF_HVSYNC, C0_SIFM_MASK);
+	/* Need set following bit for auto-recovery */
+	ccic_reg_set_bit(ccic_dev, REG_CTRL0, C0_EOFFLUSH);
+
 
 	/* Not sure the new SoC need such code */
 	/* if (sdata->bus_type == V4L2_MBUS_CSI2) */
@@ -529,19 +533,14 @@ static int ccic_hw_setup_image(struct ccic_dma_dev *dma_dev)
 	return 0;
 }
 
-static void ccic_shadow_ready(struct ccic_dma_dev *dma_dev)
+static void ccic_shadow_ready(struct ccic_dma_dev *dma_dev, int enable)
 {
 	unsigned long flags = 0;
 	spin_lock_irqsave(&dma_dev->ccic_dev->ccic_lock, flags);
-	ccic_reg_set_bit(dma_dev->ccic_dev, REG_CTRL1, C1_SHADOW_RDY);
-	spin_unlock_irqrestore(&dma_dev->ccic_dev->ccic_lock, flags);
-}
-
-static void ccic_shadow_empty(struct ccic_dma_dev *dma_dev)
-{
-	unsigned long flags = 0;
-	spin_lock_irqsave(&dma_dev->ccic_dev->ccic_lock, flags);
-	ccic_reg_clear_bit(dma_dev->ccic_dev, REG_CTRL1, C1_SHADOW_RDY);
+	if (enable)
+		ccic_reg_set_bit(dma_dev->ccic_dev, REG_CTRL1, C1_SHADOW_RDY);
+	else
+		ccic_reg_clear_bit(dma_dev->ccic_dev, REG_CTRL1, C1_SHADOW_RDY);
 	spin_unlock_irqrestore(&dma_dev->ccic_dev->ccic_lock, flags);
 }
 
@@ -611,7 +610,6 @@ static void ccic_disable(struct ccic_dma_dev *dma_dev)
 static struct ccic_dma_ops ccic_dma_ops = {
 	.setup_image = ccic_hw_setup_image,
 	.shadow_ready = ccic_shadow_ready,
-	.shadow_empty = ccic_shadow_empty,
 	.set_yaddr = ccic_set_yaddr,
 	.set_uaddr = ccic_set_uaddr,
 	.set_vaddr = ccic_set_vaddr,
@@ -1055,10 +1053,6 @@ static irqreturn_t ccic_irqhandler(int irq, void *data)
 
 	/* not sure here to clear is the best point */
 	ccic_reg_write(ccic_dev, REG_IRQSTAT, irqs);
-
-	/* If overflow, need set following bit for auto-recovery */
-	if (irqs & IRQ_OVERFLOW)
-		ccic_reg_set_bit(ccic_dev, REG_CTRL0, C0_EOFFLUSH);
 
 	if (dma_dev->handler)
 		handled = dma_dev->handler(dma_dev, irqs);
