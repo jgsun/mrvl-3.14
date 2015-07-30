@@ -1028,9 +1028,11 @@ static int mv_otg_probe(struct platform_device *pdev)
 
 		/* TODO: use device tree to parse extcon device name */
 		mvotg->extcon = extcon_get_extcon_dev("88pm88x-extcon");
-		if (!mvotg->extcon)
-			return -EPROBE_DEFER;
-
+		if (!mvotg->extcon) {
+			mv_otg_disable_internal(mvotg);
+			retval = -EPROBE_DEFER;
+			goto err_destroy_workqueue;
+		}
 		if (pdata->extern_attr & MV_USB_HAS_VBUS_DETECTION)
 			mvotg->clock_gating = 1;
 
@@ -1039,14 +1041,17 @@ static int mv_otg_probe(struct platform_device *pdev)
 		retval = extcon_register_interest(&mvotg->vbus_dev,
 						  "88pm88x-extcon", "VBUS",
 						  &mvotg->notifier);
-		if (retval)
-			return retval;
+		if (retval) {
+			mv_otg_disable_internal(mvotg);
+			goto err_destroy_workqueue;
+		}
 		retval = extcon_register_interest(&mvotg->id_dev,
 						  "88pm88x-extcon", "USB-ID",
 						  &mvotg->notifier);
 		if (retval) {
+			mv_otg_disable_internal(mvotg);
 			extcon_unregister_interest(&mvotg->vbus_dev);
-			return retval;
+			goto err_destroy_workqueue;
 		}
 	}
 
