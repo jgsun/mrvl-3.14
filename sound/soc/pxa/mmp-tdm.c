@@ -450,6 +450,88 @@ int mmp_tdm_slot_inc(struct tdm_manage_private *tdm_man_priv,
 	return slot;
 }
 
+#define STATIC_TX_SLOT		4
+
+/* TDM slot static alloc mangement */
+int mmp_tdm_static_slot_inc(struct tdm_manage_private *tdm_man_priv,
+	int *tx, int tx_num, int *rx, int rx_num)
+{
+	int slot = 0;
+	int i;
+	int rx_slot_tol, tx_slot_tol;
+
+	slot = tdm_man_priv->slot_tol;
+	if (slot == 0) {
+		/*
+		 * Fixme: configure tdm_double_edge, slot_size
+		 * slot_space, start_slot
+		 */
+		mmp_tdm_bus_config(tdm_man_priv);
+	}
+
+	if (!tdm_man_priv->use_4_wires) {
+		for (i = 0; i < tx_num; i++) {
+			if (tx[i] > slot)
+				slot = tx[i];
+		}
+		for (i = 0; i < rx_num; i++) {
+			if (rx[i] > slot)
+				slot = rx[i];
+		}
+		if (slot == tdm_man_priv->slot_tol) {
+			dev_dbg(tdm_man_priv->dev,
+					"tdm slot has been allocated\n");
+			return slot;
+		}
+		slot = mmp_tdm_slot_config(tdm_man_priv, slot);
+		if (slot < 0)
+			return -EINVAL;
+	} else {
+		rx_slot_tol = slot - tdm_man_priv->rx_unused_slot_tol;
+		tx_slot_tol = slot - tdm_man_priv->tx_unused_slot_tol;
+		if (!tdm_man_priv->single_out) {
+			/* always allocate 4 slots for playback */
+			for (i = 0; i < tx_num; i++) {
+				if (tx[i] > 0) {
+					if (STATIC_TX_SLOT > slot)
+						slot = STATIC_TX_SLOT;
+					if (STATIC_TX_SLOT > tx_slot_tol)
+						tx_slot_tol = STATIC_TX_SLOT;
+					break;
+				}
+			}
+		} else {
+			for (i = 0; i < tx_num; i++) {
+				if (tx[i] > slot)
+					slot = tx[i];
+				if (tx[i] > tx_slot_tol)
+					tx_slot_tol = tx[i];
+			}
+		}
+
+		for (i = 0; i < rx_num; i++) {
+			if (rx[i] > slot)
+				slot = rx[i];
+			if (rx[i] > rx_slot_tol)
+				rx_slot_tol = rx[i];
+		}
+
+		if (slot == tdm_man_priv->slot_tol) {
+			dev_dbg(tdm_man_priv->dev,
+					"tdm slot has been allocated\n");
+			return slot;
+		}
+		slot = mmp_tdm_slot_config(tdm_man_priv, slot);
+		if (slot < 0)
+			return -EINVAL;
+
+		tdm_man_priv->tx_unused_slot_tol = (slot - tx_slot_tol);
+		tdm_man_priv->rx_unused_slot_tol = (slot - rx_slot_tol);
+	}
+	tdm_man_priv->slot_tol = slot;
+	return slot;
+}
+
 int mmp_tdm_slot_dec(struct tdm_manage_private *tdm_man_priv)
 {
 	int slot;
@@ -564,8 +646,6 @@ int mmp_tdm_move_slot(struct snd_pcm_substream *substream, int dst)
 }
 EXPORT_SYMBOL(mmp_tdm_move_slot);
 
-#define STATIC_TX_SLOT		4
-
 /* TDM slot allocate for static allocation */
 int mmp_tdm_static_slot_alloc(struct snd_pcm_substream *substream,
 				int *tx, int tx_num, int *rx, int rx_num)
@@ -574,48 +654,20 @@ int mmp_tdm_static_slot_alloc(struct snd_pcm_substream *substream,
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
 	struct tdm_dai_private *tdm_dai_priv = snd_soc_dai_get_drvdata(cpu_dai);
 	struct tdm_manage_private *tdm_man_priv;
-	int slot;
-	struct tdm_used_entity *entity;
+	struct tdm_used_entity *entity = NULL, *entity1 = NULL;
+	int ret = 0;
 	int i;
-	int rx_slot_tol, tx_slot_tol;
 
 	if (unlikely(substream == NULL))
 		return -EINVAL;
 
 	tdm_man_priv = tdm_dai_priv->tdm_manage_priv;
-	mutex_lock(&tdm_man_priv->mutex);
-	/*
-	 * Fixme: 0<->channel 0; 1<->channel 1
-	 * suppose we don't care the bit map in rx direction due to
-	 * Many clients can receiver stream from the same slot???
-	 * talked with xin, suggest using the different slot for different
-	 * peripheral device even if the stream is the same for simple handling.
-	 */
-	for (i = 0; i < tx_num; i++) {
-		entity = get_tdm_entity_from_slot(tdm_man_priv, tx[i],
-						SNDRV_PCM_STREAM_PLAYBACK);
-		if (entity) {
-			pr_err("the tx channel[%d] is in used\n", tx[i]);
-			return -EINVAL;
-		}
-	}
-	for (i = 0; i < rx_num; i++) {
-		entity = get_tdm_entity_from_slot(tdm_man_priv, rx[i],
-						SNDRV_PCM_STREAM_CAPTURE);
-		if (entity) {
-			pr_err("the rx channel[%d] is in used\n", rx[i]);
-			return -EINVAL;
-		}
+	entity = get_tdm_entity(substream);
+	if (entity != NULL) {
+		dev_dbg(tdm_man_priv->dev, "shouldn't happen!!!\n");
+		return 0;
 	}
 
-	slot = tdm_man_priv->slot_tol;
-	if (slot == 0) {
-		/*
-		 * Fixme: configure tdm_double_edge, slot_size
-		 * slot_space, start_slot
-		 */
-		mmp_tdm_bus_config(tdm_man_priv);
-	}
 	/* malloc one entity */
 	entity = devm_kzalloc(tdm_man_priv->dev,
 					sizeof(struct tdm_used_entity),
@@ -624,81 +676,73 @@ int mmp_tdm_static_slot_alloc(struct snd_pcm_substream *substream,
 		mutex_unlock(&tdm_man_priv->mutex);
 		return -ENOMEM;
 	}
+
+	mutex_lock(&tdm_man_priv->mutex);
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		for (i = 0; i < tx_num; i++) {
+			entity1 = get_tdm_entity_from_slot(tdm_man_priv, tx[i],
+						SNDRV_PCM_STREAM_PLAYBACK);
+			if (entity1)
+				break;
+		}
+		if (entity1 == NULL) {
+			ret = mmp_tdm_static_slot_inc(tdm_man_priv, tx, tx_num,
+				rx, rx_num);
+			if (ret < 0) {
+				mutex_unlock(&tdm_man_priv->mutex);
+				devm_kfree(tdm_man_priv->dev, entity);
+				return -EINVAL;
+			}
+		} else if (tdm_man_priv->single_out) {
+			tx_num = entity1->tx_num;
+			for (i = 0; i < tx_num; i++)
+				tx[i] = entity1->tx[i];
+		} else {
+			mutex_unlock(&tdm_man_priv->mutex);
+			devm_kfree(tdm_man_priv->dev, entity);
+			pr_err("the tx channel[%d] is in used\n", tx[i]);
+			return -EINVAL;
+		}
+
+		for (i = 0; i < tx_num; i++)
+			entity->tx[i] = tx[i];
+
+		entity->tx_num = tx_num;
+	} else {
+		for (i = 0; i < rx_num; i++) {
+			entity1 = get_tdm_entity_from_slot(tdm_man_priv, rx[i],
+						SNDRV_PCM_STREAM_CAPTURE);
+			if (entity1)
+				break;
+		}
+		if (entity1 == NULL) {
+			ret = mmp_tdm_static_slot_inc(tdm_man_priv, tx, tx_num,
+				rx, rx_num);
+			if (ret < 0) {
+				mutex_unlock(&tdm_man_priv->mutex);
+				devm_kfree(tdm_man_priv->dev, entity);
+				return -EINVAL;
+			}
+		} else {
+			mutex_unlock(&tdm_man_priv->mutex);
+			devm_kfree(tdm_man_priv->dev, entity);
+			pr_err("the rx channel[%d] is in used\n", rx[i]);
+			return -EINVAL;
+		}
+
+		for (i = 0; i < rx_num; i++)
+			entity->rx[i] = rx[i];
+
+		entity->rx_num = rx_num;
+	}
+
 	entity->substream = substream;
-	for (i = 0; i < tx_num; i++)
-		entity->tx[i] = tx[i];
-	entity->tx_num = tx_num;
-	for (i = 0; i < rx_num; i++)
-		entity->rx[i] = rx[i];
-	entity->rx_num = rx_num;
 	INIT_LIST_HEAD(&entity->list);
 	list_add_tail(&entity->list, &tdm_man_priv->substream_list);
 	tdm_man_priv->substream_num++;
 
-	if (!tdm_man_priv->use_4_wires) {
-		for (i = 0; i < tx_num; i++) {
-			if (tx[i] > slot)
-				slot = tx[i];
-		}
-		for (i = 0; i < rx_num; i++) {
-			if (rx[i] > slot)
-				slot = rx[i];
-		}
-		if (slot == tdm_man_priv->slot_tol) {
-			dev_dbg(tdm_man_priv->dev,
-					"tdm slot has been allocated\n");
-			mutex_unlock(&tdm_man_priv->mutex);
-			return slot;
-		}
-		slot = mmp_tdm_slot_config(tdm_man_priv, slot);
-		if (slot < 0) {
-			list_del(&entity->list);
-			devm_kfree(tdm_man_priv->dev, entity);
-			mutex_unlock(&tdm_man_priv->mutex);
-			return -EINVAL;
-		}
-	} else {
-		rx_slot_tol = slot - tdm_man_priv->rx_unused_slot_tol;
-		tx_slot_tol = slot - tdm_man_priv->tx_unused_slot_tol;
-
-		/* always allocate 4 slots for playback */
-		for (i = 0; i < tx_num; i++) {
-			if (tx[i] > 0) {
-				if (STATIC_TX_SLOT > slot)
-					slot = STATIC_TX_SLOT;
-				if (STATIC_TX_SLOT > tx_slot_tol)
-					tx_slot_tol = STATIC_TX_SLOT;
-				break;
-			}
-		}
-
-		for (i = 0; i < rx_num; i++) {
-			if (rx[i] > slot)
-				slot = rx[i];
-			if (rx[i] > rx_slot_tol)
-				rx_slot_tol = rx[i];
-		}
-		slot = mmp_tdm_slot_config(tdm_man_priv, slot);
-		if (slot < 0) {
-			list_del(&entity->list);
-			devm_kfree(tdm_man_priv->dev, entity);
-			mutex_unlock(&tdm_man_priv->mutex);
-			return -EINVAL;
-		}
-
-		tdm_man_priv->tx_unused_slot_tol = (slot - tx_slot_tol);
-		tdm_man_priv->rx_unused_slot_tol = (slot - rx_slot_tol);
-
-		if (slot == tdm_man_priv->slot_tol) {
-			dev_dbg(tdm_man_priv->dev,
-					"tdm slot has been allocated\n");
-			mutex_unlock(&tdm_man_priv->mutex);
-			return slot;
-		}
-	}
-	tdm_man_priv->slot_tol = slot;
 	mutex_unlock(&tdm_man_priv->mutex);
-	return slot;
+	return ret;
 }
 EXPORT_SYMBOL(mmp_tdm_static_slot_alloc);
 
@@ -1251,6 +1295,17 @@ static int mmp_tdm_set_out1_channel_map(struct snd_soc_dai *dai,
 	enum tdm_out_reg cntrl_reg_id;
 	int i, j;
 
+#ifdef CONFIG_SND_TDM_STATIC_ALLOC
+	struct tdm_manage_private *tdm_man_priv;
+	int num;
+
+	tdm_man_priv = tdm_dai_priv->tdm_manage_priv;
+	if (dai->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		num = get_tdm_entity_number_from_slot(tdm_man_priv, 1, 0);
+		if ((num > 1) || (num < 0))
+			return 0;
+	}
+#endif
 	tdm_out1_tx_num = tdm_dai_priv->tdm_out1_tx_num;
 	tdm_out1_tx = tdm_dai_priv->tdm_out1_tx;
 	cntrl_reg_id = NO_OUT_CONTROL_REG;
@@ -1413,6 +1468,17 @@ static int mmp_tdm_set_out2_channel_map(struct snd_soc_dai *dai,
 	enum tdm_out_reg cntrl_reg_id;
 	int i, j;
 
+#ifdef CONFIG_SND_TDM_STATIC_ALLOC
+	struct tdm_manage_private *tdm_man_priv;
+	int num;
+
+	tdm_man_priv = tdm_dai_priv->tdm_manage_priv;
+	if (dai->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		num = get_tdm_entity_number_from_slot(tdm_man_priv, 1, 0);
+		if ((num > 1) || (num < 0))
+			return 0;
+	}
+#endif
 	tdm_out2_tx_num = tdm_dai_priv->tdm_out2_tx_num;
 	tdm_out2_tx = tdm_dai_priv->tdm_out2_tx;
 	cntrl_reg_id = NO_OUT_CONTROL_REG;
