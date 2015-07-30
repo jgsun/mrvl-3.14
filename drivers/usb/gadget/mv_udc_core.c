@@ -61,7 +61,7 @@
 #define LOOPS_USEC_SHIFT	1
 #define LOOPS_USEC		(1 << LOOPS_USEC_SHIFT)
 #define LOOPS(timeout)		((timeout) >> LOOPS_USEC_SHIFT)
-#define	ENUMERATION_DELAY	(4 * HZ)
+#define	ENUMERATION_DELAY	(2 * HZ)
 
 static DECLARE_COMPLETION(release_done);
 
