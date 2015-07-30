@@ -1672,6 +1672,33 @@ config TRACEPOINTS
 
 source "arch/Kconfig"
 
+config FLC
+	bool "Final Level Cache support"
+	help
+	  Say Y here to enable the FLC support. FLC is the short for final level cache
+	  supported by Marvell. FLC architecture cuts the DRAM needed in a system by as
+	  much as a factor of ten, enabling computing systems to use about half the
+	  energy they consume today.
+	  For detail, please refer: <http://www.marvell.com/architecture/flc/>
+
+config FLC_CACHE_LOCK
+	bool "Final Level Cache lock support"
+	depends on FLC
+	help
+	  Say Y here to let software can lock some FLC cache lines. In some scenario,
+	  to get a better performance, user can determin to lock a series memory in FLC
+	  to DRAM, so the access to these memory would be accelerated. If it was configured,
+	  allocator can use the __GFP_FLC_C flag to get cache locked pages for user.
+
+config FLC_CACHE_LOCK_SIZE_MBTYES
+	bool "FLC Cache Lock size in Mega Bytes"
+	depends on FLC_CACHE_LOCK
+	default 128
+	help
+	  Define the size (in MB) of the default FLC cache lock area size
+	  for FLC cache locked memory allocator. Be attention, this size shouldn't
+	  be configured larger than the FLC cache size in DRAM.
+
 endmenu		# General setup
 
 config HAVE_GENERIC_DMA_COHERENT
