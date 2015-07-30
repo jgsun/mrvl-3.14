@@ -2961,12 +2961,18 @@ static void call_charger_notifier(struct mv_udc *udc)
 
 static void do_delayed_charger_work(struct work_struct *work)
 {
+	u32 portsc;
 	struct mv_udc *udc = NULL;
 	udc = container_of(work, struct mv_udc, delayed_charger_work.work);
 
 	/* if still see DEFAULT_CHARGER, check again */
 	if (udc->charger_type == DEFAULT_CHARGER) {
-		udc->charger_type = NONE_STANDARD_CHARGER;
+		/* check LINE STATUS to detect DCP */
+		portsc = readl(&udc->op_regs->portsc[0]);
+		if (PORTSCX_LINE_STATUS_MASK == (portsc & PORTSCX_LINE_STATUS_MASK))
+			udc->charger_type = DCP_CHARGER;
+		else
+			udc->charger_type = NONE_STANDARD_CHARGER;
 	}
 
 	dev_info(&udc->dev->dev, "final charger type: %s\n",
