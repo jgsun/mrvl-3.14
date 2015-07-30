@@ -360,7 +360,7 @@ __setup("keepinitrd", keepinitrd_setup);
  * Memory is added always to NORMAL zone. This means you will never get
  * additional DMA/DMA32 memory.
  */
-int arch_add_memory(int nid, u64 start, u64 size)
+int __ref arch_add_memory(int nid, u64 start, u64 size)
 {
 	/*
 	 * This function is used to support memory hotplug on arm architecture.
