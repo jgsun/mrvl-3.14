@@ -96,6 +96,8 @@ struct clk_axi {
 
 #define CIU_REG(ciu_base, x)	(ciu_base + (x))
 #define CIU_TOP_MEM_XTC(c)	CIU_REG(c->params->ciu_base, 0x0044)
+/* constriant of ddr freq for bypass mode setting */
+#define MAX_DDR_FREQ_BYPASS	315
 
 static DEFINE_SPINLOCK(fc_seq_lock);
 static struct task_struct *fc_seqlock_owner;
@@ -1545,6 +1547,11 @@ static inline void hwdfc_initvl(struct clk_ddr *ddr,
 
 	dfc_lvl.v = readl(reg);
 	dfc_lvl.b.reqvl = cop->ddr_volt_level;
+	/* FIXME: switch LPM exit table based on dll bypass&master mode */
+	if (cop->dclk < MAX_DDR_FREQ_BYPASS)
+		dfc_lvl.b.mclpmtblnum = 0;
+	else
+		dfc_lvl.b.mclpmtblnum = 1;
 	regval = dfc_lvl.v;
 	writel(regval, reg);
 }
