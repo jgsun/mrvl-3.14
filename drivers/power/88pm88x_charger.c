@@ -678,7 +678,7 @@ static void pm88x_charger_set_supply_type(struct pm88x_charger_info *info,
 	schedule_work(&info->chg_state_machine_work);
 
 	dev_info(info->dev, "%s: TA: online = %d, type = %d\n", __func__,
-		 info->cable_online, psy->type);
+		 info->cable_online, info->charger_cable_type);
 }
 
 static void pm88x_change_chg_status(struct pm88x_charger_info *info, int status)
