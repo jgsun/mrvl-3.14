@@ -38,7 +38,7 @@
 #define PM88X_OTG_BST_VSET_MASK		(0x7)
 #define PM88X_OTG_BST_VSET(x)		((x - 3750) / 250)
 
-#define USB_OTG_MIN			4800 /* mV */
+#define USB_OTG_MIN			(4800) /* mV */
 
 /* choose 0x100(87.5mV) as threshold */
 #define OTG_IDPIN_TH			(0x100)
@@ -189,8 +189,8 @@ static int get_current_range(struct pm88x_chip *chip)
 
 	current_vbus_volt = get_vbus_volt(chip);
 	dev_info(chip->dev, "now, vbus voltage = %dmV\n", current_vbus_volt);
-	size = ARRAY_SIZE(vbus_volt);
 
+	size = ARRAY_SIZE(vbus_volt);
 	for (i = 0; i < size; i++) {
 		if (current_vbus_volt >= vbus_volt[i].lo &&
 		    current_vbus_volt <= vbus_volt[i].hi)
@@ -231,7 +231,6 @@ static void pm88x_set_vbus_cable_state(struct pm88x_vbus_info *pm88x_vbus)
 		dev_info(pm88x_vbus->chip->dev, "%s: 88pm88x vbus low\n", __func__);
 		break;
 	}
-	pm88x_vbus_check_errors(pm88x_vbus);
 }
 
 static int pm88x_vbus_sw_ctrl(struct pm88x_chip *chip, bool enable)
@@ -306,8 +305,10 @@ static void pm88x_set_id_cable_state(struct pm88x_vbus_info *pm88x_vbus)
 {
 	int ret, data;
 
-	if ((pm88x_vbus->id_gpadc < PM88X_GPADC0) || (pm88x_vbus->id_gpadc > PM88X_GPADC3))
+	if ((pm88x_vbus->id_gpadc < PM88X_GPADC0) || (pm88x_vbus->id_gpadc > PM88X_GPADC3)) {
+		dev_err(pm88x_vbus->dev, "%s: GPADC number is error.\n", __func__);
 		return;
+	}
 
 	ret = pm88x_get_gpadc_data(pm88x_vbus, &data);
 	if (ret < 0)
@@ -340,6 +341,7 @@ static irqreturn_t pm88x_vbus_irq_handler(int irq, void *_pm88x_vbus)
 		dev_info(pm88x_vbus->chip->dev, "otg boost is enabled.\n");
 		return IRQ_HANDLED;
 	}
+
 	current_range = get_current_range(pm88x_vbus->chip);
 	if (current_range < 0) {
 		dev_err(pm88x_vbus->chip->dev, "what happened to vbus?\n");
@@ -515,8 +517,6 @@ static int pm88x_vbus_probe(struct platform_device *pdev)
 
 fail_extcon:
 	extcon_dev_unregister(&pm88x_vbus->edev);
-	devm_kfree(&pdev->dev, pm88x_vbus);
-
 	return ret;
 }
 
@@ -525,7 +525,6 @@ static int pm88x_vbus_remove(struct platform_device *pdev)
 	struct pm88x_vbus_info *pm88x_vbus = platform_get_drvdata(pdev);
 
 	extcon_dev_unregister(&pm88x_vbus->edev);
-	devm_kfree(&pdev->dev, pm88x_vbus);
 
 	return 0;
 }
