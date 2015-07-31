@@ -43,6 +43,29 @@ struct ehci_hcd_mv {
 
 };
 
+static int ehci_otg_enable(struct device *dev, struct ehci_hcd_mv *ehci_mv, bool enable)
+{
+	int ret;
+
+	ehci_mv->vbus_otg = regulator_get(dev, "vbus_otg");
+
+	if (IS_ERR(ehci_mv->vbus_otg)) {
+		pr_err("%s: unable to get vbus_otg.\n", __func__);
+		return PTR_ERR(ehci_mv->vbus_otg);
+	}
+
+	if (enable)
+		ret = regulator_enable(ehci_mv->vbus_otg);
+	else
+		ret = regulator_disable(ehci_mv->vbus_otg);
+
+	if (ret)
+		pr_err("%s: failed to %s vbus_otg.\n", __func__, enable ? "enable" : "disable");
+	regulator_put(ehci_mv->vbus_otg);
+
+	return ret;
+}
+
 static void ehci_clock_enable(struct ehci_hcd_mv *ehci_mv)
 {
 	clk_enable(ehci_mv->clk);
@@ -285,17 +308,9 @@ static int mv_ehci_probe(struct platform_device *pdev)
 		/* otg will enable clock before use as host */
 		mv_ehci_disable(ehci_mv);
 	} else {
-		ehci_mv->vbus_otg = regulator_get(dev, "vbus_otg");
-
-		if (IS_ERR(ehci_mv->vbus_otg)) {
-			pr_err("%s: unable to get vbus_otg.\n", __func__);
-			return PTR_ERR(ehci_mv->vbus_otg);
-		}
-
-		retval = regulator_enable(ehci_mv->vbus_otg);
+		retval = ehci_otg_enable(dev, ehci_mv, 1);
 		if (retval)
-			pr_err("%s: failed to set vbus_otg.\n", __func__);
-		regulator_put(ehci_mv->vbus_otg);
+			goto err_disable_clk;
 
 		retval = usb_add_hcd(hcd, hcd->irq, IRQF_SHARED);
 		if (retval) {
@@ -313,15 +328,7 @@ static int mv_ehci_probe(struct platform_device *pdev)
 	return 0;
 
 err_set_vbus:
-	ehci_mv->vbus_otg = regulator_get(dev, "vbus_otg");
-	if (IS_ERR(ehci_mv->vbus_otg)) {
-		pr_err("%s: unable to get vbus_otg.\n", __func__);
-		return PTR_ERR(ehci_mv->vbus_otg);
-	}
-	retval = regulator_disable(ehci_mv->vbus_otg);
-	if (retval)
-		pr_err("%s: failed to clear vbus_otg.\n", __func__);
-	regulator_put(ehci_mv->vbus_otg);
+	ehci_otg_enable(dev, ehci_mv, 0);
 err_disable_clk:
 	mv_ehci_disable(ehci_mv);
 err_clear_drvdata:
@@ -336,7 +343,6 @@ static int mv_ehci_remove(struct platform_device *pdev)
 {
 	struct ehci_hcd_mv *ehci_mv = platform_get_drvdata(pdev);
 	struct usb_hcd *hcd = ehci_mv->hcd;
-	int retval;
 
 	if (hcd->rh_registered)
 		usb_remove_hcd(hcd);
@@ -345,16 +351,7 @@ static int mv_ehci_remove(struct platform_device *pdev)
 		otg_set_host(ehci_mv->otg->otg, NULL);
 
 	if (ehci_mv->mode == MV_USB_MODE_HOST) {
-		ehci_mv->vbus_otg = regulator_get(&pdev->dev, "vbus_otg");
-		if (IS_ERR(ehci_mv->vbus_otg)) {
-			pr_err("%s: unable to get vbus_otg.\n", __func__);
-			return PTR_ERR(ehci_mv->vbus_otg);
-		}
-		retval = regulator_disable(ehci_mv->vbus_otg);
-		if (retval)
-			pr_err("%s: failed to clear vbus_otg.\n", __func__);
-		regulator_put(ehci_mv->vbus_otg);
-
+		ehci_otg_enable(&pdev->dev, ehci_mv, 0);
 		mv_ehci_disable(ehci_mv);
 
 		clk_unprepare(ehci_mv->clk);

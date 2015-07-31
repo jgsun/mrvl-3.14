@@ -160,7 +160,6 @@ struct mv_otg {
 	struct mv_usb_platform_data *pdata;
 	struct notifier_block notifier;
 	struct notifier_block notifier_charger;
-	struct notifier_block notifier_empty;
 
 	struct pm_qos_request   qos_idle;
 	s32                     lpm_qos;
