@@ -219,6 +219,7 @@ static int pm88x_otg_boost_is_enabled(struct pm88x_chip *chip)
 static void pm88x_set_vbus_cable_state(struct pm88x_vbus_info *pm88x_vbus)
 {
 	int current_range;
+	int ret = 0;
 
 	if (pm88x_otg_boost_is_enabled(pm88x_vbus->chip))
 		return;
@@ -226,15 +227,19 @@ static void pm88x_set_vbus_cable_state(struct pm88x_vbus_info *pm88x_vbus)
 	current_range = get_current_range(pm88x_vbus->chip);
 	switch (current_range) {
 	case ONLINE_RANGE:
-		extcon_set_cable_state(&pm88x_vbus->edev, "VBUS", true);
-		dev_info(pm88x_vbus->chip->dev, "%s: 88pm88x vbus high\n", __func__);
+		ret = extcon_set_cable_state(&pm88x_vbus->edev, "VBUS", true);
+		dev_info(pm88x_vbus->dev, "%s: 88pm88x vbus high\n", __func__);
 		break;
 	case OFFLINE_RANGE:
 	default:
-		extcon_set_cable_state(&pm88x_vbus->edev, "VBUS", false);
-		dev_info(pm88x_vbus->chip->dev, "%s: 88pm88x vbus low\n", __func__);
+		ret = extcon_set_cable_state(&pm88x_vbus->edev, "VBUS", false);
+		dev_info(pm88x_vbus->dev, "%s: 88pm88x vbus low\n", __func__);
 		break;
 	}
+
+	if (ret != 0)
+		dev_err(pm88x_vbus->dev,
+			"%s: fail to set cable state, ret=%d\n", __func__, ret);
 }
 
 static int pm88x_vbus_sw_ctrl(struct pm88x_chip *chip, bool enable)
@@ -332,15 +337,19 @@ static void pm88x_set_id_cable_state(struct pm88x_vbus_info *pm88x_vbus)
 		regmap_write(pm88x_vbus->chip->gpadc_regmap, pm88x_vbus->gpadc.low_th,
 			     OTG_IDPIN_TH >> 4);
 		regmap_write(pm88x_vbus->chip->gpadc_regmap, pm88x_vbus->gpadc.upp_th, 0xff);
-		extcon_set_cable_state(&pm88x_vbus->edev, "USB-ID", false);
+		ret = extcon_set_cable_state(&pm88x_vbus->edev, "USB-ID", false);
 		dev_info(pm88x_vbus->dev, "%s: USB-HOST cable is not attached\n", __func__);
 	} else {
 		regmap_write(pm88x_vbus->chip->gpadc_regmap, pm88x_vbus->gpadc.low_th, 0);
 		regmap_write(pm88x_vbus->chip->gpadc_regmap, pm88x_vbus->gpadc.upp_th,
 			     OTG_IDPIN_TH >> 4);
-		extcon_set_cable_state(&pm88x_vbus->edev, "USB-ID", true);
+		ret = extcon_set_cable_state(&pm88x_vbus->edev, "USB-ID", true);
 		dev_info(pm88x_vbus->dev, "%s: USB-HOST cable is attached\n", __func__);
 	}
+
+	if (ret != 0)
+		dev_err(pm88x_vbus->dev,
+			"%s: fail to set cable state, ret=%d\n", __func__, ret);
 }
 
 static void dump_vbus_ov_status(struct pm88x_vbus_info *info)
