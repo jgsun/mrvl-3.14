@@ -20,6 +20,10 @@
 #include <linux/kmsg_dump.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
+
+#include <linux/cputype.h>
+#include <linux/clk/dvfs-dvc.h>
+
 #include <linux/arm-coresight.h>
 #include <linux/mck_memorybus.h>
 
@@ -200,6 +204,8 @@ static int panic_flush(struct notifier_block *nb,
 #ifdef CONFIG_REGDUMP
 	dump_reg_to_console();
 #endif
+	if (cpu_is_pxa1956())
+		pxa_sysset_print();
 
 	pr_emerg("EMMD: done\n");
 	arm_machine_flush_console();

@@ -1037,6 +1037,106 @@ device_initcall(hwdvc_init_level_volt);
 
 
 #ifdef CONFIG_DEBUG_FS
+
+#define		SYSSET_BUFSIZE		2048
+static char read_buf[SYSSET_BUFSIZE];
+
+static ssize_t pxa_sysset_read(char *buf, ssize_t count)
+{
+	int len = 0, cur_vl, num_comps;
+	unsigned int i;
+	struct dvfs *d;
+	unsigned long rate;
+	union pmudvc_xp pmudvc_xp;
+	union pmudvc_apsubchip pmudvc_apsub, pmudvc_chip;
+	union pmudvc_cr pmudvc_cr;
+	struct dvfs_rail_component *comps;
+	struct clk *c;
+	size_t size = PAGE_SIZE;
+	len += snprintf(buf + len, size,
+		"\n|dvc_flag:\t| %d (Use %s)\t\t\t  |\n",
+		dvc_flag, dvc_flag ? "HWDVC" : "SWDVC");
+
+	pmudvc_cr.v = DVC_REG_READ(DVC_DVCR);
+	len += snprintf(buf + len, size,
+		"|HW_DVC:\t| %-10s%d,%5s%-10s%d%4s|\n", "Active_E:",
+		pmudvc_cr.b.act_avc_en,  " ", "Lpm_E:",
+		pmudvc_cr.b.lpm_avc_en, " ");
+
+	pmudvc_xp.v = DVC_REG_READ(DVC_AP);
+	len += snprintf(buf + len, size,
+		"|DVC_AP:\t| %-10s%d,%5s%-10s%d(%d) |\n", "Active:",
+		pmudvc_xp.b.act_vl,  " ", "Lpm(E):",
+		pmudvc_xp.b.lpm_vl, pmudvc_xp.b.lpm_avc_en);
+
+	if (dvc_info->dvcplatinfo->pmucp_inaccessible == 0) {
+		pmudvc_xp.v = DVC_REG_READ(DVC_CP);
+		len += snprintf(buf + len, size,
+			"|DVC_CP:\t| %-10s%d,%5s%-10s%d(%d) |\n", "Active:",
+			pmudvc_xp.b.act_vl,  " ", "Lpm(E):",
+			pmudvc_xp.b.lpm_vl, pmudvc_xp.b.lpm_avc_en);
+
+		pmudvc_xp.v = DVC_REG_READ(DVC_DP);
+		len += snprintf(buf + len, size,
+			"|DVC_DP:\t| %-10s%d,%5s%-10s%d(%d) |\n", "Active:",
+			pmudvc_xp.b.act_vl,  " ", "Lpm(E):",
+			pmudvc_xp.b.lpm_vl, pmudvc_xp.b.lpm_avc_en);
+	}
+
+	pmudvc_apsub.v = DVC_REG_READ(DVC_APSUB);
+	len += snprintf(buf + len, size,
+		"|DVC_APSUB:\t| %-10s%d(%d),%2s%-10s%d(%d) |\n", "IDLE(E):",
+		pmudvc_apsub.b.mode0_vl, pmudvc_apsub.b.mode0_en,
+		" ", "SLEEP(E):",
+		pmudvc_apsub.b.mode2_vl, pmudvc_apsub.b.mode2_en);
+
+	pmudvc_chip.v = DVC_REG_READ(DVC_APCHIP);
+	len += snprintf(buf + len, size,
+		"|DVC_CHIP:\t| %-10s%d(%d),%2s%-10s%d(%d) |\n\n", "nUDR(E):",
+		pmudvc_chip.b.mode0_vl, pmudvc_chip.b.mode0_en,
+		" ", "UDR(E):",
+		pmudvc_chip.b.mode1_vl, pmudvc_chip.b.mode1_en);
+
+	cur_vl = (DVC_REG_READ(DVC_STATUS) >> 1) & 0x7;
+	len += snprintf(buf + len, size, "|DVC Voltage:\t| Level %d ",
+			cur_vl);
+
+	num_comps = dvc_info->dvcplatinfo->num_comps;
+	comps = dvc_info->dvcplatinfo->comps;
+	for (i = 0; i < num_comps; i++) {
+		if (comps[i].auto_dvfs) {
+			d = comps[i].dvfs;
+			if (!d)
+				continue;
+			c = comps[i].clk_node;
+			rate = clk_get_rate(c);
+			len += snprintf(buf + len, size,
+				"|%-15s| freq %luMhz,\t voltage:%6s %d |\n",
+				comps[i].clk_name, rate / 1000000,
+				(c->enable_count && dvc_flag) ? "Level" : "",
+				(c->enable_count && dvc_flag) ?
+				dvc_info->level_mapping[d->millivolts] :
+				d->millivolts);
+		}
+	}
+	return len;
+}
+
+/*for pxa1956 dump the pp and dvc levels*/
+int pxa_sysset_print(void)
+{
+	ssize_t i = 0, len;
+	len = pxa_sysset_read(read_buf, SYSSET_BUFSIZE);
+	if (len < 0)
+		return -EINVAL;
+
+	while (i < len)
+		printk("%c", read_buf[i++]);
+
+	return 0;
+}
+EXPORT_SYMBOL(pxa_sysset_print);
+
 static ssize_t voltage_read(struct file *filp,
 	char __user *buffer, size_t count, loff_t *ppos)
 {
