@@ -177,7 +177,13 @@
 	};
 
 	vbus {
-		marvell,enable-usb-id-detection;
+		/*
+		 * if we use PMIC GPADC to detect USB ID pin state, the
+		 * "marvell,enable-usb-id-detection" feature should be enabled.
+		 * on the other hand, USB ID pin state may be detected by AP
+		 * side, and this feature should be disabled then.
+		 */
+		/* marvell,enable-usb-id-detection; */
 		marvell,usb-id-gpadc = "88pm88x-gpadc1";
 	};
 };
