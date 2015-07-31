@@ -482,7 +482,8 @@ static int pm88x_vbus_probe(struct platform_device *pdev)
 	/* initial the vbus state */
 	pm88x_set_vbus_cable_state(pm88x_vbus);
 	/* initial the id state */
-	pm88x_set_id_cable_state(pm88x_vbus);
+	if (pm88x_vbus->detect_usb_id)
+		pm88x_set_id_cable_state(pm88x_vbus);
 
 	INIT_DELAYED_WORK(&pm88x_vbus->pxa_notify, pm88x_vbus_work_callback);
 
