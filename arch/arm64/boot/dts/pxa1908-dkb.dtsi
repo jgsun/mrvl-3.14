@@ -31,6 +31,7 @@
 			};
 
 			otg: otg@d4208100 {
+				usbavdd-supply = <&ldo4>;
 				vbus_otg-supply = <&votg>;
 				status = "okay";
 			};
