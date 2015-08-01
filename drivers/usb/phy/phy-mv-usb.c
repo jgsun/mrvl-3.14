@@ -927,6 +927,7 @@ static int mv_otg_probe(struct platform_device *pdev)
 	struct device_node *np = pdev->dev.of_node;
 	const __be32 *prop;
 	unsigned int proplen;
+	struct regulator *reg_avdd;
 
 	pdata = devm_kzalloc(&pdev->dev, sizeof(*pdata), GFP_KERNEL);
 	if (pdata == NULL) {
@@ -1118,6 +1119,20 @@ static int mv_otg_probe(struct platform_device *pdev)
 
 	device_init_wakeup(&pdev->dev, 1);
 	if (!(pdata->extern_attr & MV_USB_HAS_IDPIN_DETECTION)) {
+		reg_avdd = regulator_get(&(pdev->dev), "usbavdd");
+		if (IS_ERR(reg_avdd)) {
+			dev_err(&pdev->dev, "get usb avdd fail!\n");
+			reg_avdd = NULL;
+			goto err_remove_otg_phy;
+		} else {
+			regulator_set_voltage(reg_avdd,
+				3100000, 3100000);
+			retval = regulator_enable(reg_avdd);
+			if (retval)
+				dev_err(&pdev->dev, "enable usb avdd fail!\n");
+			regulator_set_suspend_mode(reg_avdd,
+				REGULATOR_MODE_NORMAL);
+		}
 		enable_irq_wake(mvotg->irq);
 		mv_otg_usbid_wakeup_en(1, mvotg->apmu_base);
 	}
