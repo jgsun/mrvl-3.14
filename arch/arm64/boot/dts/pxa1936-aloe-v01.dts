@@ -81,6 +81,11 @@
 			sdh0: sdh@d4280000 {
 				cd-gpios = <&gpio 50 0>;
 			};
+
+			otg: otg@d4208100 {
+				vbus_otg-supply = <&votg>;
+				status = "okay";
+			};
 		};
 		apb@d4000000 {
 			twsi1: i2c@d4010800 {
