@@ -236,7 +236,6 @@
 				marvell,sdh-host-caps = <(MMC_CAP_1_8V_DDR)>;
 				marvell,sdh-host-caps2 = <(
 						MMC_CAP2_DISABLE_BLK_ASYNC |
-						MMC_CAP2_BOOTPART_NOACC |
 						MMC_CAP2_SKIP_SD |
 						MMC_CAP2_SKIP_SDIO
 						)>;
