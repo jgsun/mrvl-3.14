@@ -49,6 +49,7 @@
 			};
 
 			otg: otg@d4208100 {
+				vbus_otg-supply = <&votg>;
 				status = "okay";
 			};
 		};
