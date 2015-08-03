@@ -2137,6 +2137,19 @@ zonelist_scan:
 	for_each_zone_zonelist_nodemask(zone, z, zonelist,
 						high_zoneidx, nodemask) {
 		unsigned long mark;
+#ifdef CONFIG_FLC
+	/*
+	 * Don't fallback to FLC non-cachable zone if gfp_flags
+	 * didn't include __GFP_FLC_NC(neither __GFP_DMA nor __GFP_DMA32 if
+	 * CONFIG_ZONE_DMA/CONFIG_ZONE_DMA32 defined).
+	 * Now only __GFP_FLC_NC will specify highest_zoneidx = OPT_ZONE_NFLC.
+	 */
+	if (flc_available && (high_zoneidx > OPT_ZONE_NFLC) &&
+		 (zone_idx(zone) == OPT_ZONE_NFLC)) {
+		zone = NULL;
+		break;
+	}
+#endif
 
 		if (IS_ENABLED(CONFIG_NUMA) && zlc_active &&
 			!zlc_zone_worth_trying(zonelist, z, allowednodes))
