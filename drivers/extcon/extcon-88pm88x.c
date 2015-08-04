@@ -253,28 +253,32 @@ static int pm88x_vbus_sw_ctrl(struct pm88x_chip *chip, bool enable)
 
 static int pm88x_gpadc_config(struct pm88x_vbus_info *pm88x_vbus)
 {
-	unsigned int meas, upp_th, low_th;
+	unsigned int meas, upp_th, low_th, en;
 
 	switch (pm88x_vbus->id_gpadc) {
 	case PM88X_GPADC0:
 		meas = PM88X_GPADC0_MEAS1;
 		low_th = PM88X_GPADC0_LOW_TH;
 		upp_th = PM88X_GPADC0_UPP_TH;
+		en = PM88X_GPADC0_MEAS_EN;
 		break;
 	case PM88X_GPADC1:
 		meas = PM88X_GPADC1_MEAS1;
 		low_th = PM88X_GPADC1_LOW_TH;
 		upp_th = PM88X_GPADC1_UPP_TH;
+		en = PM88X_GPADC1_MEAS_EN;
 		break;
 	case PM88X_GPADC2:
 		meas = PM88X_GPADC2_MEAS1;
 		low_th = PM88X_GPADC2_LOW_TH;
 		upp_th = PM88X_GPADC2_UPP_TH;
+		en = PM88X_GPADC2_MEAS_EN;
 		break;
 	case PM88X_GPADC3:
 		meas = PM88X_GPADC3_MEAS1;
 		low_th = PM88X_GPADC3_LOW_TH;
 		upp_th = PM88X_GPADC3_UPP_TH;
+		en = PM88X_GPADC3_MEAS_EN;
 		break;
 	default:
 		pr_err("%s: wrong gpadc number: %d\n", __func__, pm88x_vbus->id_gpadc);
@@ -284,6 +288,12 @@ static int pm88x_gpadc_config(struct pm88x_vbus_info *pm88x_vbus)
 	pm88x_vbus->gpadc.meas = meas;
 	pm88x_vbus->gpadc.upp_th = upp_th;
 	pm88x_vbus->gpadc.low_th = low_th;
+
+	/* GPADC module is not initialized yet, we enable GPADC measurement directly */
+	regmap_update_bits(pm88x_vbus->chip->gpadc_regmap, PM88X_GPADC_CONFIG2, en, en);
+	/* wait until the voltage is stable */
+	usleep_range(10000, 20000);
+
 	return 0;
 }
 
@@ -345,7 +355,7 @@ static irqreturn_t pm88x_vbus_irq_handler(int irq, void *_pm88x_vbus)
 	current_range = get_current_range(pm88x_vbus->chip);
 	if (current_range < 0) {
 		dev_err(pm88x_vbus->chip->dev, "what happened to vbus?\n");
-		/*stop configuring ranges */
+		/* stop configuring ranges */
 		goto out;
 	}
 
