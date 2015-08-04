@@ -38,6 +38,10 @@
 #define PM88X_OTG_BST_VSET_MASK		(0x7)
 #define PM88X_OTG_BST_VSET(x)		((x - 3750) / 250)
 
+#define PM88X_CHG_STATUS2		(0x43)
+#define PM88X_USB_LIM_OK		(1 << 3)
+#define PM88X_VBUS_SW_OV		(1 << 0)
+
 #define USB_OTG_MIN			(4800) /* mV */
 
 /* choose 0x100(87.5mV) as threshold */
@@ -339,6 +343,37 @@ static void pm88x_set_id_cable_state(struct pm88x_vbus_info *pm88x_vbus)
 	}
 }
 
+static void dump_vbus_ov_status(struct pm88x_vbus_info *info)
+{
+	int ret;
+	unsigned int val;
+	bool usb_lim_ok, vbus_sw_ov, vbus_sw_en;
+
+	ret = regmap_read(info->chip->battery_regmap, PM88X_CHG_STATUS2, &val);
+	if (ret) {
+		dev_err(info->chip->dev, "fail to read charger status: %d\n", ret);
+		return;
+	}
+
+	usb_lim_ok = !!(val & PM88X_USB_LIM_OK);
+	vbus_sw_ov = !!(val & PM88X_VBUS_SW_OV);
+
+	ret = regmap_read(info->chip->battery_regmap, PM88X_CHG_CONFIG4, &val);
+	if (ret) {
+		dev_err(info->chip->dev, "fail to read charger config 4: %d\n", ret);
+		return;
+	}
+
+	vbus_sw_en = !!(val & PM88X_VBUS_SW_EN);
+
+	/*
+	 * usb_lim_ok = 1, 4V < VBUS < 6V
+	 * vbus_sw_ov = 1, VBUS > 5.25V or VBUS_SW_EN = 0, VBUS switch is opened.
+	 */
+	dev_info(info->chip->dev, "usb_lim_ok:%d vbus_sw_ov:%d vbus_sw_en:%d\n",
+		 usb_lim_ok, vbus_sw_ov, vbus_sw_en);
+}
+
 static irqreturn_t pm88x_vbus_irq_handler(int irq, void *_pm88x_vbus)
 {
 	int current_range;
@@ -369,6 +404,7 @@ static irqreturn_t pm88x_vbus_irq_handler(int irq, void *_pm88x_vbus)
 		pm88x_vbus_sw_ctrl(pm88x_vbus->chip, false);
 
 out:
+	dump_vbus_ov_status(pm88x_vbus);
 	/* allowing 7.5msec for the SW to close */
 	schedule_delayed_work(&pm88x_vbus->pxa_notify, usecs_to_jiffies(7500));
 
