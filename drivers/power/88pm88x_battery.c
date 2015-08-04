@@ -2225,10 +2225,12 @@ static int pm88x_battery_dt_init(struct device_node *np,
 	if (ret)
 		return ret;
 
-	ret = of_property_read_u32(np, "ntc-series-ohm", &series_ohm);
+	ret = of_property_read_u32(np, "ntc-id-resistor-off", &series_ohm);
 	/* error is ignored, use the default value 0 initialized before */
-	if (ret)
-		pr_info("%s: ntc-series-ohm not used\n", __func__);
+	if (ret) {
+		series_ohm = 0;
+		pr_info("%s: ntc-id-resistor-off not used\n", __func__);
+	}
 
 	values = of_get_property(np, "ntc-table", &size);
 	if (!values) {
