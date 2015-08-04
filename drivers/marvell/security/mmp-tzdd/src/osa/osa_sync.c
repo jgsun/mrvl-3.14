@@ -261,6 +261,7 @@ osa_err_t osa_wait_for_sem(osa_sem_t handle, int32_t msec)
 	}
 
 	down(&(sem->sem));
+
 	sem_up = true;
 
 	if (msec > 0)
@@ -414,8 +415,19 @@ osa_err_t osa_wait_for_sem(osa_sem_t handle, int32_t msec)
 		if (ret < 0)
 			return OSA_SEM_WAIT_TO;
 
-	} else
-		down(&(sem->sem));
+	} else {
+_retry:
+		ret = down_interruptible(&(sem->sem));
+		if (-EINTR == ret) {
+			osa_dbg_print(DBG_WARN,
+				"WARNING - down_interruptible returns -EINTR, retry\n");
+			goto _retry;
+		} else if (ret != 0) {
+			osa_dbg_print(DBG_ERR,
+				"ERROR - failed to do down_interruptible, ret = %d\n", ret);
+			return OSA_EINTR;
+		}
+	}
 
 	return OSA_OK;
 }
