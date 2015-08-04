@@ -634,6 +634,23 @@ void cpu_dcstat_event(struct clk *clk, unsigned int cpuid,
 					dc_stat_info->C2_op_total[i] = 0;
 					dc_stat_info->C2_count[i] = 0;
 				}
+
+				if (dc_stat_info->power_mode == LPM_C1 && cpu_online(cpu_i)) {
+					dc_stat_info->C1_op_index = dc_stat_info->curopindex;
+					dc_stat_info->C1_idle_start = ktime_temp;
+					dc_stat_info->idle_flag = LPM_C1;
+				} else if (dc_stat_info->power_mode == LPM_C2 &&
+					cpu_online(cpu_i)) {
+					dc_stat_info->C2_op_index = dc_stat_info->curopindex;
+					dc_stat_info->C2_idle_start = ktime_temp;
+					dc_stat_info->idle_flag = LPM_C2;
+					if (multi_cluster)
+						dc_stat_info->power_mode = LPM_D2;
+				}
+				if ((dc_stat_info->power_mode >= LPM_C1 ||
+					dc_stat_info->power_mode <= LPM_D2_UDR)
+					&& cpu_online(cpu_i))
+					dc_stat_info->breakdown_start = ktime_temp;
 			}
 			for (i = 0; i < MAX_LPM_INDEX_DC; i++) {
 				idle_dcstat_info.all_idle_op_total[i] = 0;
