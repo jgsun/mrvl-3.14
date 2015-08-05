@@ -44,6 +44,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/flc.h>
+#include <linux/cpuidle.h>
 #include <dt-bindings/mmc/pxa_sdhci.h>
 #include <marvell/emmc_rsv.h>
 
@@ -1241,6 +1242,8 @@ static int pxav3_execute_tuning_dvfs(struct sdhci_host *host, u32 opcode)
 	int dvfs_level_updated;
 	int dvfs_level_min;
 
+	if(pdata->quirks2 & SDHCI_QUIRK2_SET_CPUILDE_LATENCY)
+		cpuidle_c2_latency_modify();
 	/*
 	 * 1.Check whether there is pre-tuned data and whether it is valid
 	 *  if Yes: tuning is not need, Set rx delay and dvfs level directly.
@@ -1382,6 +1385,9 @@ prep_tuning:
 	pxa_sdh_request_dvfs_level(host, dvfs_level);
 
 out:
+	if (pdata->quirks2 & SDHCI_QUIRK2_SET_CPUILDE_LATENCY)
+		cpuidle_c2_latency_recover();
+
 	return 0;
 }
 

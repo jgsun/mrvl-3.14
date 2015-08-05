@@ -130,6 +130,8 @@ struct sdhci_host {
 #define SDHCI_QUIRK2_FIXED_VOLTAGE			(1<<22)
 /* DMA need internal clock force on */
 #define SDHCI_QUIRK2_DMA_CLOCK_FORCE_ON			(1<<23)
+/* Need set cpuidle latency for tuning thread */
+#define SDHCI_QUIRK2_SET_CPUILDE_LATENCY		(1<<24)
 
 	int irq;		/* Device IRQ */
 	void __iomem *ioaddr;	/* Mapped address */
