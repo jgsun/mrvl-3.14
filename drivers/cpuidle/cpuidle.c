@@ -43,6 +43,14 @@ void __weak cpuidle_c2_unlock(void)
 }
 EXPORT_SYMBOL(cpuidle_c2_unlock);
 
+void __weak cpuidle_c2_latency_modify(void)
+{
+}
+
+void __weak cpuidle_c2_latency_recover(void)
+{
+}
+
 int cpuidle_disabled(void)
 {
 	return off;

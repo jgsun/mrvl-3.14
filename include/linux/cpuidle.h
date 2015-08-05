@@ -210,4 +210,6 @@ static inline int cpuidle_register_governor(struct cpuidle_governor *gov)
 void cpuidle_c2_lock(void);
 void cpuidle_c2_unlock(void);
 
+void cpuidle_c2_latency_modify(void);
+void cpuidle_c2_latency_recover(void);
 #endif /* _LINUX_CPUIDLE_H */
