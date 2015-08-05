@@ -14,10 +14,12 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/of.h>
+#include <linux/slab.h>
 #include <linux/pxa1936_powermode.h>
 #include <asm/suspend.h>
 #include <asm/proc-fns.h>
 #include <asm/psci.h>
+#include <asm/smp_plat.h>
 #include <linux/clk/mmpdcstat.h>
 #include <linux/edge_wakeup_mmp.h>
 #include <linux/helanx_smc.h>
@@ -136,6 +138,83 @@ void cpuidle_c2_unlock(void)
 		su[i].disable = (states_disabled_cpu0 & (1 << i))?1:0;
 }
 
+#define _state2bit(val) ((1 << (val)) - 1)
+
+static int clst_enter_m2[MAX_NR_CLST];
+static unsigned int clst_core_state[MAX_NR_CLST][4];
+static spinlock_t clst_cpuidle_lock[MAX_NR_CLST];
+static struct cpu_clst_info **clst_info;
+static int big_clst_index, little_clst_index;
+
+static int cpu_is_big(int cpu)
+{
+	int first_cpu, nr_cpu;
+
+	first_cpu = clst_info[big_clst_index]->first_cpu;
+	nr_cpu = clst_info[big_clst_index]->nr_cpu;
+	return first_cpu <= cpu && cpu < (first_cpu + nr_cpu);
+}
+
+static void cpu_pm_enter_pre(int cpu, int idx)
+{
+	unsigned int states;
+	int i, clst_index, first_cpu, nr_cpu;
+
+	if (cpu_is_big(cpu))
+		clst_index = big_clst_index;
+	else
+		clst_index = little_clst_index;
+
+	first_cpu = clst_info[clst_index]->first_cpu;
+	nr_cpu = clst_info[clst_index]->nr_cpu;
+
+	spin_lock(&clst_cpuidle_lock[clst_index]);
+	/*
+	 * C1  - arg == POWER_MODE_CORE_INTIDLE
+	 * C2  - arg == POWER_MODE_CORE_POWERDOWN
+	 * MP2 - arg == POWER_MODE_MP_POWERDOWN
+	 * D1P - arg == POWER_MODE_APPS_IDLE
+	 * D1  - arg == POWER_MODE_SYS_SLEEP
+	 * D2  - arg == POWER_MODE_UDR
+	 */
+	clst_core_state[clst_index][cpu - first_cpu] = _state2bit(idx);
+
+	states = _state2bit(POWER_MODE_UDR);
+	for (i = first_cpu; i < (first_cpu + nr_cpu); i++)
+		states &= clst_core_state[clst_index][i - first_cpu];
+	if (states >= _state2bit(POWER_MODE_MP_POWERDOWN)) {
+		if (clst_index == big_clst_index)
+			;	/* TODO: big cluster enter M2 */
+		else
+			;	/* TODO: little cluster enter M2 */
+		clst_enter_m2[clst_index] = 1;
+	}
+	spin_unlock(&clst_cpuidle_lock[clst_index]);
+}
+
+static void cpu_pm_exit_post(int cpu)
+{
+	int clst_index, first_cpu;
+
+	if (cpu_is_big(cpu))
+		clst_index = big_clst_index;
+	else
+		clst_index = little_clst_index;
+
+	first_cpu = clst_info[clst_index]->first_cpu;
+
+	spin_lock(&clst_cpuidle_lock[clst_index]);
+	clst_core_state[clst_index][cpu - first_cpu] = 0;
+	if (clst_enter_m2[clst_index] == 1) {
+		clst_enter_m2[clst_index] = 0;
+		if (clst_index == big_clst_index)
+			;	/* TODO: big cluster exit M2 */
+		else
+			;	/* TODO: little cluster exit M2 */
+	}
+	spin_unlock(&clst_cpuidle_lock[clst_index]);
+}
+
 /*
  * arm64_enter_state - Programs CPU to enter the specified state
  *
@@ -163,6 +242,7 @@ static int arm64_enter_state(struct cpuidle_device *dev,
 		return idx;
 	}
 
+	cpu_pm_enter_pre(cpu, idx);
 	cpu_pm_enter();
 	/*
 	 * Pass C-state index to cpu_suspend which in turn will call
@@ -181,8 +261,10 @@ static int arm64_enter_state(struct cpuidle_device *dev,
 	/*
 	 * Trigger notifier only if cpu_suspend succeeded
 	 */
-	if (!ret)
+	if (!ret) {
 		cpu_pm_exit();
+		cpu_pm_exit_post(cpu);
+	}
 
 	return idx;
 }
@@ -228,9 +310,24 @@ core_initcall(setup_mfp_notify);
  */
 int __init arm64_idle_init(void)
 {
+	int i;
 	int err = check_platform();
 	if (err)
 		return err;
+
+	clst_info = kmalloc(sizeof(struct cpu_clst_info *) * MAX_NR_CLST, GFP_KERNEL);
+	if (!clst_info)
+		BUG_ON("cpuidle: no memory for cluster info\n");
+
+	for (i = 0; i < MAX_NR_CLST; i++) {
+		clst_info[i] = get_clst_info(i);
+		if (clst_info[i]->is_big)
+			big_clst_index = clst_info[i]->clst_index;
+		else
+			little_clst_index = clst_info[i]->clst_index;
+		clst_enter_m2[i] = 0;
+		spin_lock_init(&clst_cpuidle_lock[i]);
+	}
 
 	return cpuidle_register(&arm64_idle_driver, NULL);
 }
