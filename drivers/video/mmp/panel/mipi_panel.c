@@ -1069,6 +1069,8 @@ static int mmp_dsi_panel_remove(struct platform_device *dev)
 
 static void mmp_dsi_panel_shutdown(struct platform_device *dev)
 {
+	struct mmp_path *path = mmp_get_path(mmp_dsi_panel.plat_path_name);
+
 #ifdef CONFIG_DDR_DEVFREQ
 	if (mmp_dsi_panel.ddrfreq_qos != PM_QOS_DEFAULT_VALUE)
 		pm_qos_remove_request(&mmp_dsi_panel.ddrfreq_qos_req_min);
@@ -1076,9 +1078,13 @@ static void mmp_dsi_panel_shutdown(struct platform_device *dev)
 	if (mmp_dsi_panel.set_brightness)
 		mmp_dsi_panel.set_brightness(&mmp_dsi_panel, 0);
 
+	mutex_lock(&path->access_ok);
+
 	mmp_dsi_panel_set_status(&mmp_dsi_panel, 0);
 	mmp_unregister_panel(&mmp_dsi_panel);
 	kfree(mmp_dsi_panel.plat_data);
+
+	mutex_unlock(&path->access_ok);
 }
 
 #ifdef CONFIG_OF
