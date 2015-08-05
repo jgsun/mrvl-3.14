@@ -1283,6 +1283,7 @@ static void get_dvc_info(void)
 {
 	struct cpmsa_dvc_info dvc_vol_info;
 	int i = 0;
+	int sz_tel, sz_ap, sz;
 
 	getcpdvcinfo(&dvc_vol_info);
 	for (i = 0; i < MAX_CPDVC_NUM; i++) {
@@ -1290,6 +1291,25 @@ static void get_dvc_info(void)
 		cpks->cp_vol[i] = dvc_vol_info.cpdvcinfo[i].cpvl;
 	}
 	cpks->msa_dvc_vol = dvc_vol_info.msadvcvl[0].cpvl;
+
+	cpks->dvc_info.dvc_magic = DVC_MAGIC_V1;
+	sz_tel = sizeof(cpks->dvc_info.cp_freq)/sizeof(cpks->dvc_info.cp_freq[0]);
+	sz_ap = sizeof(dvc_vol_info.cpdvcinfo)/sizeof(dvc_vol_info.cpdvcinfo[0]);
+	sz = sz_tel < sz_ap ? sz_tel : sz_ap;
+	/* get new cp msa dvc info */
+	for (i = 0; i < sz; i++) {
+		cpks->dvc_info.cp_freq[i] = dvc_vol_info.cpdvcinfo[i].cpfreq;
+		cpks->dvc_info.cp_vol[i] = dvc_vol_info.cpdvcinfo[i].cpvl;
+
+		cpks->dvc_info.cpaxi_freq[i] = dvc_vol_info.cpaxidvcinfo[i].cpfreq;
+		cpks->dvc_info.cpaxi_vol[i] = dvc_vol_info.cpaxidvcinfo[i].cpvl;
+
+		cpks->dvc_info.lteaxi_freq[i] = dvc_vol_info.lteaxidvcinfo[i].cpfreq;
+		cpks->dvc_info.lteaxi_vol[i] = dvc_vol_info.lteaxidvcinfo[i].cpvl;
+
+		cpks->dvc_info.msa_freq[i] = dvc_vol_info.msadvcvl[i].cpfreq;
+		cpks->dvc_info.msa_vol[i] = dvc_vol_info.msadvcvl[i].cpvl;
+	}
 }
 
 enum ddr_dfc_level {

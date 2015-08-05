@@ -88,6 +88,24 @@ extern void msocket_recv_unthrottled(int sock);
 */
 DECLARE_BLOCKING_NOTIFIER(cp_link_status);
 
+struct cpmsa_dvc_info_v1 {
+/* D: 0x44, V: 0x56, C: 0x43, the last byte represent the version: 01 */
+#define DVC_MAGIC_V1 0x44564301
+	volatile unsigned int dvc_magic;
+#define MAX_CPDVC_NUM_V1 5
+	volatile unsigned int cp_freq[MAX_CPDVC_NUM_V1];
+	volatile unsigned int cp_vol[MAX_CPDVC_NUM_V1];
+
+	volatile unsigned int cpaxi_freq[MAX_CPDVC_NUM_V1];
+	volatile unsigned int cpaxi_vol[MAX_CPDVC_NUM_V1];
+
+	volatile unsigned int lteaxi_freq[MAX_CPDVC_NUM_V1];
+	volatile unsigned int lteaxi_vol[MAX_CPDVC_NUM_V1];
+
+	volatile unsigned int msa_freq[MAX_CPDVC_NUM_V1];
+	volatile unsigned int msa_vol[MAX_CPDVC_NUM_V1];
+};
+
 struct cp_keysection {
 #define PMIC_MASTER_FLAG	0x4D415354
 	/* PMIC SSP master status setting query */
@@ -135,6 +153,9 @@ struct cp_keysection {
 	/* dfc level */
 	/* 0 - idle, 1 - active, 2 - high, 3, 4 reserve */
 	volatile unsigned int dfc_lvl[MAX_DFCLVL_NUM];
+
+	/* new cp msa dvc information */
+	struct cpmsa_dvc_info_v1 dvc_info;
 };
 
 extern struct cp_keysection *cpks;
