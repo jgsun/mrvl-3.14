@@ -24,6 +24,7 @@
 #include <linux/mfd/core.h>
 #include <linux/mfd/88pm88x.h>
 #include <linux/mfd/88pm886.h>
+#include <linux/mfd/88pm880.h>
 #include <linux/regulator/machine.h>
 
 #include "88pm88x.h"
@@ -369,6 +370,48 @@ static const char *chip_stepping_to_string(unsigned int id)
 	return "Unknown";
 }
 
+static int pm88x_get_minor_stepping(struct pm88x_chip *chip)
+{
+	int ret;
+	unsigned int val;
+
+	switch (chip->type) {
+	case PM880:
+		/* only check 88pm880 A1 */
+		if (chip->chip_id != PM880_A1)
+			return -EINVAL;
+
+		hold_test_page(chip);
+		ret = regmap_read(chip->test_regmap, 0x01, &val);
+		release_test_page(chip);
+
+		if (ret < 0) {
+			dev_err(chip->dev, "fail to read minor stepping: %d\n", ret);
+			return ret;
+		}
+		break;
+	case PM886:
+	default:
+		return -EINVAL;
+	}
+
+	return val;
+}
+
+static void pm88x_print_minor_stepping(struct pm88x_chip *chip)
+{
+	int minor;
+	char s[4];
+
+	minor = pm88x_get_minor_stepping(chip);
+	if (minor < 0)
+		return;
+
+	snprintf(s, sizeof(s), "%c", 'A' + minor);
+	dev_info(chip->dev, "%s-> minor_stepping = %s\n",
+		 chip_stepping_to_string(chip->chip_id), s);
+}
+
 static void pm88x_verify_is_trimmed(struct pm88x_chip *chip)
 {
 	int val, trimming_reg, trimming_mask;
@@ -471,7 +514,9 @@ int pm88x_post_init_chip(struct pm88x_chip *chip)
 	chip->chip_id = val;
 
 	dev_info(chip->dev, "PM88X chip ID = 0x%x(%s)\n", val,
-			chip_stepping_to_string(chip->chip_id));
+		 chip_stepping_to_string(chip->chip_id));
+
+	pm88x_print_minor_stepping(chip);
 
 	/* verify chip is trimmed */
 	pm88x_verify_is_trimmed(chip);
