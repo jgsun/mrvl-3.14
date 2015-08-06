@@ -24,6 +24,8 @@
 #define EDITR		0x84
 #define EDSCR		0x88
 #define EDRCR		0x90
+#define OSLAR_EL1	0x300
+#define DBGDTRRX_EL0	0x80
 
 #define EDPCSR_LO	0xA0
 #define EDPCSR_HI	0xAC
@@ -89,6 +91,12 @@ int arch_halt_cpu(u32 cpu)
 	u32 timeout, val;
 	void __iomem *p_dbg_base = DBG_BASE(cpu);
 	void __iomem *p_cti_base = CTI_BASE(cpu);
+
+	/* To make sure the OS lock and OS double lock is unlocked */
+	val = readl(p_dbg_base + EDPRSR);
+	if (val & (0x1 << 5))
+		writel(0, p_dbg_base + OSLAR_EL1);
+
 	/* Enable Halt Debug mode */
 	val = readl(p_dbg_base + EDSCR);
 	val |= (0x1 << 14);
@@ -126,6 +134,40 @@ void arch_insert_inst(u32 cpu)
 	u32 timeout, val;
 	void __iomem *p_dbg_base = DBG_BASE(cpu);
 
+#ifdef CONFIG_ARM
+	/* write 0 to DBGDTRRXint */
+	writel(0x0, p_dbg_base + DBGDTRRX_EL0);
+
+	timeout = 10000;
+	do {
+		val = readl(p_dbg_base + EDSCR);
+		if (val & (0x1 << 24)) {
+			/* mrc p14, 0, r0, c0, c5, 0;
+			 * read DBGDTRRXint into r0
+			 */
+			writel(0x0E15EE10, p_dbg_base + EDITR);
+			break;
+		}
+	} while (--timeout);
+
+	val = readl(p_dbg_base + EDSCR);
+	if (val & (0x1 << 6))
+		pr_emerg("It happens some errors, error flag\n");
+
+	timeout = 10000;
+	do {
+		val = readl(p_dbg_base + EDSCR);
+		if (val & (0x1 << 24)) {
+			/* mcr p15, 0x3, r0, c4, c5, 0x1; write r0 to DLR */
+			writel(0x0F35EE64, p_dbg_base + EDITR);
+			break;
+		}
+	} while (--timeout);
+
+	val = readl(p_dbg_base + EDSCR);
+	if (val & (0x1 << 6))
+		pr_emerg("It happens some errors, error flag\n");
+#else
 	/* msr dlr_el0, xzr */
 	writel(0xD51B453F, p_dbg_base + EDITR);
 
@@ -141,6 +183,7 @@ void arch_insert_inst(u32 cpu)
 
 	if (val & (0x1 << 6))
 		pr_emerg("Occurred exception in debug state on cpu%d\n", cpu);
+#endif
 }
 
 void arch_restart_cpu(u32 cpu)

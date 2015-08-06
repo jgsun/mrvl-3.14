@@ -21,10 +21,14 @@ obj-$(CONFIG_CPU_PXA910)	+= pm-pxa910.o
 obj-$(CONFIG_CPU_MMP2)		+= pm-mmp2.o
 endif
 
-# coresight support
-obj-$(CONFIG_CORESIGHT_SUPPORT) += coresight-v7.o
-
 ARM64=../../../arch/arm64/mach
+
+# coresight support
+ifeq ($(CONFIG_CPU_PXA1908), y)
+obj-$(CONFIG_CORESIGHT_SUPPORT) += $(ARM64)/coresight-v8.o
+else
+obj-$(CONFIG_CORESIGHT_SUPPORT) += coresight-v7.o
+endif
 
 # board support
 obj-$(CONFIG_MACH_ASPENITE)	+= aspenite.o
