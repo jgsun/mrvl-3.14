@@ -166,6 +166,7 @@
 			sdh0: sdh@d4280000 {
 				pinctrl-names = "default", "fast";
 				bus-width = <4>;
+				wp-inverted;
 				marvell,sdh-pm-runtime-en;
 				marvell,sdh-quirks = <(
 						SDHCI_QUIRK_BROKEN_ADMA |
