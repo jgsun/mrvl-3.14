@@ -121,6 +121,7 @@ struct page *dma_alloc_from_contiguous(struct device *dev, int count,
 bool dma_release_from_contiguous(struct device *dev, struct page *pages,
 				 int count);
 
+int __init cma_activate_area(struct cma *cma);
 #else
 
 #define MAX_CMA_AREAS	(0)
@@ -159,6 +160,11 @@ struct page *dma_alloc_from_contiguous(struct device *dev, int count,
 static inline
 bool dma_release_from_contiguous(struct device *dev, struct page *pages,
 				 int count)
+{
+	return false;
+}
+
+static inline int cma_activate_area(struct cma *cma)
 {
 	return false;
 }

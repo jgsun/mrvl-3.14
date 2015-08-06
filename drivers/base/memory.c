@@ -21,6 +21,8 @@
 #include <linux/mutex.h>
 #include <linux/stat.h>
 #include <linux/slab.h>
+#include <linux/flc.h>
+#include <linux/dma-contiguous.h>
 
 #include <linux/atomic.h>
 #include <asm/uaccess.h>
@@ -303,7 +305,7 @@ static int memory_block_online(struct memory_block *mem)
 }
 
 /* address should be section aligned */
-int memory_add_and_online(u64 addr, int size)
+int __ref memory_add_and_online(u64 addr, int size, int rsv_size)
 {
 	int nid;
 	int section_size = PAGES_PER_SECTION << PAGE_SHIFT;
@@ -312,13 +314,35 @@ int memory_add_and_online(u64 addr, int size)
 	struct mem_section *section;
 	struct memory_block *mem;
 	int i, ret = 0;
-
+#ifdef CONFIG_FLC_CACHE_LOCK
+	int err = -EINVAL;
+#endif
 	WARN_ON(size % section_size);
 
 	nid = memory_add_physaddr_to_nid(addr);
 	ret = add_memory(nid, addr, size);
 	WARN_ON_ONCE(ret);
 
+#ifdef CONFIG_FLC_CACHE_LOCK
+	/*
+	 * declare one CMA area for flc_dev, this memory region would be resident in
+	 * FLC memory region, which would be locked to DRAM when pages was allocated
+	 * from this region.
+	 */
+	if (!rsv_size || (rsv_size > size)) {
+		pr_info("%s: rsv_size 0x%x, size 0x%x\n", __func__, rsv_size, size);
+		goto online;
+	}
+
+	if (!ret && flc_dev) {
+			dev_dbg(flc_dev, "reserve one cma area: start 0x%x, size 0x%x\n",
+				addr, rsv_size);
+			err = dma_declare_contiguous(flc_dev, rsv_size,	addr, 0);
+			if (err)
+				dev_err(flc_dev, "dma_declare_contiguous failed: err = %d\n", err);
+	}
+online:
+#endif
 	/* do the online action */
 	phys_start_pfn = __phys_to_pfn(addr);
 	phys_end_pfn = __phys_to_pfn(addr + size - 1);
@@ -340,6 +364,13 @@ int memory_add_and_online(u64 addr, int size)
 
 	}
 
+#ifdef CONFIG_FLC_CACHE_LOCK
+	if (!err && flc_dev && flc_dev->cma_area) {
+		err = cma_activate_area(flc_dev->cma_area);
+		if (err)
+			dev_err(flc_dev, "cma_activate_area failed: err = %d\n", err);
+	}
+#endif
 	return ret;
 }
 

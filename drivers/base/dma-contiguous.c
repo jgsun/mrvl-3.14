@@ -137,7 +137,7 @@ void __init dma_contiguous_reserve(phys_addr_t limit)
 
 static DEFINE_MUTEX(cma_mutex);
 
-static int __init cma_activate_area(struct cma *cma)
+int __init cma_activate_area(struct cma *cma)
 {
 	int bitmap_size = BITS_TO_LONGS(cma->count) * sizeof(long);
 	unsigned long base_pfn = cma->base_pfn, pfn = base_pfn;

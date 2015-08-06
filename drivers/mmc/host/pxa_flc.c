@@ -152,11 +152,13 @@ static u64 flc_mmc_start = ((u64)10 << 30); /* 10G */
 static u64 flc_mmc_size = ((u64)1 << 30); /* 1G */
 static u64 flc_ddr_start = ((u64)256 << 20); /* 256M */
 static u64 flc_ddr_size = ((u64)256 << 20); /* 256M */
+static u64 flc_cma_size = ((u64)128 << 20); /* 128M */
 #else
 static u64 flc_mmc_start;
 static u64 flc_mmc_size;
 static u64 flc_ddr_start;
 static u64 flc_ddr_size;
+static u64 flc_cma_size = -1;
 #endif
 
 #define FLC_NC_START	0x0
@@ -214,6 +216,16 @@ static int __init early_flc_get_ddr_setting(char *p)
 }
 early_param("flc_ddr", early_flc_get_ddr_setting);
 
+static int __init early_flc_cma(char *p)
+{
+	pr_debug("%s(%s)\n", __func__, p);
+	flc_cma_size = memparse(p, &p);
+	flc_cma_size = min(flc_cma_size, flc_ddr_size);
+
+	return 0;
+}
+early_param("flc_cma", early_flc_cma);
+
 /*
  * Using flc_writb/w/l macro with pr_debug support
  * It can be used for a useful debugging method if need
@@ -245,12 +257,30 @@ struct flc_host *get_flc_host(void)
 	return pxa_flc;
 }
 
+#ifdef CONFIG_FLC_CACHE_LOCK_SIZE_MBTYES
+#define FLC_CMA_SIZE_MBYTES CONFIG_FLC_CACHE_LOCK_SIZE_MBTYES
+#else
+#define FLC_CMA_SIZE_MBYTES 0
+#endif
+
 static int flc_memory_hotplug(u64 addr, int size, bool on)
 {
-	int ret = -1;
+	int ret = -1, rsv_size = 0;
+
+	if (flc_cma_size != -1) {
+		rsv_size = flc_cma_size;
+	} else {
+#ifdef CONFIG_FLC_CACHE_LOCK_SIZE_MBTYES
+		rsv_size = FLC_CMA_SIZE_MBYTES * SZ_1M;
+#endif
+	}
+
+	/* FIXME: set default reserve size as 1/2 of flc_ddr_size */
+	if (!rsv_size)
+		rsv_size = flc_ddr_size >> 1;
 
 	if (on) {
-		ret = memory_add_and_online(addr, size);
+		ret = memory_add_and_online(addr, size, rsv_size);
 		if (!ret)
 			flc_available = true;
 		else

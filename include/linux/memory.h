@@ -104,7 +104,7 @@ static inline int memory_isolate_notify(unsigned long val, void *v)
 	return 0;
 }
 
-static inline int memory_add_and_online(u64 addr, int size)
+static inline int memory_add_and_online(u64 addr, int size, int rsv_size)
 {
 	return -EINVAL;
 }
@@ -123,7 +123,7 @@ extern int memory_isolate_notify(unsigned long val, void *v);
 extern struct memory_block *find_memory_block_hinted(struct mem_section *,
 							struct memory_block *);
 extern struct memory_block *find_memory_block(struct mem_section *);
-extern int memory_add_and_online(u64 addr, int size);
+extern int memory_add_and_online(u64 addr, int size, int rsv_size);
 #define CONFIG_MEM_BLOCK_SIZE	(PAGES_PER_SECTION<<PAGE_SHIFT)
 #endif /* CONFIG_MEMORY_HOTPLUG_SPARSE */
 
