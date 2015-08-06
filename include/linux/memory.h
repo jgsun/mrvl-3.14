@@ -106,7 +106,7 @@ static inline int memory_isolate_notify(unsigned long val, void *v)
 
 static inline int memory_add_and_online(u64 addr, int size)
 {
-	return 0;
+	return -EINVAL;
 }
 #else
 extern int register_memory_notifier(struct notifier_block *nb);
