@@ -606,6 +606,15 @@ config MSM_SMD_PKT
 	  Enables userspace clients to read and write to some packet SMD
 	  ports via device interface for MSM chipset.
 
+config MV_USB_CONNECTOR
+	tristate "Marvell USB connector support"
+	help
+	Say Y here if you use marvell usb connector to notify vbus status.
+	If unsure, say N.
+
+	To compile this driver as a module, choose M here: the module will
+	be called mv-usb-connector.
+
 config VIBRATOR_88PM80X
         tristate "88pm80X based vibrator"
         depends on MFD_88PM800

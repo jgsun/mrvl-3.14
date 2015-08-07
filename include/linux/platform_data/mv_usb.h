@@ -88,9 +88,10 @@ struct pxa_usb_extern_ops {
 } \
 )
 
-#if defined(CONFIG_VBUS_88PM88X) || defined(CONFIG_VBUS_88PM80X) || defined(CONFIG_VBUS_88PM830)
 extern int mv_udc_register_client(struct notifier_block *nb);
 extern int mv_udc_unregister_client(struct notifier_block *nb);
+
+#ifdef CONFIG_MV_USB_CONNECTOR
 extern struct pxa_usb_extern_ops *pxa_usb_get_extern_ops(unsigned int id);
 extern int pxa_usb_register_notifier(unsigned int id,
 					struct notifier_block *nb);
@@ -98,8 +99,6 @@ extern int pxa_usb_unregister_notifier(unsigned int id,
 					struct notifier_block *nb);
 extern int pxa_usb_notify(unsigned int id, unsigned long val, void *v);
 #else
-static inline int mv_udc_register_client(struct notifier_block *nb) {return 0;}
-static inline int mv_udc_unregister_client(struct notifier_block *nb) {return 0;}
 static inline struct pxa_usb_extern_ops *pxa_usb_get_extern_ops(unsigned int id) {return NULL;}
 static inline int pxa_usb_register_notifier(unsigned int id, struct notifier_block *nb) {return 0;}
 static inline int pxa_usb_unregister_notifier(unsigned int id, struct notifier_block *nb) {return 0;}
