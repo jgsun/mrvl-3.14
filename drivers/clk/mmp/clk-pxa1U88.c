@@ -1269,10 +1269,6 @@ static struct ddr_opt lpddr800_oparray[] = {
 	},
 };
 
-static unsigned long hwdfc_freq_table[] = {
-	0, 312000, 312000, 416000, 528000, 528000, 624000, 667000
-};
-
 /*
  * ULC support max to 667M, and has extra 624M PP
  * FIXME: ULC could assign specific lpm tbl, use 0 for bringup.
@@ -1347,8 +1343,6 @@ static struct ddr_opt lpddr667_oparray[] = {
 static struct ddr_params ddr_params = {
 	.parent_table = ddr_parent_table,
 	.parent_table_size = ARRAY_SIZE(ddr_parent_table),
-	.hwdfc_freq_table = hwdfc_freq_table,
-	.hwdfc_table_size = ARRAY_SIZE(hwdfc_freq_table),
 	.dcstat_support = true,
 };
 
@@ -1543,6 +1537,11 @@ static void __init pxa1U88_clk_init(struct device_node *np)
 		goto err;
 	}
 
+#if defined(CONFIG_PXA_DVFS)
+	if (!board_is_fpga())
+		setup_pxa1908_dvfs_platinfo();
+#endif
+
 	mmp_clk_init(np, &pxa_unit->unit, PXA1U88_NR_CLKS);
 
 	pxa1U88_misc_init(pxa_unit);
@@ -1556,11 +1555,6 @@ static void __init pxa1U88_clk_init(struct device_node *np)
 #ifdef CONFIG_SMC91X
 	if (board_is_fpga())
 		smc91x_clk_init(pxa_unit->apmu_base);
-#endif
-
-#if defined(CONFIG_PXA_DVFS)
-	if (!board_is_fpga())
-		setup_pxa1908_dvfs_platinfo();
 #endif
 
 #ifdef CONFIG_DEBUG_FS
