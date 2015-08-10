@@ -865,6 +865,7 @@ static int mv_otg_remove(struct platform_device *pdev)
 		& (MV_USB_HAS_VBUS_DETECTION | MV_USB_HAS_IDPIN_DETECTION)) {
 			extcon_unregister_interest(&mvotg->vbus_dev);
 			extcon_unregister_interest(&mvotg->id_dev);
+			pxa_usb_unregister_notifier(mvotg->pdata->id, &mvotg->notifier);
 	}
 
 	mv_otg_disable(mvotg);
@@ -1054,6 +1055,7 @@ static int mv_otg_probe(struct platform_device *pdev)
 			extcon_unregister_interest(&mvotg->vbus_dev);
 			goto err_destroy_workqueue;
 		}
+		pxa_usb_register_notifier(mvotg->pdata->id, &mvotg->notifier);
 	}
 
 	mvotg->notifier_charger.notifier_call = mv_otg_notifier_charger_callback;
@@ -1148,6 +1150,7 @@ err_disable_clk:
 		& (MV_USB_HAS_VBUS_DETECTION | MV_USB_HAS_IDPIN_DETECTION)) {
 			extcon_unregister_interest(&mvotg->vbus_dev);
 			extcon_unregister_interest(&mvotg->id_dev);
+			pxa_usb_unregister_notifier(mvotg->pdata->id, &mvotg->notifier);
 	}
 err_destroy_workqueue:
 	flush_workqueue(mvotg->qwork);

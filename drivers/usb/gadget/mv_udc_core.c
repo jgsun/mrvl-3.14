@@ -3306,8 +3306,10 @@ static int mv_udc_remove(struct platform_device *pdev)
 	usb_del_gadget_udc(&udc->gadget);
 
 	if (udc->pdata && (udc->pdata->extern_attr & MV_USB_HAS_VBUS_DETECTION)
-		&& udc->clock_gating && udc->transceiver == NULL)
+		&& udc->clock_gating && udc->transceiver == NULL) {
 		extcon_unregister_interest(&udc->vbus_dev);
+		pxa_usb_unregister_notifier(udc->pdata->id, &udc->notifier);
+	}
 
 	if (udc->qwork) {
 		flush_workqueue(udc->qwork);
@@ -3683,6 +3685,7 @@ static int mv_udc_probe(struct platform_device *pdev)
 		}
 
 		INIT_WORK(&udc->vbus_work, mv_udc_vbus_work);
+		pxa_usb_register_notifier(udc->pdata->id, &udc->notifier);
 	}
 
 	retval = mv_udc_psy_register(udc);
@@ -3757,12 +3760,12 @@ err_rx_opt_exit:
 #endif
 err_create_workqueue:
 	mv_udc_psy_unregister(udc);
-
 	if (udc->qwork) {
 		flush_workqueue(udc->qwork);
 		destroy_workqueue(udc->qwork);
 	}
 	extcon_unregister_interest(&udc->vbus_dev);
+	pxa_usb_unregister_notifier(udc->pdata->id, &udc->notifier);
 err_destroy_dma:
 	dma_pool_destroy(udc->dtd_pool);
 err_free_dma:
