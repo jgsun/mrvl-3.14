@@ -755,6 +755,17 @@ int dvfs_get_svc_freq_table(unsigned long const **freq, const char *name)
 }
 EXPORT_SYMBOL(dvfs_get_svc_freq_table);
 
+int get_dvc_level(unsigned int freq, const unsigned long *freq_volt_tbl, int nr_vl)
+{
+	int i;
+
+	for (i = 0; i < nr_vl; i++)
+		if (freq <= freq_volt_tbl[i])
+			return i;
+	WARN_ON("cannot find targe freq in map table.");
+	return nr_vl - 1;
+}
+EXPORT_SYMBOL(get_dvc_level);
 
 /* notifier for hwdvc */
 int hwdvc_notifier_register(struct notifier_block *n)

@@ -632,19 +632,6 @@ static void wait_for_fc_done(enum fc_type comp, void __iomem *apmu_base)
 	return;
 }
 
-#ifdef CONFIG_PXA_DVFS
-static int get_dvc_level(unsigned int freq, const unsigned long *freq_volt_tbl, int nr_vl)
-{
-	int i;
-
-	for (i = 0; i < nr_vl; i++)
-		if (freq <= freq_volt_tbl[i])
-			return i;
-	WARN_ON("cannot find targe freq in map table.");
-	return nr_vl - 1;
-}
-#endif
-
 static void set_ap_clk_sel(struct clk_core *core, struct cpu_opt *top)
 {
 	union pmum_fcapclk fcap;

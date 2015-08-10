@@ -110,6 +110,7 @@ extern int dvfs_setup_dvcplatinfo(struct dvc_plat_info *platinfo);
 extern int dvfs_get_dvcplatinfo(struct dvc_plat_info *platinfo);
 
 extern int dvfs_get_svc_freq_table(unsigned long const **freq, const char *name);
+extern int get_dvc_level(unsigned int freq, const unsigned long *freq_volt_tbl, int nr_vl);
 extern int get_nodvfs(void);
 
 /* hwdvc notifier */
