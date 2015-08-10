@@ -92,11 +92,7 @@ struct mck_pmu_regs_offset {
  *  reg[3] ddr_nobus_notidle
  */
 struct perf_counters {
-#ifdef CONFIG_64BIT
 	u64 *reg;
-#else
-	u32 *reg;
-#endif
 };
 
 struct mck_ppmu {
@@ -126,13 +122,8 @@ struct ddr_stats_data {
 
 /* snapshot of ddr_ticks to get tick diff in profiling window */
 struct ddr_profiler_data {
-#ifdef CONFIG_64BIT
 	u64 total_ticks_base[DDR_FREQ_MAX];
 	u64 data_ticks_base[DDR_FREQ_MAX];
-#else
-	u32 total_ticks_base[DDR_FREQ_MAX];
-	u32 data_ticks_base[DDR_FREQ_MAX];
-#endif
 };
 
 struct ddr_devfreq_data {

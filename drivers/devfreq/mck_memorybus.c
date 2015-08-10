@@ -428,13 +428,9 @@ static void get_ddr_cycles(struct ddr_devfreq_data *data,
 	static unsigned long long time_stamp_old;
 	struct perf_counters *ddr_ticks = data->dmc.ddr_ticks;
 	int i;
-#ifdef CONFIG_64BIT
+
 	u64 *total_ticks_base = data->ddr_profiler.total_ticks_base;
 	u64 *data_ticks_base = data->ddr_profiler.data_ticks_base;
-#else
-	u32 *total_ticks_base = data->ddr_profiler.total_ticks_base;
-	u32 *data_ticks_base = data->ddr_profiler.data_ticks_base;
-#endif
 
 	spin_lock_irqsave(&data->lock, flags);
 	*total_ticks = *data_ticks = 0;
