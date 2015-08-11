@@ -521,7 +521,7 @@ static inline void i2c_pxa_enable(struct pxa_i2c *i2c, bool enable)
 		writel(readl(_ICR(i2c)) | ICR_IUE, _ICR(i2c));
 	else
 		writel(readl(_ICR(i2c)) & ~ICR_IUE, _ICR(i2c));
-	udelay(100);
+
 	i2c->icr_save = readl(_ICR(i2c));
 }
 
