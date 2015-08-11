@@ -1195,7 +1195,18 @@ void __init sanity_check_meminfo(void)
 	}
 #endif
 	meminfo.nr_banks = j;
+
+#ifdef CONFIG_MEMORY_HOTPLUG
+	/*
+	 * here we reserve the range [arm_lowmem_limit, vmalloc_limit]
+	 * as lowmem range, so later we can hotplug some memory ot lowmem.
+	 */
+	if (arm_lowmem_limit < vmalloc_limit)
+		high_memory = __va(vmalloc_limit - 1) + 1;
+	else
+#else
 	high_memory = __va(arm_lowmem_limit - 1) + 1;
+#endif
 
 	/*
 	 * Round the memblock limit down to a section size.  This
