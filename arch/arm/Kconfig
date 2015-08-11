@@ -2095,6 +2095,20 @@ config ARM_FLUSH_CONSOLE_ON_RESTART
 	  released if it failed to be acquired, which will cause all the
 	  pending messages to be flushed.
 
+config ARCH_ENABLE_MEMORY_HOTPLUG
+	bool "Memory Hotplug Architecture Enable"
+	depends on SPARSEMEM && MMU
+	help
+	  This option define if the architecture support memory hotplug.
+
+config ARCH_ENABLE_MEMORY_HOTREMOVE
+	def_bool y
+	depends on ARCH_ENABLE_MEMORY_HOTPLUG
+
+config ARCH_MEMORY_PROBE
+	def_bool y
+	depends on ARCH_ENABLE_MEMORY_HOTPLUG
+
 endmenu
 
 menu "Boot options"
