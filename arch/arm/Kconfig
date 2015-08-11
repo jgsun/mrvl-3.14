@@ -596,6 +596,8 @@ config ARCH_MMP
 	select PLAT_PXA
 	select SPARSE_IRQ
 	select NEED_MACH_MEMORY_H if !CPU_PXA1908
+	select ARCH_SPARSEMEM_ENABLE if FLC
+	select ARCH_HAS_HOLES_MEMORYMODEL if FLC
 	help
 	  Support for Marvell's PXA168/PXA910(MMP) and MMP2 processor line.
 
