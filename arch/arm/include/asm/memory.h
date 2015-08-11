@@ -256,14 +256,29 @@ static inline unsigned long __phys_to_virt(phys_addr_t x)
 
 #define PHYS_OFFSET	PLAT_PHYS_OFFSET
 
+extern phys_addr_t arm_lowmem_limit;
+extern unsigned long added_lowmem_offset;
+
 static inline phys_addr_t __virt_to_phys(unsigned long x)
 {
-	return (phys_addr_t)x - PAGE_OFFSET + PHYS_OFFSET;
+	unsigned long phys = x - PAGE_OFFSET + PHYS_OFFSET;
+
+#ifdef CONFIG_MEMORY_HOTPLUG
+	if (phys > arm_lowmem_limit)
+		return (phys_addr_t)(phys + added_lowmem_offset);
+	else
+#endif
+		return (phys_addr_t)phys;
 }
 
 static inline unsigned long __phys_to_virt(phys_addr_t x)
 {
-	return x - PHYS_OFFSET + PAGE_OFFSET;
+#ifdef CONFIG_MEMORY_HOTPLUG
+	if (x > arm_lowmem_limit)
+		return (x - added_lowmem_offset) - PHYS_OFFSET + PAGE_OFFSET;
+	else
+#endif
+		return x - PHYS_OFFSET + PAGE_OFFSET;
 }
 
 #endif

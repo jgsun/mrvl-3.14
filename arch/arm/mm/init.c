@@ -653,3 +653,81 @@ static int __init keepinitrd_setup(char *__unused)
 
 __setup("keepinitrd", keepinitrd_setup);
 #endif
+
+#ifdef CONFIG_MEMORY_HOTPLUG
+unsigned long added_lowmem_offset;
+EXPORT_SYMBOL(added_lowmem_offset);
+
+/*
+ * Memory will be first added to NORMAL zone if there's still lowmem area(virtual address space).
+ * Then the rest of the memory range will added to HIGHMEM zone if CONFIG_HIGHMEM defined or
+ * added to MOVABLE zone if HIGHMEM zone not defined.
+ */
+int __ref arch_add_memory(int nid, u64 start, u64 size)
+{
+	/*
+	 * This function is used to support memory hotplug on arm architecture.
+	 */
+	struct pglist_data *pgdata = NODE_DATA(nid);
+	unsigned long start_pfn = __phys_to_pfn(start);
+	phys_addr_t vmalloc_limit = __pa(vmalloc_min - 1) + 1;
+	u64 lowmem_hotadded_size = 0;
+	unsigned long nr_pages;
+	struct zone *zone;
+	struct map_desc map;
+	int ret = -1;
+
+	pr_debug("%s: start 0x%llx, size 0x%llx\n", __func__, start, size);
+
+	if ((arm_lowmem_limit < vmalloc_limit) &&
+		(start >= arm_lowmem_limit) && !added_lowmem_offset) {
+		lowmem_hotadded_size = vmalloc_limit - arm_lowmem_limit;
+		lowmem_hotadded_size = min(lowmem_hotadded_size, size);
+
+		map.pfn = start_pfn;
+		map.virtual = __phys_to_virt(arm_lowmem_limit);
+		map.type = MT_MEMORY_RW;
+		map.length = lowmem_hotadded_size;
+
+		pr_debug("%s: create mapping start_pfn 0x%lx, virt 0x%lx, length 0x%lx\n",
+				__func__, start_pfn, map.virtual, map.length);
+		create_mapping(&map);
+
+		zone = pgdata->node_zones + ZONE_NORMAL;
+		nr_pages = lowmem_hotadded_size >> PAGE_SHIFT;
+
+		pr_debug("%s: __add_pages: start_pfn %lx, nr_pages %lx to zone %d\n",
+			 __func__, start_pfn, nr_pages, ZONE_NORMAL);
+		ret = __add_pages(0, zone, start_pfn, nr_pages);
+		WARN_ON_ONCE(ret);
+
+		if (!ret)
+			added_lowmem_offset = start - arm_lowmem_limit;
+
+		pr_debug("%s: arm_lowmem_limit 0x%pa, vmalloc_limit 0x%pa, high_memory 0x%p\n",
+			__func__, &arm_lowmem_limit, &vmalloc_limit, high_memory);
+		pr_debug("%s: added_lowmem_offset 0x%lx, lowmem_hotadded_size 0x%llx",
+			__func__, added_lowmem_offset, lowmem_hotadded_size);
+	}
+
+	if (size > lowmem_hotadded_size) {
+#ifdef CONFIG_HIGHMEM
+		zone = pgdata->node_zones + ZONE_HIGHMEM;
+#else
+		zone = pgdata->node_zones + ZONE_MOVABLE;
+#endif
+
+		nr_pages = (size - lowmem_hotadded_size) >> PAGE_SHIFT;
+		start_pfn += lowmem_hotadded_size >> PAGE_SHIFT;
+
+		pr_debug("%s: __add_pages: start_pfn %lx, nr_pages %lx to zone %d\n",
+			 __func__, start_pfn, nr_pages, zone - pgdata->node_zones);
+
+		ret = __add_pages(0, zone, start_pfn, nr_pages);
+		WARN_ON_ONCE(ret);
+	}
+
+	ret = memblock_add(start, size);
+	return ret;
+}
+#endif /* CONFIG_MEMORY_HOTPLUG */

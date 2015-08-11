@@ -88,7 +88,7 @@ extern unsigned long arm_dma_pfn_limit;
 #define arm_dma_pfn_limit (~0ul >> PAGE_SHIFT)
 #endif
 
-extern phys_addr_t arm_lowmem_limit;
+extern void * __initdata vmalloc_min;
 
 void __init bootmem_init(void);
 void arm_mm_memblock_reserve(void);

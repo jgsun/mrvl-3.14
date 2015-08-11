@@ -828,7 +828,7 @@ static void __init create_36bit_mapping(struct map_desc *md,
  * offsets, and we take full advantage of sections and
  * supersections.
  */
-static void __init create_mapping(struct map_desc *md)
+void __init create_mapping(struct map_desc *md)
 {
 	unsigned long addr, length, end;
 	phys_addr_t phys;
@@ -1025,7 +1025,7 @@ void __init debug_ll_io_init(void)
 }
 #endif
 
-static void * __initdata vmalloc_min =
+void * __initdata vmalloc_min =
 	(void *)(VMALLOC_END - (240 << 20) - VMALLOC_OFFSET);
 
 /*
@@ -1056,7 +1056,8 @@ static int __init early_vmalloc(char *arg)
 }
 early_param("vmalloc", early_vmalloc);
 
-phys_addr_t arm_lowmem_limit __initdata = 0;
+phys_addr_t arm_lowmem_limit;
+EXPORT_SYMBOL(arm_lowmem_limit);
 
 void __init sanity_check_meminfo(void)
 {
