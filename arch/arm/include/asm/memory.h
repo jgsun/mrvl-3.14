@@ -24,6 +24,11 @@
 #include <mach/memory.h>
 #endif
 
+#ifdef CONFIG_SPARSEMEM
+#define MAX_PHYSMEM_BITS	32
+#define SECTION_SIZE_BITS	28
+#endif
+
 /*
  * Allow for constants defined here to be used from assembly code
  * by prepending the UL suffix only with actual C code compilation.
