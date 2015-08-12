@@ -284,6 +284,9 @@ struct b52_sensor_ops {
 	int (*g_focus)(struct v4l2_subdev *, u16 *val);
 	int (*s_expo)(struct v4l2_subdev *, u32 expo, u16 vts);
 	int (*s_gain)(struct v4l2_subdev *, u32 gain);
+	/*just use for detect sensor, without firmware */
+	int (*i2c_read_without_fw)(struct v4l2_subdev *, u16 addr, u16 *val);
+	int (*i2c_write_without_fw)(struct v4l2_subdev *, u16 addr, u16 val);
 };
 
 struct sensor_power {
@@ -344,6 +347,9 @@ extern int b52_cmd_read_i2c(struct b52_cmd_i2c_data *data);
 extern int b52_cmd_write_i2c(struct b52_cmd_i2c_data *data);
 extern int b52_isp_read_i2c(const struct b52_sensor_i2c_attr *attr,
 		u16 reg, u16 *val, u8 pos);
+extern int b52_isp_write_i2c(const struct b52_sensor_i2c_attr *attr,
+		u16 reg, u16 val, u8 pos);
+
 extern struct b52_sensor_data b52_ov5642;
 extern struct b52_sensor *b52_get_sensor(struct media_entity *entity);
 extern struct b52_sensor_data b52_ov13850_8M;

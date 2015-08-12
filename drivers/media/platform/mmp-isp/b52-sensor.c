@@ -234,10 +234,8 @@ struct b52_sensor *b52_get_sensor(struct media_entity *entity)
 }
 EXPORT_SYMBOL(b52_get_sensor);
 
-
-
 /*only used for detect sensor, not download the FW*/
-static int b52_sensor_isp_read(const struct b52_sensor_i2c_attr *attr,
+static int __b52_sensor_isp_read(const struct b52_sensor_i2c_attr *attr,
 		u16 reg, u16 *val, u8 pos)
 {
 	if (!attr || !val) {
@@ -245,6 +243,50 @@ static int b52_sensor_isp_read(const struct b52_sensor_i2c_attr *attr,
 		return -EINVAL;
 	}
 	return b52_isp_read_i2c(attr, reg, val, pos);
+}
+
+static int __b52_sensor_isp_write(const struct b52_sensor_i2c_attr *attr,
+		u16 reg, u16 val, u8 pos)
+{
+	if (!attr) {
+		pr_err("%s, error param\n", __func__);
+		return -EINVAL;
+	}
+	return b52_isp_write_i2c(attr, reg, val, pos);
+}
+
+/* only can be called after detect the sensor */
+static int b52_sensor_isp_read(struct v4l2_subdev *sd, u16 addr,
+		u16 *val)
+{
+	u8 pos;
+	const struct b52_sensor_i2c_attr *attr;
+	struct b52_sensor *sensor = to_b52_sensor(sd);
+
+	if (!sensor) {
+		pr_err("%s, error param\n", __func__);
+		return -EINVAL;
+	}
+	attr = &sensor->drvdata->i2c_attr[sensor->cur_i2c_idx];
+	pos = sensor->pos;
+
+	return __b52_sensor_isp_read(attr, addr, val, pos);
+}
+/* only can be called after detect the sensor */
+static int b52_sensor_isp_write(struct v4l2_subdev *sd, u16 addr,
+		u16 val)
+{
+	u8 pos;
+	const struct b52_sensor_i2c_attr *attr;
+	struct b52_sensor *sensor = to_b52_sensor(sd);
+
+	if (!sensor) {
+		pr_err("%s, error param\n", __func__);
+		return -EINVAL;
+	}
+	attr = &sensor->drvdata->i2c_attr[sensor->cur_i2c_idx];
+	pos = sensor->pos;
+	return __b52_sensor_isp_write(attr, addr, val, pos);
 }
 
 static int b52_sensor_init(struct v4l2_subdev *sd)
@@ -354,7 +396,7 @@ static int b52_sensor_detect_vcm(struct v4l2_subdev *sd)
 	attr = vcm->attr;
 
 	for (i = 0; i < id->num; i++) {
-		ret = b52_sensor_isp_read(attr, id->tab[i].reg,
+		ret = __b52_sensor_isp_read(attr, id->tab[i].reg,
 				&val, sensor->pos);
 
 		if (ret || val != id->tab[i].val) {
@@ -377,7 +419,7 @@ static inline int __detect_sensor(const struct b52_sensor_regs *id,
 
 	for (i = 0; i < id->num; i++) {
 		pr_err("addr 0x%x; req 0x%x\n", attr->addr, id->tab[i].reg);
-		ret = b52_sensor_isp_read(attr, id->tab[i].reg, &val, pos);
+		ret = __b52_sensor_isp_read(attr, id->tab[i].reg, &val, pos);
 
 		if (ret || val != id->tab[i].val) {
 			pr_err("val: got %x, req %x\n", val, id->tab[i].val);
@@ -791,6 +833,8 @@ static struct b52_sensor_ops b52_sensor_def_ops = {
 	.init          = b52_sensor_init,
 	.i2c_read      = b52_sensor_cmd_read,
 	.i2c_write     = b52_sensor_cmd_write,
+	.i2c_read_without_fw = b52_sensor_isp_read,
+	.i2c_write_without_fw = b52_sensor_isp_write,
 	.g_cur_fmt     = b52_sensor_g_cur_fmt,
 	.get_power     = b52_sensor_get_power,
 	.put_power     = b52_sensor_put_power,

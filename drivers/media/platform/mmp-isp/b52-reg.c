@@ -1664,6 +1664,7 @@ struct b52_sccb {
 };
 
 #define ISP_READ_I2C_LOOP_CNT 50
+#define ISP_WRITE_I2C_LOOP_CNT 10
 static inline void b52_isp_wait_sccb_idle(u32 base, u32 us)
 {
 	int cnt;
@@ -1767,6 +1768,87 @@ int b52_isp_read_i2c(const struct b52_sensor_i2c_attr *attr,
 	return 0;
 };
 EXPORT_SYMBOL_GPL(b52_isp_read_i2c);
+
+static int __b52_isp_write_i2c(struct b52_sccb *sccb, u8 pos)
+{
+	u32 base = 0;
+	int cnt = 0;
+
+	if (!sccb) {
+		pr_err("%s, %d\n", __func__, __LINE__);
+		return -EINVAL;
+	}
+
+	if (pos == B52_SENSOR_I2C_PRIMARY_MASTER)
+		base = SCCB_MASTER1_REG_BASE;
+	else if (pos == B52_SENSOR_I2C_SECONDARY_MASTER)
+		base = SCCB_MASTER2_REG_BASE;
+	else {
+		pr_err("%s pos error\n", __func__);
+		return -EINVAL;
+	}
+	/*just check one ISP register value to make better performance*/
+	do {
+		cnt++;
+		b52_writeb(base + REG_SCCB_SPEED, sccb->speed);
+		b52_writeb(base + REG_SCCB_SLAVE_ID, sccb->slave_id);
+		b52_writeb(base + REG_SCCB_ADDRESS_H, sccb->addr_h);
+		b52_writeb(base + REG_SCCB_ADDRESS_L, sccb->addr_l);
+		b52_writeb(base + REG_SCCB_2BYTE_CONTROL, sccb->len_ctrl);
+		b52_writeb(base + REG_SCCB_OUTPUT_DATA_H, sccb->o_data_h);
+		b52_writeb(base + REG_SCCB_OUTPUT_DATA_L, sccb->o_data_l);
+
+		if (cnt > ISP_WRITE_I2C_LOOP_CNT) {
+			pr_err("%s: write ISP register failed\n", __func__);
+			return -EAGAIN;
+		}
+	} while (b52_readb(base + REG_SCCB_ADDRESS_H) != sccb->addr_h);
+
+	pr_debug("%s: write loop %d\n", __func__, cnt);
+
+	b52_writeb(base + REG_SCCB_COMMAND, sccb->cmd);
+	b52_isp_wait_sccb_idle(base, 100);
+
+	return 0;
+}
+
+int b52_isp_write_i2c(const struct b52_sensor_i2c_attr *attr,
+		u16 reg, u16 val, u8 pos)
+{
+	int ret;
+	struct b52_sccb sccb;
+
+	if (!attr) {
+		pr_err("%s, %d\n", __func__, __LINE__);
+		return -EINVAL;
+	}
+
+	memset(&sccb, 0, sizeof(sccb));
+
+	sccb.speed    = 0x12;/*default value*/
+	sccb.slave_id = (attr->addr << 1);
+	sccb.addr_h   = (reg >> 8) & 0xff;
+	sccb.addr_l   = (reg >> 0) & 0xff;
+	sccb.cmd      = 0x37;
+	sccb.o_data_h = (val >> 8) & 0xff;
+	sccb.o_data_l = (val >> 0) & 0xff;
+
+	if (attr->val_len == I2C_8BIT)
+		sccb.len_ctrl = (0x0 << 1);
+	else if (attr->val_len == I2C_16BIT)
+		sccb.len_ctrl = (0x1 << 1);
+
+	if (attr->reg_len == I2C_8BIT)
+		sccb.len_ctrl |= (0x0 << 0);
+	else if (attr->reg_len == I2C_16BIT)
+		sccb.len_ctrl |= (0x1 << 0);
+
+	ret = __b52_isp_write_i2c(&sccb, pos);
+	if (ret)
+		return ret;
+	return 0;
+};
+EXPORT_SYMBOL_GPL(b52_isp_write_i2c);
 
 static int b52_fill_cmd_i2c_buf(const struct regval_tab *regs,
 		u8 addr, u16 num, u8 addr_len, u8 data_len, u8 pos, u16 written)
