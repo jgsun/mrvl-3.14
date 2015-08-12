@@ -142,6 +142,7 @@
 
 #define PM880_CURRENT_LEVEL_STEPS	25
 
+static int gpio_en;
 static unsigned int dev_num;
 static unsigned int delay_flash_timer;
 
@@ -165,7 +166,6 @@ struct pm88x_led {
 	bool conn_cfout_ab;
 
 	int id;
-	int gpio_en;
 	/* for external CF_EN and CF_TXMSK */
 	int cf_en;
 	int cf_txmsk;
@@ -286,7 +286,7 @@ static void torch_on(struct pm88x_led *led)
 
 	chip = led->chip;
 	mutex_lock(&led->lock);
-	if (!led->gpio_en) {
+	if (!gpio_en) {
 		if (chip->type == PM886)
 			/* clear CFD_PLS_ON to disable */
 			regmap_update_bits(chip->battery_regmap, PM886_CFD_CONFIG4,
@@ -341,7 +341,7 @@ static void torch_on(struct pm88x_led *led)
 
 	/* automatic booster mode */
 	torch_set_current(led);
-	if (!led->gpio_en) {
+	if (!gpio_en) {
 		if (chip->type == PM886)
 			/* set CFD_PLS_ON to enable */
 			regmap_update_bits(chip->battery_regmap, PM886_CFD_CONFIG4,
@@ -387,7 +387,7 @@ static void cfd_pls_off(struct pm88x_led *led)
 		return;
 	}
 
-	if (!led->gpio_en) {
+	if (!gpio_en) {
 		/* read CFD_PLS_ON status */
 		regmap_read(chip->battery_regmap, reg_add, &reg_val);
 		if (reg_val & PM88X_CF_CFD_PLS_ON)
@@ -396,7 +396,7 @@ static void cfd_pls_off(struct pm88x_led *led)
 		cfd_state = gpio_get_value(led->cf_en);
 	if (cfd_state) {
 		pr_info("%s: turning cfd off\n", __func__);
-		if (!led->gpio_en) {
+		if (!gpio_en) {
 			/* clear CFD_PLS_ON to disable */
 			regmap_update_bits(chip->battery_regmap, reg_add,
 				   PM88X_CF_CFD_PLS_ON, 0);
@@ -431,7 +431,7 @@ static void strobe_flash(struct pm88x_led *led)
 	chip = led->chip;
 
 	mutex_lock(&led->lock);
-	if (!led->gpio_en) {
+	if (!gpio_en) {
 		if (chip->type == PM886)
 			/* clear CFD_PLS_ON to disable */
 			regmap_update_bits(chip->battery_regmap, PM886_CFD_CONFIG4,
@@ -595,7 +595,7 @@ static void strobe_flash(struct pm88x_led *led)
 	}
 
 	/* trigger flash */
-	if (!led->gpio_en) {
+	if (!gpio_en) {
 		if (chip->type == PM886) {
 			regmap_update_bits(chip->battery_regmap, PM886_CFD_CONFIG4,
 					   PM88X_CF_CFD_PLS_ON, PM88X_CF_CFD_PLS_ON);
@@ -726,7 +726,7 @@ static ssize_t gpio_ctrl_show(struct device *dev, struct device_attribute *attr,
 	cdev = dev_get_drvdata(dev);
 	led = container_of(cdev, struct pm88x_led, cdev);
 
-	s += sprintf(buf, "gpio control: %d\n", led->gpio_en);
+	s += sprintf(buf, "gpio control: %d\n", gpio_en);
 	return s;
 }
 
@@ -757,7 +757,7 @@ static ssize_t gpio_ctrl_store(
 	/* clear CF_EN and CFD_PLS_ON before switching modes */
 
 	/* request gpio only if it wasn't already requested */
-	if (!led->gpio_en) {
+	if (!gpio_en) {
 		ret = gpio_request(led->cf_en, "cf-gpio");
 		if (ret) {
 			dev_err(led->cdev.dev, "request cf-gpio error!\n");
@@ -770,7 +770,7 @@ static ssize_t gpio_ctrl_store(
 	if (!gpio_state)
 		gpio_free(led->cf_en);
 
-	led->gpio_en = gpio_state;
+	gpio_en = gpio_state;
 
 	if (led->chip->type == PM886) {
 		/* clear CFD_PLS_ON to disable */
@@ -779,7 +779,7 @@ static ssize_t gpio_ctrl_store(
 		if (ret)
 			goto error;
 
-		if (led->gpio_en)
+		if (gpio_en)
 			/* high active */
 			ret = regmap_update_bits(led->chip->battery_regmap, PM886_CFD_CONFIG3,
 						 (PM88X_CF_EN_HIGH | PM88X_CFD_ENABLED),
@@ -795,7 +795,7 @@ static ssize_t gpio_ctrl_store(
 		if (ret)
 			goto error;
 
-		if (led->gpio_en)
+		if (gpio_en)
 			/* high active */
 			ret = regmap_update_bits(led->chip->battery_regmap, PM880_CFD_CONFIG3,
 						 (PM88X_CF_EN_HIGH | PM88X_CFD_ENABLED),
@@ -1062,7 +1062,7 @@ static int pm88x_setup(struct platform_device *pdev, struct pm88x_led_pdata *pda
 	struct pm88x_chip *chip = dev_get_drvdata(pdev->dev.parent);
 	int ret;
 
-	if (led->gpio_en) {
+	if (gpio_en) {
 		/* high active */
 		if (chip->type == PM886)
 			ret = regmap_update_bits(chip->battery_regmap, PM886_CFD_CONFIG3,
@@ -1282,7 +1282,7 @@ static int pm88x_led_probe(struct platform_device *pdev)
 		led->max_current_div = PM88X_CURRENT_DIV(max_current, led->iset_step);
 	led->cf_en = pdata->cf_en;
 	led->cf_txmsk = pdata->cf_txmsk;
-	led->gpio_en = pdata->gpio_en;
+	gpio_en = pdata->gpio_en;
 	led->cfd_bst_vset = pdata->cfd_bst_vset;
 	delay_flash_timer = pdata->delay_flash_timer;
 
@@ -1298,7 +1298,7 @@ static int pm88x_led_probe(struct platform_device *pdev)
 
 	mutex_lock(&led->lock);
 	if (!dev_num) {
-		if (led->gpio_en) {
+		if (gpio_en) {
 			ret = gpio_request(led->cf_en, "cf-gpio");
 			if (ret) {
 				dev_err(&pdev->dev, "request cf-gpio error!\n");
@@ -1365,7 +1365,7 @@ static int pm88x_led_remove(struct platform_device *pdev)
 	if (dev_num > 0)
 		dev_num--;
 
-	if ((!dev_num) && (led->gpio_en))
+	if ((!dev_num) && (gpio_en))
 		gpio_free(led->cf_en);
 
 	mutex_unlock(&led->lock);
