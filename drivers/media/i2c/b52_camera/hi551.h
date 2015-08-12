@@ -2075,6 +2075,11 @@ struct b52_sensor_i2c_attr hi551_i2c_attr[] = {
 		.addr = 0x20,
 	},
 };
+static struct b52_sensor_module hi551_MODULE_INFO[] = {
+	[0] = {
+		.id = 1,/*follow KERR YL5B01A module id.*/
+	},
+};
 #define N_HI551_I2C_ATTR ARRAY_SIZE(hi551_i2c_attr)
 #define N_HI551_INIT ARRAY_SIZE(hi551_res_init)
 #define N_HI551_ID ARRAY_SIZE(hi551_id)
@@ -2090,6 +2095,7 @@ struct b52_sensor_i2c_attr hi551_i2c_attr[] = {
 #define N_HI551_STREAM_OFF ARRAY_SIZE(hi551_stream_off)
 #define N_HI551_HFLIP ARRAY_SIZE(hi551_hflip)
 #define N_HI551_VFLIP ARRAY_SIZE(hi551_vflip)
+#define N_HI551_MODULE_INFO ARRAY_SIZE(hi551_MODULE_INFO)
 
 struct b52_sensor_mbus_fmt hi551_fmt = {
 	.mbus_code	= V4L2_MBUS_FMT_SGBRG10_1X10,
@@ -2123,9 +2129,7 @@ struct b52_sensor_resolution hi551_res[] = {
 		},
 	},
 };
-static struct b52_sensor_module hi551_KERR = {
-	.id = 1,		/*follow KERR YL5B01A module id.*/
-};
+
 static int HI551_get_pixelclock(struct v4l2_subdev *sd, u32 *rate, u32 mclk);
 static int HI551_get_dphy_desc(struct v4l2_subdev *sd,
 	struct csi_dphy_desc *dphy_desc, u32 mclk);
@@ -2215,10 +2219,9 @@ struct b52_sensor_data b52_hi551 = {
 	.nr_lane = 2,
 	.mipi_clk_bps = 884000000,
 	.ops = &hi551_ops,
-	.module = &hi551_KERR,
-	.num_module =  1,
+	.module = hi551_MODULE_INFO,
+	.num_module = N_HI551_MODULE_INFO,
 	/*.reset_delay = 10000, //hi551 maybe don't need it, double check	*/
 };
 
 #endif
-

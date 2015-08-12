@@ -2146,6 +2146,11 @@ struct b52_sensor_i2c_attr sr544_i2c_attr[] = {
 		.addr = 0x28,
 	},
 };
+static struct b52_sensor_module sr544_MODULE_INFO[] = {
+	[0] = {
+		.id = 0,
+	},
+};
 #define N_SR544_I2C_ATTR ARRAY_SIZE(sr544_i2c_attr)
 #define N_SR544_INIT ARRAY_SIZE(sr544_res_init)
 #define N_SR544_ID ARRAY_SIZE(sr544_id)
@@ -2161,6 +2166,8 @@ struct b52_sensor_i2c_attr sr544_i2c_attr[] = {
 #define N_SR544_STREAM_ON ARRAY_SIZE(sr544_stream_on)
 #define N_SR544_STREAM_OFF ARRAY_SIZE(sr544_stream_off)
 #define N_SR544_ESD ARRAY_SIZE(sr544_esd)
+#define N_SR544_MODULE_INFO ARRAY_SIZE(sr544_MODULE_INFO)
+
 struct b52_sensor_mbus_fmt sr544_fmt = {
 	.mbus_code	= V4L2_MBUS_FMT_SRGGB10_1X10,
 	.colorspace	= V4L2_COLORSPACE_SRGB,
@@ -2193,9 +2200,7 @@ struct b52_sensor_resolution sr544_res[] = {
 		},
 	},
 };
-static struct b52_sensor_module sr544_SSG = {
-	.id = 0,
-};
+
 static int SR544_get_pixelclock(struct v4l2_subdev *sd, u32 *rate, u32 mclk);
 static int SR544_get_dphy_desc(struct v4l2_subdev *sd,
 			struct csi_dphy_desc *dphy_desc, u32 mclk);
@@ -2287,9 +2292,8 @@ struct b52_sensor_data b52_sr544 = {
 	.nr_lane = 2,
 	.mipi_clk_bps = 871000000,
 	.ops = &sr544_ops,
-
-	.module = &sr544_SSG,
-	.num_module =  1,
+	.module = sr544_MODULE_INFO,
+	.num_module = N_SR544_MODULE_INFO,
 	.reset_delay = 10000,
 };
 

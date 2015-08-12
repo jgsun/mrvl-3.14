@@ -292,13 +292,16 @@ struct b52_sensor_i2c_attr s5k5e3_i2c_attr[] = {
 		.addr = 0x10,
 	},
 };
-static struct b52_sensor_module s5k5e3_SSG = {
-	.id = 0,
+static struct b52_sensor_module s5k5e3_MODULE_INFO[] = {
+	[0] = {
+		.id = 0,
+	},
 };
 static int ev_bias_offset[] = {
 	-0x3C, -0x33, -0x33, -0x2C, -0x22, -0x0D, 0,
 	0x16, 0x2F, 0x5F, 0x7F, 0x4B, 0x5A
 };
+
 #define N_S5K5E3_I2C_ATTR ARRAY_SIZE(s5k5e3_i2c_attr)
 #define N_S5K5E3_INIT ARRAY_SIZE(s5k5e3_res_init)
 #define N_S5K5E3_ID ARRAY_SIZE(s5k5e3_id)
@@ -314,6 +317,7 @@ static int ev_bias_offset[] = {
 #define N_S5K5E3_STREAM_OFF ARRAY_SIZE(s5k5e3_stream_off)
 #define N_S5K5E3_HFLIP ARRAY_SIZE(s5k5e3_hflip)
 #define N_S5K5E3_VFLIP ARRAY_SIZE(s5k5e3_vflip)
+#define N_S5K5E3_MODULE_INFO ARRAY_SIZE(s5k5e3_MODULE_INFO)
 
 struct b52_sensor_mbus_fmt s5k5e3_fmt = {
 	.mbus_code	= V4L2_MBUS_FMT_SGBRG10_1X10,
@@ -434,10 +438,10 @@ struct b52_sensor_data b52_s5k5e3 = {
 	.calc_dphy = 0,
 	.nr_lane = 2,
 	.ops = &s5k5e3_ops,
-	.module = &s5k5e3_SSG,
+	.module = s5k5e3_MODULE_INFO,
+	.num_module = N_S5K5E3_MODULE_INFO,
 	.mipi_clk_bps = 884000000,
 	.reset_delay = 100,
 };
 
 #endif
-

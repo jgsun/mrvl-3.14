@@ -301,6 +301,11 @@ struct b52_sensor_i2c_attr ov5648_i2c_attr[] = {
 		.addr = 0x36,
 	},
 };
+static struct b52_sensor_module ov5648_MODULE_INFO[] = {
+	[0] = {
+		.id = 0,
+	},
+};
 #define N_OV5648_I2C_ATTR ARRAY_SIZE(ov5648_i2c_attr)
 #define N_OV5648_INIT ARRAY_SIZE(ov5648_res_init)
 #define N_OV5648_ID ARRAY_SIZE(ov5648_id)
@@ -315,6 +320,7 @@ struct b52_sensor_i2c_attr ov5648_i2c_attr[] = {
 #define N_OV5648_STREAM_OFF ARRAY_SIZE(ov5648_stream_off)
 #define N_OV5648_HFLIP ARRAY_SIZE(ov5648_hflip)
 #define N_OV5648_VFLIP ARRAY_SIZE(ov5648_vflip)
+#define N_OV5648_MODULE_INFO ARRAY_SIZE(ov5648_MODULE_INFO)
 
 struct b52_sensor_mbus_fmt ov5648_fmt = {
 	.mbus_code	= V4L2_MBUS_FMT_SBGGR10_1X10,
@@ -348,11 +354,6 @@ struct b52_sensor_resolution ov5648_res[] = {
 		},
 	},
 };
-
-static struct b52_sensor_module ov5648_vcm = {
-	.id = 0,
-};
-
 
 static int OV5648_get_pixelclock(struct v4l2_subdev *sd, u32 *rate, u32 mclk);
 static int OV5648_get_dphy_desc(struct v4l2_subdev *sd, struct csi_dphy_desc *dphy_desc, u32 mclk);
@@ -433,8 +434,8 @@ struct b52_sensor_data b52_ov5648 = {
 	.calc_dphy = 0,
 	.mipi_clk_bps = 429000000,
 	.ops = &ov5648_ops,
-	.module = &ov5648_vcm,
-	.num_module =  1,
+	.module = ov5648_MODULE_INFO,
+	.num_module = N_OV5648_MODULE_INFO,
 	.reset_delay = 100,
 };
 #endif

@@ -132,6 +132,10 @@ struct b52_sensor_i2c_attr imx219_i2c_attr[] = {
 		.addr = 0x1A,
 	},
 };
+static struct b52_sensor_module imx219_MODULE_INFO[] = {
+	[0] = {
+	},
+};
 #define N_IMX219_I2C_ATTR ARRAY_SIZE(imx219_i2c_attr)
 #define N_IMX219_INIT ARRAY_SIZE(imx219_res_init)
 #define N_IMX219_ID ARRAY_SIZE(imx219_id)
@@ -148,6 +152,8 @@ struct b52_sensor_i2c_attr imx219_i2c_attr[] = {
 #define N_IMX219_STREAM_OFF ARRAY_SIZE(imx219_stream_off)
 #define N_IMX219_VFLIP ARRAY_SIZE(imx219_vflip)
 #define N_IMX219_HFLIP ARRAY_SIZE(imx219_hflip)
+#define N_IMX219_MODULE_INFO ARRAY_SIZE(imx219_MODULE_INFO)
+
 struct b52_sensor_mbus_fmt imx219_fmt = {
 	.mbus_code	= V4L2_MBUS_FMT_SBGGR10_1X10,
 	.colorspace	= V4L2_COLORSPACE_SRGB,
@@ -182,8 +188,7 @@ struct b52_sensor_resolution imx219_res[] = {
 	},
 #endif
 };
-static struct b52_sensor_module imx219_SSG = {
-};
+
 static int IMX219_get_pixelclock(struct v4l2_subdev *sd, u32 *rate, u32 mclk);
 static int IMX219_get_dphy_desc(struct v4l2_subdev *sd,
 			struct csi_dphy_desc *dphy_desc, u32 mclk);
@@ -271,8 +276,8 @@ struct b52_sensor_data b52_imx219 = {
 	.nr_lane = 4,
 	.mipi_clk_bps = 728000000,
 	.ops = &imx219_ops,
-	.module = &imx219_SSG,
-	.num_module =  1,
+	.module = imx219_MODULE_INFO,
+	.num_module = N_IMX219_MODULE_INFO,
 };
 
 #endif

@@ -239,6 +239,13 @@ static int ev_bias_offset[] = {
 	-0x3C, -0x33, -0x30, -0x29, -0x21, -0x11, 0,
 	0x1c, 0x39, 0x7b, 0xbd, 0x4B, 0x5A
 };
+
+static struct b52_sensor_module S5K4H5_MODULE_INFO[] = {
+	[0] = {
+		.id = 0,
+	},
+};
+
 #define N_S5K4H5_I2C_ATTR ARRAY_SIZE(S5K4H5_i2c_attr)
 #define N_S5K4H5_INIT ARRAY_SIZE(S5K4H5_res_init)
 #define N_S5K4H5_ID ARRAY_SIZE(S5K4H5_id)
@@ -254,6 +261,7 @@ static int ev_bias_offset[] = {
 #define N_S5K4H5_STREAM_ON ARRAY_SIZE(S5K4H5_stream_on)
 #define N_S5K4H5_STREAM_OFF ARRAY_SIZE(S5K4H5_stream_off)
 #define N_S5K4H5_video ARRAY_SIZE(S5K4H5_res_video)
+#define N_S5K4H5_MODULE_INFO ARRAY_SIZE(S5K4H5_MODULE_INFO)
 
 struct b52_sensor_mbus_fmt S5K4H5_fmt = {
 	.mbus_code	= V4L2_MBUS_FMT_SGRBG10_1X10,
@@ -292,9 +300,6 @@ struct b52_sensor_resolution S5K4H5_res[] = {
 
 };
 
-static struct b52_sensor_module S5K4H5_SSG = {
-	.id = 0,
-};
 static int S5K4H5_get_pixelclock(struct v4l2_subdev *sd, u32 *rate, u32 mclk);
 static int S5K4H5_get_dphy_desc(struct v4l2_subdev *sd,
 			struct csi_dphy_desc *dphy_desc, u32 mclk);
@@ -385,8 +390,8 @@ struct b52_sensor_data b52_s5k4h5 = {
 	.nr_lane = 4,
 	.mipi_clk_bps = 719942000,
 	.ops = &S5K4H5_ops,
-	.module = &S5K4H5_SSG,
-	.num_module =  1,
+	.module = S5K4H5_MODULE_INFO,
+	.num_module =  N_S5K4H5_MODULE_INFO,
 	.reset_delay = 10000,
 };
 

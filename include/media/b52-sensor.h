@@ -129,11 +129,17 @@ struct b52_sensor_vcm {
 
 struct b52_sensor_module {
 	u32 id;
+	char *name;/* as module id send to userspace, limit the size to 7 characters*/
 	u32 apeture_size;
 	struct b52_sensor_vcm *vcm;
 };
 struct b52_sensor_otp {
 	u32 customer_id;
+	/*
+	 * The module_id should same with the value wrote in the sensor OTP,
+	 * if the module use a string as id, the module_id can be set to any integer,
+	 * but must same with the value return from update_otp function.
+	 */
 	u32 module_id;
 	u32 lens_id;
 	u32 af_cal_dir;

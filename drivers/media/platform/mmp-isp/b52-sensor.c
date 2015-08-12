@@ -309,8 +309,10 @@ static int b52_sensor_init(struct v4l2_subdev *sd)
 
 	module = sensor->drvdata->module;
 	for (num = 0; num < sensor->drvdata->num_module; num++)
-		if (sensor->otp.module_id == module->id)
+		if (sensor->otp.module_id == module[num].id) {
+			pr_info("detected module[%d].id = 0x%x\n", num, module[num].id);
 			break;
+		}
 
 	if (num < sensor->drvdata->num_module)
 		sensor->cur_mod_id = num;

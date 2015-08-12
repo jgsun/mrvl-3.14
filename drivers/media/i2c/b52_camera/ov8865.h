@@ -547,6 +547,11 @@ struct b52_sensor_i2c_attr OV8865_i2c_attr[] = {
 		.addr = 0x10,
 	},
 };
+static struct b52_sensor_module OV8865_MODULE_INFO[] = {
+	[0] = {
+		.id = 0x6,
+	},
+};
 #define N_OV8865_I2C_ATTR ARRAY_SIZE(OV8865_i2c_attr)
 #define N_OV8865_INIT ARRAY_SIZE(OV8865_res_init)
 #define N_OV8865_ID ARRAY_SIZE(OV8865_id)
@@ -561,6 +566,8 @@ struct b52_sensor_i2c_attr OV8865_i2c_attr[] = {
 #define N_OV8865_HFLIP ARRAY_SIZE(OV8865_hflip)
 #define N_OV8865_STREAM_ON ARRAY_SIZE(OV8865_stream_on)
 #define N_OV8865_STREAM_OFF ARRAY_SIZE(OV8865_stream_off)
+#define N_OV8865_MODULE_INFO ARRAY_SIZE(OV8865_MODULE_INFO)
+
 struct b52_sensor_mbus_fmt OV8865_fmt = {
 	.mbus_code	= V4L2_MBUS_FMT_SBGGR10_1X10,
 	.colorspace	= V4L2_COLORSPACE_SRGB,
@@ -593,9 +600,7 @@ struct b52_sensor_resolution OV8865_res[] = {
 		},
 	},
 };
-static struct b52_sensor_module OV8865_SUNNY = {
-	.id = 0x6,
-};
+
 static int OV8865_get_pixelclock(struct v4l2_subdev *sd, u32 *rate, u32 mclk);
 static int OV8865_get_dphy_desc(struct v4l2_subdev *sd,
 		struct csi_dphy_desc *dphy_desc, u32 mclk);
@@ -682,8 +687,8 @@ struct b52_sensor_data b52_ov8865 = {
 	.nr_lane = 4,
 	.mipi_clk_bps = 988000000,
 	.ops = &ov8865_ops,
-	.module = &OV8865_SUNNY,
-	.num_module =  1,
+	.module = OV8865_MODULE_INFO,
+	.num_module = N_OV8865_MODULE_INFO,
 };
 
 #endif

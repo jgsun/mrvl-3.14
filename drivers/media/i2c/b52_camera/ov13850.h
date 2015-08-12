@@ -561,6 +561,12 @@ struct b52_sensor_i2c_attr ov13850_i2c_attr[] = {
 		.addr = 0x10,
 	},
 };
+
+static struct b52_sensor_module ov13850_MODULE_INFO[] = {
+	[0] = {
+		.id = 0,
+	},
+};
 #define N_OV13850_I2C_ATTR ARRAY_SIZE(ov13850_i2c_attr)
 #define N_OV13850_13M_INIT ARRAY_SIZE(ov13850_13M_res_init)
 #define N_OV13850_8M_INIT ARRAY_SIZE(ov13850_8M_res_init)
@@ -577,6 +583,7 @@ struct b52_sensor_i2c_attr ov13850_i2c_attr[] = {
 #define N_OV13850_HFLIP ARRAY_SIZE(ov13850_hflip)
 #define N_OV13850_STREAM_ON ARRAY_SIZE(ov13850_stream_on)
 #define N_OV13850_STREAM_OFF ARRAY_SIZE(ov13850_stream_off)
+#define N_OV13850_MODULE_INFO ARRAY_SIZE(ov13850_MODULE_INFO)
 struct b52_sensor_mbus_fmt ov13850_fmt = {
 	.mbus_code	= V4L2_MBUS_FMT_SBGGR10_1X10,
 	.colorspace	= V4L2_COLORSPACE_SRGB,
@@ -622,9 +629,7 @@ struct b52_sensor_resolution ov13850_13M_res[] = {
 		},
 	},
 };
-static struct b52_sensor_module ov13850_SUNNY = {
-	.id = 0,
-};
+
 static int OV13850_get_pixelclock(struct v4l2_subdev *sd, u32 *rate, u32 mclk);
 static int OV13850_get_dphy_desc(struct v4l2_subdev *sd,
 			struct csi_dphy_desc *dphy_desc, u32 mclk);
@@ -713,7 +718,7 @@ struct b52_sensor_data b52_ov13850_8M = {
 	.mipi_clk_bps = 988000000,
 	.ops = &ov13850_ops,
 
-	.module = &ov13850_SUNNY,
+	.module = ov13850_MODULE_INFO,
 	.num_module =  1,
 	.reset_delay = 100,
 };
@@ -793,9 +798,8 @@ struct b52_sensor_data b52_ov13850_13M = {
 	.nr_lane = 4,
 	.mipi_clk_bps = 1100000000,
 	.ops = &ov13850_ops,
-
-	.module = &ov13850_SUNNY,
-	.num_module =  1,
+	.module = ov13850_MODULE_INFO,
+	.num_module = N_OV13850_MODULE_INFO,
 	.reset_delay = 100,
 };
 
