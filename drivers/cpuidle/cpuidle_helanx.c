@@ -138,6 +138,7 @@ void cpuidle_c2_unlock(void)
 		su[i].disable = (states_disabled_cpu0 & (1 << i))?1:0;
 }
 
+#ifdef CONFIG_SCHED_HMP
 #define _state2bit(val) ((1 << (val)) - 1)
 
 static int clst_enter_m2[MAX_NR_CLST];
@@ -214,6 +215,7 @@ static void cpu_pm_exit_post(int cpu)
 	}
 	spin_unlock(&clst_cpuidle_lock[clst_index]);
 }
+#endif
 
 /*
  * arm64_enter_state - Programs CPU to enter the specified state
@@ -242,7 +244,9 @@ static int arm64_enter_state(struct cpuidle_device *dev,
 		return idx;
 	}
 
+#ifdef CONFIG_SCHED_HMP
 	cpu_pm_enter_pre(cpu, idx);
+#endif
 	cpu_pm_enter();
 	/*
 	 * Pass C-state index to cpu_suspend which in turn will call
@@ -263,7 +267,9 @@ static int arm64_enter_state(struct cpuidle_device *dev,
 	 */
 	if (!ret) {
 		cpu_pm_exit();
+#ifdef CONFIG_SCHED_HMP
 		cpu_pm_exit_post(cpu);
+#endif
 	}
 
 	return idx;
@@ -310,11 +316,13 @@ core_initcall(setup_mfp_notify);
  */
 int __init arm64_idle_init(void)
 {
+#ifdef CONFIG_SCHED_HMP
 	int i;
+#endif
 	int err = check_platform();
 	if (err)
 		return err;
-
+#ifdef CONFIG_SCHED_HMP
 	clst_info = kmalloc(sizeof(struct cpu_clst_info *) * MAX_NR_CLST, GFP_KERNEL);
 	if (!clst_info)
 		BUG_ON("cpuidle: no memory for cluster info\n");
@@ -328,7 +336,7 @@ int __init arm64_idle_init(void)
 		clst_enter_m2[i] = 0;
 		spin_lock_init(&clst_cpuidle_lock[i]);
 	}
-
+#endif
 	return cpuidle_register(&arm64_idle_driver, NULL);
 }
 device_initcall(arm64_idle_init);
