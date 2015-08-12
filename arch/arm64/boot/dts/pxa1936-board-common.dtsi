@@ -246,7 +246,7 @@
 				marvell,fb-name = "mmp-fb";
 				marvell,path-name = "mmp_pnpath";
 				marvell,overlay-id = <1>;
-				marvell,default-pixfmt = <0x109>;
+				marvell,default-pixfmt = <0x108>;
 				marvell,buffer-num = <3>;
 				marvell,fb-mem = <0x17000000>;
 				status = "okay";
