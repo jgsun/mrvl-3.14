@@ -80,7 +80,14 @@ enum OTP_TYPE {
 	ISP_TO_SENSOR = 3,
 	VERIFY_CRC = 4,
 	GEN_CRC = 5,
-	MODULE_TO_ISP = 6,
+	/*
+	 * This OTP type will be called after detected the sensor,
+	 * to get module info for module detection.
+	 * Please enable this type in the sensor update_otp function,
+	 * if the sensor need to support multi-module feature.
+	 */
+	READ_MODULE_INFO = 6,
+	MODULE_TO_ISP = 8,
 };
 struct sensor_otp {
 	enum OTP_TYPE	otp_type;

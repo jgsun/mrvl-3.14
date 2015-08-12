@@ -262,6 +262,7 @@ struct b52_sensor_ops {
 	int (*i2c_read)(struct v4l2_subdev *, u16 addr, u32 *val, u8 num);
 	int (*i2c_write)(struct v4l2_subdev *, u16 addr, u32 val, u8 num);
 	int (*detect_sensor)(struct v4l2_subdev *);
+	int (*detect_module)(struct v4l2_subdev *);
 	int (*detect_vcm)(struct v4l2_subdev *);
 	int (*g_cur_fmt)(struct v4l2_subdev *, struct b52_cmd_i2c_data *);
 	int (*gain_to_iso)(struct v4l2_subdev *, u32 gain, u32 *iso);

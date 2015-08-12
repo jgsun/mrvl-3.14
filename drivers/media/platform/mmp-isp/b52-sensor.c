@@ -461,6 +461,62 @@ sensor_detected:
 
 	return 0;
 }
+/*read module id after detect the sensor. */
+static int b52_sensor_detect_module(struct v4l2_subdev *sd)
+{
+	int ret, num;
+	struct b52_sensor_module *module;
+	struct b52_sensor *sensor = to_b52_sensor(sd);
+
+	if (sensor->drvdata->ops->update_otp &&
+		sensor->drvdata->module) {
+		if (sensor->drvdata->num_module > 1) {
+			sensor->otp.otp_type = READ_MODULE_INFO;
+			ret = b52_sensor_call(sensor, update_otp, &sensor->otp);
+
+			if (!ret) {
+				module = sensor->drvdata->module;
+				for (num = 0; num < sensor->drvdata->num_module;
+					num++)
+					if (sensor->otp.module_id
+						== module[num].id)
+						break;
+
+				if (num < sensor->drvdata->num_module) {
+					sensor->cur_mod_id = num;
+					goto detected;
+
+				} else
+					goto error;
+			} else
+				goto error;
+		} else {
+			pr_info("%s:just support one module for %s,use the default module directly.\n",
+				__func__, sensor->drvdata->name);
+			goto use_default_module_info;
+		}
+	} else {
+		pr_info("%s: no module info for %s,use the default module.\n",
+			__func__, sensor->drvdata->name);
+		goto use_default_module_info;
+	}
+
+detected:
+	pr_info("%s: detected module[%d].id:0x%x, name:%s for %s\n", __func__,
+		sensor->cur_mod_id, module[sensor->cur_mod_id].id,
+		module[sensor->cur_mod_id].name, sensor->drvdata->name);
+	return 0;
+
+use_default_module_info:
+	sensor->cur_mod_id = 0;
+	return 0;
+
+error:
+	sensor->cur_mod_id = -ENXIO;
+	pr_err("%s: read %s module id error, check the otp function.\n",
+		__func__, sensor->drvdata->name);
+	return -ENXIO;
+}
 
 static int b52_sensor_get_power(struct v4l2_subdev *sd)
 {
@@ -839,6 +895,7 @@ static struct b52_sensor_ops b52_sensor_def_ops = {
 	.get_power     = b52_sensor_get_power,
 	.put_power     = b52_sensor_put_power,
 	.detect_sensor = b52_sensor_detect_sensor,
+	.detect_module = b52_sensor_detect_module,
 	/* .detect_vcm    = b52_sensor_detect_vcm,*/
 	.g_cur_fps     = b52_sensor_g_cur_fps,
 	.g_param_range = b52_sensor_g_param_range,
@@ -1863,6 +1920,10 @@ static int b52_detect_sensor(struct b52_sensor *sensor)
 
 	ret = b52_sensor_call(sensor, detect_sensor);
 
+	/*try to get the module id after detected the sensor. */
+	if (!ret)
+		b52_sensor_call(sensor, detect_module);
+
 #if 0
 	/* FIXME support detect sensor success while VCM detect error */
 	ret |= b52_sensor_call(sensor, detect_vcm);
@@ -2174,6 +2235,9 @@ static int b52_sensor_probe(struct i2c_client *client,
 	sd = &sensor->sd;
 	v4l2_i2c_subdev_init(sd, client, &b52_sensor_sd_ops);
 	sd->internal_ops = &b52_sensor_sd_internal_ops;
+	if (strlen(sensor->drvdata->name) > 15)
+		dev_err(dev, "The sensor name:%s is too long!\n",
+			sensor->drvdata->name);
 	sprintf(sd->name, "sensor:%s", sensor->drvdata->name);
 	sensor->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 
@@ -2188,6 +2252,22 @@ static int b52_sensor_probe(struct i2c_client *client,
 	if (ret)
 		return ret;
 detect_done:
+	/*add the module name into subdev name if it be detected*/
+	if (sensor->cur_mod_id >= 0 && sensor->cur_mod_id <= 255
+		&& sensor->drvdata->module[sensor->cur_mod_id].name) {
+		if (strlen(sd->name) +
+			strlen(sensor->drvdata->module[sensor->cur_mod_id].name) >
+			V4L2_SUBDEV_NAME_SIZE - 2)
+			dev_err(dev, "The sensor/module name is too long, can't make them together.\n");
+		else {
+			sd->name[strlen(sd->name)] = ',';
+			strncat(sd->name, sensor->drvdata->module[sensor->cur_mod_id].name,
+				strlen(sensor->drvdata->module[sensor->cur_mod_id].name));
+			sd->name[V4L2_SUBDEV_NAME_SIZE - 1] = '\0';
+			dev_info(dev, "The subdev name with module name: %s\n", sd->name);
+		}
+	} else
+		dev_err(dev, "can't get the module name, check the module support list.\n");
 
 	ret = b52_sensor_alloc_fmt_regs(sensor);
 	if (ret)
