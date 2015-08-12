@@ -278,6 +278,88 @@ static void OV13850r2a_Lenc_Decoder(uint8_t *pdata, uint8_t *ppara)
 	OV13850r2a_ColorDecoder(pdata + 86, ppara + 120);
 	OV13850r2a_ColorDecoder(pdata + 136, ppara + 240);
 }
+/*just use for read module info before load ISP firmware */
+static void OV13850r2a_write_i2c_without_fw(struct b52_sensor *sensor,
+	u16 reg, u16 val)
+{
+	b52_sensor_call(sensor, i2c_write_without_fw, reg, val);
+}
+/*just use for read module info before load ISP firmware */
+static u8 OV13850r2a_read_i2c_without_fw(struct b52_sensor *sensor,
+	u16 reg)
+{
+	u16 temp = 0;
+	b52_sensor_call(sensor, i2c_read_without_fw, reg, &temp);
+	return temp;
+}
+/*just use for read module info before load ISP firmware */
+static int OV13850r2a_OTP_access_start_without_fw(struct b52_sensor *sensor)
+{
+	int temp;
+	/* stream on sensor before read OTP data*/
+	OV13850r2a_write_i2c_without_fw(sensor, 0x0100, 0x01);
+
+	temp = OV13850r2a_read_i2c_without_fw(sensor, 0x5002);
+	OV13850r2a_write_i2c_without_fw(sensor,
+		0x5002, (0x00 & 0x02) | (temp & (~0x02)));
+	/* Load module info part only!!!*/
+	OV13850r2a_write_i2c_without_fw(sensor, 0x3d84, 0xC0);
+	OV13850r2a_write_i2c_without_fw(sensor, 0x3d88, 0x72);
+	OV13850r2a_write_i2c_without_fw(sensor, 0x3d89, 0x20);
+	OV13850r2a_write_i2c_without_fw(sensor, 0x3d8A, 0x72);
+	OV13850r2a_write_i2c_without_fw(sensor, 0x3d8B, 0x31);
+	OV13850r2a_write_i2c_without_fw(sensor, 0x3d81, 0x01);
+	usleep_range(5000, 5010);
+
+	return 0;
+}
+/*just use for read module info before load ISP firmware */
+static int OV13850r2a_OTP_access_end_without_fw(struct b52_sensor *sensor)
+{
+	int temp, i;
+	for (i = 0x7220; i <= 0x7231; i++)
+		OV13850r2a_write_i2c_without_fw(sensor, i, 0);
+
+	temp = OV13850r2a_read_i2c_without_fw(sensor, 0x5002);
+	OV13850r2a_write_i2c_without_fw(sensor,
+		0x5002, (0x02 & 0x02) | (temp & (~0x02)));
+
+	OV13850r2a_write_i2c_without_fw(sensor, 0x0100, 0x00);
+	return 0;
+}
+/*just use for read module info before load ISP firmware */
+static int check_otp_info_without_fw(struct b52_sensor *sensor)
+{
+	int flag, addr = 0x0;
+
+	flag = OV13850r2a_read_i2c_without_fw(sensor, 0x7220);
+	if ((flag & 0xc0) == 0x40)
+		addr = 0x7221;
+	else if ((flag & 0x30) == 0x10)
+		addr = 0x7229;
+
+	return addr;
+}
+/*just use for read module info before load ISP firmware */
+static int read_otp_info_without_fw(struct b52_sensor *sensor, int addr,
+				struct b52_sensor_otp *otp)
+{
+	otp->module_id = OV13850r2a_read_i2c_without_fw(sensor, addr);
+	otp->lens_id = OV13850r2a_read_i2c_without_fw(sensor, addr + 1);
+	pr_info("%s:otp->module_id = 0x%x\n", __func__, otp->module_id);
+	return 0;
+}
+/*just use for read module info before load ISP firmware */
+static int update_otp_info_without_fw(struct b52_sensor *sensor,
+					struct b52_sensor_otp *otp)
+{
+	int otp_addr;
+
+	otp_addr = check_otp_info_without_fw(sensor);
+	read_otp_info_without_fw(sensor, otp_addr, otp);
+
+	return 0;
+}
 
 static int OV13850r2a_OTP_access_start(struct b52_sensor *sensor)
 {
@@ -507,6 +589,11 @@ int OV13850R2A_update_otp(struct v4l2_subdev *sd,
 		}
 
 		OV13850r2a_OTP_access_end(sensor);
+	} else if (otp->otp_type == READ_MODULE_INFO) {
+		/* read module_info to otp struct */
+		OV13850r2a_OTP_access_start_without_fw(sensor);
+		update_otp_info_without_fw(sensor, otp);
+		OV13850r2a_OTP_access_end_without_fw(sensor);
 	} else {
 		return -1;
 	}
