@@ -23,8 +23,14 @@
 #define OTP_DRV_LSC_REG_ADDR  0x5200
 #define OTP_DRV_VCM_GROUP_COUNT  3
 #define OTP_DRV_VCM_SIZE  3
-#define bg_ratio_typical 0x400
-#define rg_ratio_typical 0x400
+#define MODULE_INFO_LEN 6
+#define MODULE_INFO_PREFIX "0x"
+/*
+ * The typical value should always in line with the golden module,
+ * otherwise with lead raw data abnormal.
+ */
+#define DEFAULT_RG_TYPICAL_RATIO 0x12f
+#define DEFAULT_BG_TYPICAL_RATIO 0x11f
 
 /* raw10,XVCLK=24Mhz, MIPI 12000Mbps */
 static struct regval_tab OV13850R2A_13M_res_init[] = {

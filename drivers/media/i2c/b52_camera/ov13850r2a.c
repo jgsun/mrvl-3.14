@@ -524,14 +524,23 @@ static int update_otp_info(struct b52_sensor *sensor,
 
 static int update_otp_wb(struct b52_sensor *sensor, struct b52_sensor_otp *otp)
 {
-	int opt_addr;
+	int otp_addr;
 	int r_gain, g_gain, b_gain, base_gain;
+	int rg_typical_ratio, bg_typical_ratio;
 
-	opt_addr = check_otp_info(sensor);
-	read_otp_wb(sensor, opt_addr, otp);
+	otp_addr = check_otp_info(sensor);
+	read_otp_wb(sensor, otp_addr, otp);
 
-	r_gain = (rg_ratio_typical * 1000) / otp->rg_ratio;
-	b_gain = (bg_ratio_typical * 1000) / otp->bg_ratio;
+	if (otp->golden_rg_ratio && otp->golden_bg_ratio) {
+		rg_typical_ratio = otp->golden_rg_ratio;
+		bg_typical_ratio = otp->golden_bg_ratio;
+	} else {
+		rg_typical_ratio = DEFAULT_RG_TYPICAL_RATIO;
+		bg_typical_ratio = DEFAULT_BG_TYPICAL_RATIO;
+	}
+
+	r_gain = (rg_typical_ratio * 1000) / otp->rg_ratio;
+	b_gain = (bg_typical_ratio * 1000) / otp->bg_ratio;
 	g_gain = 1000;
 
 	if (r_gain < 1000 || b_gain < 1000) {
@@ -594,6 +603,26 @@ int OV13850R2A_update_otp(struct v4l2_subdev *sd,
 		OV13850r2a_OTP_access_start_without_fw(sensor);
 		update_otp_info_without_fw(sensor, otp);
 		OV13850r2a_OTP_access_end_without_fw(sensor);
+	} else if (otp->otp_type == APPLY_TYPICAL_VALUE) {
+		if (!otp->user_otp) {
+			pr_err("user otp haven't init\n");
+			return 0;
+		}
+		if (otp->user_otp->rg_typical_ratio &&
+			otp->user_otp->bg_typical_ratio) {
+			otp->golden_rg_ratio = otp->user_otp->rg_typical_ratio;
+			otp->golden_bg_ratio = otp->user_otp->bg_typical_ratio;
+			otp->golden_gg_ratio = otp->user_otp->gg_typical_ratio;
+			pr_info("%s:got WB typical values,RG:0x%x,BG:0x%x,GG:0x%x\n",
+				__func__, otp->golden_rg_ratio,
+				otp->golden_bg_ratio, otp->golden_gg_ratio);
+		} else {
+			otp->golden_rg_ratio = DEFAULT_RG_TYPICAL_RATIO;
+			otp->golden_bg_ratio = DEFAULT_BG_TYPICAL_RATIO;
+			otp->golden_gg_ratio = 0;
+			pr_err("%s:invalid typical values,use the default values.\n",
+				__func__);
+		}
 	} else {
 		return -1;
 	}
