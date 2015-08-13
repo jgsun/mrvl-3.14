@@ -118,7 +118,6 @@ static const struct reg_default pm880_base_patch[] = {
 	{PM88X_LOWPOWER2, 0x20}, /* XO_LJ = 1, enable low jitter for 32kHZ */
 	/* enable LPM for internal reference group in sleep */
 	{PM88X_LOWPOWER4, 0xc0},
-	{PM88X_BK_OSC_CTRL3, 0xc0}, /* set the duty cycle of charger DC/DC to max */
 };
 
 static const struct reg_default pm880_power_patch[] = {

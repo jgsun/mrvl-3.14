@@ -33,7 +33,6 @@
 #define PM88X_POWER_DOWN_LOG1		(0xe5)
 #define PM88X_POWER_DOWN_LOG2		(0xe6)
 #define PM88X_SW_PDOWN			(1 << 5)
-#define PM88X_BK_OSE_CTRL3		(0x52)
 #define PM88X_CHGBK_CONFIG6		(0x50)
 
 /* don't export it at present */
@@ -776,12 +775,12 @@ int pm88x_stepping_fixup(struct pm88x_chip *chip)
 		regmap_update_bits(chip->base_regmap, PM88X_RTC_ALARM_CTRL1,
 			PM88X_USE_XO, PM88X_USE_XO);
 		/* to fix fault charger remove detection */
-		regmap_write(chip->base_regmap, PM88X_BK_OSE_CTRL3, 0xc0);
+		regmap_write(chip->base_regmap, PM88X_BK_OSC_CTRL3, 0xc0);
 		regmap_write(chip->battery_regmap, PM88X_CHGBK_CONFIG6, 0xe1);
 		break;
 	case PM880:
 		/* to fix fault charger remove detection */
-		regmap_write(chip->base_regmap, PM88X_BK_OSE_CTRL3, 0xc0);
+		regmap_write(chip->base_regmap, PM88X_BK_OSC_CTRL3, 0xc0);
 		regmap_write(chip->battery_regmap, PM88X_CHGBK_CONFIG6, 0xe1);
 		break;
 	default:
