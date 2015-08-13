@@ -1806,6 +1806,9 @@ struct sensor_otp32 {
 	compat_caddr_t	read_otp_len;
 	__u8	erase_otp_len;
 	__u8	erase_otp_base;
+	__u32 rg_typical_ratio;
+	__u32 bg_typical_ratio;
+	__u32 gg_typical_ratio;
 };
 
 #define VIDIOC_PRIVATE_B52ISP_SENSOR_OTP32 \
@@ -1829,7 +1832,10 @@ static int get_sensor_otp32(struct sensor_otp *kp,
 			get_user(kp->full_otp_len, &up->full_otp_len) ||
 			get_user(kp->crc_status, &up->crc_status) ||
 			get_user(kp->erase_otp_len, &up->erase_otp_len) ||
-			get_user(kp->erase_otp_base, &up->erase_otp_base))
+			get_user(kp->erase_otp_base, &up->erase_otp_base) ||
+			get_user(kp->rg_typical_ratio, &up->rg_typical_ratio) ||
+			get_user(kp->bg_typical_ratio, &up->bg_typical_ratio) ||
+			get_user(kp->gg_typical_ratio, &up->gg_typical_ratio))
 		return -EFAULT;
 	kp->otp_data = compat_ptr(tmp1);
 	kp->module_data = compat_ptr(tmp2);

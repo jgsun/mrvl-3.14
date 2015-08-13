@@ -87,6 +87,7 @@ enum OTP_TYPE {
 	 * if the sensor need to support multi-module feature.
 	 */
 	READ_MODULE_INFO = 6,
+	APPLY_TYPICAL_VALUE = 7,
 	MODULE_TO_ISP = 8,
 };
 struct sensor_otp {
@@ -104,6 +105,9 @@ struct sensor_otp {
 	__u16			*read_otp_len;
 	__u8			erase_otp_len;
 	__u8			erase_otp_base;
+	__u32 rg_typical_ratio;
+	__u32 bg_typical_ratio;
+	__u32 gg_typical_ratio;
 };
 
 enum type_aeag {
