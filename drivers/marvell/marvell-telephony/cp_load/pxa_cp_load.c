@@ -322,12 +322,22 @@ noinline int cp_invoke_smc(u64 function_id, u64 arg0, u64 arg1,
 	return function_id;
 }
 #else
-int cp_invoke_smc(u64 function_id, u64 arg0, u64 arg1,
-	u64 arg2)
+noinline int cp_invoke_smc(u32 function_id, u32 arg0, u32 arg1,
+	u32 arg2)
 {
-	(void)function_id; (void)arg0; (void)arg1; (void)arg2;
+	asm volatile(
+		__asmeq("%0", "r0")
+		__asmeq("%1", "r1")
+		__asmeq("%2", "r2")
+		__asmeq("%3", "r3")
+#if (__GNUC__ >= 4 && __GNUC_MINOR__ >= 6)
+		".arch_extension sec\n"
+#endif
+		"smc	#0\n"
+		: "+r" (function_id)
+		: "r" (arg0), "r" (arg1), "r" (arg2));
 
-	return -1;
+	return function_id;
 }
 #endif
 

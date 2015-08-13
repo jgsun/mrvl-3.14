@@ -54,17 +54,22 @@ extern void (*watchdog_count_stop_fp)(void);
 extern void acquire_fc_mutex(void);
 extern void release_fc_mutex(void);
 
-extern int cp_invoke_smc(u64 function_id, u64 arg0, u64 arg1,
+#ifdef CONFIG_ARM64
+int cp_invoke_smc(u64 function_id, u64 arg0, u64 arg1,
 	u64 arg2);
+#else
+int cp_invoke_smc(u32 function_id, u32 arg0, u32 arg1,
+	u32 arg2);
+#endif
 
-static inline int cp_set_seagull_remap_reg(u64 val)
+static inline int cp_set_seagull_remap_reg(u32 val)
 {
 	int ret;
 
 	ret = cp_invoke_smc(seagull_remap_smc_funcid, val, 0, 0);
 
-	pr_info("%s: function_id: 0x%llx, arg0: 0x%llx, ret 0x%x\n",
-		__func__, (u64)seagull_remap_smc_funcid, val, ret);
+	pr_info("%s: function_id: 0x%x, arg0: 0x%x, ret 0x%x\n",
+		__func__, seagull_remap_smc_funcid, val, ret);
 
 	return ret;
 }
