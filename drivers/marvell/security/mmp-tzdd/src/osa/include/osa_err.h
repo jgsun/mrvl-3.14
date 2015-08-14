@@ -23,7 +23,6 @@
 #define OSA_OK                  (0)
 #define OSA_ERR                 (-1)
 
-#define OSA_EINTR               (-4)
 #define OSA_BAD_ARG             (-10)
 #define OSA_OUT_OF_MEM          (-11)
 #define OSA_BUSY                (-12)

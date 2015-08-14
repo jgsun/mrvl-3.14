@@ -60,6 +60,7 @@ static int tzdd_proxy_thread(void *data)
 	set_cpus_allowed_ptr(current, cpumask_of(0));
 	TZDD_DBG("tzdd_proxy_thread on cpu %d\n", smp_processor_id());
 
+	current->flags |= PF_FREEZER_SKIP;
 	nice = task_nice(current);
 	TZDD_DBG("tzdd_proxy_thread: nice = %d\n", nice);
 

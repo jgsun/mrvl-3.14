@@ -28,11 +28,11 @@ MODULE_LICENSE("GPL");
  */
 
 #ifdef TEE_RES_CFG_16M
-#define TZDD_VERSION    "TEEC Drvier Version 1.1.7 16MB, kernel_3_10/3_14"
+#define TZDD_VERSION    "TEEC Drvier Version 1.1.8 16MB, kernel_3_10/3_14"
 #elif defined(TEE_RES_CFG_24M)
-#define TZDD_VERSION    "TEEC Drvier Version 1.1.7 24MB, kernel_3_10/3_14"
+#define TZDD_VERSION    "TEEC Drvier Version 1.1.8 24MB, kernel_3_10/3_14"
 #else
-#define TZDD_VERSION    "TEEC Drvier Version 1.1.7, kernel_3_10/3_14"
+#define TZDD_VERSION    "TEEC Drvier Version 1.1.8, kernel_3_10/3_14"
 #endif
 #define TZDD_DRV_NAME   "tzdd"
 
