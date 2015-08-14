@@ -792,7 +792,7 @@
 				reg = <0xd4018800 0x64>,
 				      <0xd403d300 0x4>;
 				mrvl,i2c-fast-mode;
-				marvell,i2c-ilcr = <0x82c469f>;
+				marvell,i2c-ilcr = <0x82c4e9f>;
 				marvell,i2c-iwcr = <0x142a>;
 				marvell,i2c-enable-bus-rst;
 
