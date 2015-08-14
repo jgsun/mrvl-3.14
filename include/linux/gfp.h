@@ -36,9 +36,9 @@ struct vm_area_struct;
 #define ___GFP_NO_KSWAPD	0x400000u
 #define ___GFP_OTHER_NODE	0x800000u
 #define ___GFP_WRITE		0x1000000u
+#define ___GFP_FLC_C		0x2000000u
+#define ___GFP_FLC_NC		0x4000000u
 #define ___GFP_CMA		0x20000000u
-#define ___GFP_FLC_C		0x40000000u
-#define ___GFP_FLC_NC		0x80000000u
 /* If the above are modified, __GFP_BITS_SHIFT may need updating */
 
 /*
@@ -106,7 +106,7 @@ struct vm_area_struct;
  */
 #define __GFP_NOTRACK_FALSE_POSITIVE (__GFP_NOTRACK)
 
-#define __GFP_BITS_SHIFT 28	/* Room for N __GFP_FOO bits */
+#define __GFP_BITS_SHIFT 27	/* Room for N __GFP_FOO bits */
 
 #define __GFP_BITS_MASK ((__force gfp_t)((1 << __GFP_BITS_SHIFT) - 1))
 
