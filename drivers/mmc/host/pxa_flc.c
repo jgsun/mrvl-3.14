@@ -24,6 +24,7 @@
 #include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/platform_data/pxa_sdhci.h>
+#include <linux/flc.h>
 
 #include "pxa_flc.h"
 #include "sdhci.h"
@@ -36,9 +37,6 @@
 #define FLC_SDH_RESP_TIMEOUT (FLC_SDH_RESP_TIMEOUT_BASE * FLC_SDH_RESP_TIMEOUT_SEC)
 
 #define FLC_REG_ERR (0xFFFFFFFF)
-
-struct device *flc_dev;
-bool flc_available __read_mostly;
 
 /*
  * flc_size_to_area_length_reg & flc_size_offset_check:
@@ -71,11 +69,6 @@ static const u64 flc_a_l_table[] = {
 };
 
 #define FLC_A_L_TABLE_SIZE ARRAY_SIZE(flc_a_l_table)
-
-void set_flc_dev(struct device *dev)
-{
-	flc_dev = dev;
-}
 
 static u32 flc_size_to_area_length_reg(u64 size)
 {
