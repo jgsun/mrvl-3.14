@@ -128,6 +128,10 @@ unsigned long dirty_balance_reserve __read_mostly;
 int percpu_pagelist_fraction;
 gfp_t gfp_allowed_mask __read_mostly = GFP_BOOT_MASK;
 
+#ifdef CONFIG_MEMORY_HOTPLUG
+bool populated_zone_pageset_initialized;
+#endif
+
 #ifdef CONFIG_PM_SLEEP
 /*
  * The following functions are used by the suspend/hibernate code to temporarily
@@ -4103,15 +4107,15 @@ void __ref build_all_zonelists(pg_data_t *pgdat, struct zone *zone)
 {
 	set_zonelist_order();
 
+#ifdef CONFIG_MEMORY_HOTPLUG
+	if (zone && populated_zone_pageset_initialized)
+		setup_zone_pageset(zone);
+#endif
 	if (system_state == SYSTEM_BOOTING) {
 		__build_all_zonelists(NULL);
 		mminit_verify_zonelist();
 		cpuset_init_current_mems_allowed();
 	} else {
-#ifdef CONFIG_MEMORY_HOTPLUG
-		if (zone)
-			setup_zone_pageset(zone);
-#endif
 		/* we have to stop all cpus to guarantee there is no user
 		   of zonelist */
 		stop_machine(__build_all_zonelists, pgdat, NULL);
@@ -4549,6 +4553,14 @@ void __init setup_per_cpu_pageset(void)
 
 	for_each_populated_zone(zone)
 		setup_zone_pageset(zone);
+
+#ifdef CONFIG_MEMORY_HOTPLUG
+	/*
+	 * This flag provides the necessary info for memory hotplug
+	 * to setup hogplugged zone's pageset correctly.
+	 */
+	populated_zone_pageset_initialized = true;
+#endif
 }
 
 static noinline __init_refok
