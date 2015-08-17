@@ -2956,6 +2956,9 @@ EXPORT_SYMBOL(mv_udc_unregister_client);
 
 static void call_charger_notifier(struct mv_udc *udc)
 {
+	blocking_notifier_call_chain(&mv_udc_notifier_list,
+					udc->charger_type, &udc->power);
+
 	/* notify the interested guy the charger type is ready */
 	power_supply_changed(&udc->udc_psy);
 }
