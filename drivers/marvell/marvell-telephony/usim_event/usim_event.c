@@ -80,7 +80,7 @@ static void report_usim_event(struct usim_event_device *uedev, int state)
 	snprintf(name_buf, sizeof(name_buf), "USIM_NAME=%s", uedev->name);
 
 	env[0] = name_buf;
-	if (strcmp("usimTray", uedev->name) == 0)
+	if (strcmp("usimtray", uedev->name) == 0)
 		env[1] = state ? "USIM_EVENT=trayPlugin" :
 			"USIM_EVENT=trayPlugout";
 	else
@@ -96,7 +96,7 @@ static void usim_event_work(struct work_struct *work)
 {
 	struct usim_event_device *uedev =
 	    container_of(to_delayed_work(work), struct usim_event_device, work);
-	int state = !!gpio_get_value(uedev->gpio);
+	int state = !gpio_get_value(uedev->gpio);
 
 	if (state != uedev->state) {
 		uedev->state = state;
@@ -196,7 +196,7 @@ static int init_device(struct platform_device *pdev, int dev_num)
 
 	if (dev_num == USIM_DEVICE_NUM - 1)
 		snprintf(uedevice->name, sizeof(uedevice->name) - 1,
-			"usimTray");
+			"usimtray");
 	else
 		snprintf(uedevice->name, sizeof(uedevice->name) - 1,
 			"usim%d", dev_num);
@@ -226,7 +226,7 @@ static int init_device(struct platform_device *pdev, int dev_num)
 		}
 	}
 
-	uedevice->state = !!gpio_get_value(uedevice->gpio);
+	uedevice->state = !gpio_get_value(uedevice->gpio);
 
 	ret = usim_event_create_sys_device(uedevice->dev);
 	if (ret < 0) {
@@ -242,8 +242,8 @@ static int init_device(struct platform_device *pdev, int dev_num)
 	uedevice->irq = gpio_to_irq(uedevice->gpio);
 	ret =
 	    request_irq(uedevice->irq, usim_event_handler,
-			IRQF_DISABLED | IRQF_TRIGGER_RISING |
-			IRQF_TRIGGER_FALLING | IRQF_NO_SUSPEND, uedevice->name,
+			IRQF_SHARED | IRQF_TRIGGER_RISING |
+			IRQF_TRIGGER_FALLING | IRQF_ONESHOT, uedevice->name,
 			uedevice);
 	if (ret < 0) {
 		usim_event_debug(GE_DEBUG_ERROR, "%s: request irq failed!\n",
@@ -304,9 +304,9 @@ static int usim_event_init(struct platform_device *pdev)
 		usim_event_debug(GE_DEBUG_INFO, "%s: usim2\n",
 			 __func__);
 	} else if (of_device_is_compatible(pdev->dev.of_node,
-				"marvell,usimTray")) {
+				"marvell,usimtray")) {
 		dev_num = 2;
-		usim_event_debug(GE_DEBUG_INFO, "%s: usimTray\n",
+		usim_event_debug(GE_DEBUG_INFO, "%s: usimtray\n",
 			 __func__);
 	} else {
 		usim_event_debug(GE_DEBUG_ERROR, "%s: unknown device\n",
@@ -353,7 +353,7 @@ static int usim_event_exit(struct platform_device *pdev)
 static const struct of_device_id usim_of_match[] = {
 	{ .compatible = "marvell,usim1",},
 	{ .compatible = "marvell,usim2",},
-	{ .compatible = "marvell,usimTray",},
+	{ .compatible = "marvell,usimtray",},
 	{},
 };
 MODULE_DEVICE_TABLE(of, usim_of_match);
