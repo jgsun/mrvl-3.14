@@ -465,14 +465,19 @@ sensor_detected:
 static int b52_sensor_detect_module(struct v4l2_subdev *sd)
 {
 	int ret, num;
+	enum OTP_TYPE org_otp_type;
 	struct b52_sensor_module *module;
 	struct b52_sensor *sensor = to_b52_sensor(sd);
 
 	if (sensor->drvdata->ops->update_otp &&
 		sensor->drvdata->module) {
 		if (sensor->drvdata->num_module > 1) {
+			/*Fixme: the default otp type maybe have set before,
+			 * need write back it after read module info */
+			org_otp_type = sensor->otp.otp_type;
 			sensor->otp.otp_type = READ_MODULE_INFO;
 			ret = b52_sensor_call(sensor, update_otp, &sensor->otp);
+			sensor->otp.otp_type = org_otp_type;
 
 			if (!ret) {
 				module = sensor->drvdata->module;
