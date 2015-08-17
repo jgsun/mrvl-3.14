@@ -702,7 +702,7 @@ static int pm88x_get_batt_temp(struct pm88x_battery_info *info)
 	int temp, low, high, low_temp, high_temp, low_ohm, high_ohm;
 
 	if (is_battery_temp_faked())
-		return get_battery_fake_temp()/10;
+		return get_battery_fake_temp() / 10;
 
 	if (!info->bat_temp_monitor_en)
 		return default_temp;
@@ -2079,7 +2079,7 @@ static int pm88x_batt_set_prop_temp(struct pm88x_battery_info *info, int data)
 
 	dev_info(info->dev, "fake temperature is %s\n",
 		 is_battery_temp_faked() ? "enabled" : "disabled");
-	dev_info(info->dev, "fake temperature is %dC\n", battery_fake_temp/10);
+	dev_info(info->dev, "fake temperature is %dC\n", battery_fake_temp / 10);
 
 	return 0;
 }
