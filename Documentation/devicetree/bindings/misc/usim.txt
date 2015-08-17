@@ -1,0 +1,19 @@
+* usim card detector
+
+** usim
+
+Required properties:
+- compatible: "marvell,usim1" "marvell,usim2 "marvell,usimtray"
+- pinctrl-names : Names corresponding to the numbered pinctrl states
+- pinctrl-<n> : Pinctrl states as described in bindings/pinctrl/pinctrl-bindings.txt
+- edge-wakeup-gpio: the gpio for edge wake up
+
+Example:
+usim1: usim@0 {
+        compatible = "marvell,usimtray";
+        pinctrl-names = "default", "sleep";
+        pinctrl-0 = <&usim1_pmx_func>;
+        pinctrl-1 = <&usim1_pmx_func_sleep>;
+        edge-wakeup-gpio = <50>;
+        status = "okay";
+};

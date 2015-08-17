@@ -64,15 +64,29 @@
 			MMC1_DAT4 AF0
 			MMC1_WP AF1
 			MMC1_CD AF1 /* Above pins not used by sdh1, configured as GPIO */
-			GPIO50 AF0 /* GPIO50, used for sd card detect */
 		>;
 		MFP_DEFAULT;
+	};
+
+	usim1_pmx_func: usim1_pmx_func {
+			pinctrl-single,pins = <
+				GPIO50 AF0
+			>;
+			DS_FAST;PULL_UP;EDGE_NONE;LPM_NONE;
+	};
+
+	usim1_pmx_func_sleep: usim1_pmx_func_sleep {
+			pinctrl-single,pins = <
+				GPIO50 AF0
+			>;
+			DS_FAST;PULL_UP;EDGE_BOTH;LPM_NONE;
 	};
 };
 
 &disp {
 	pinctrl-0 = <&disp_func>;
 };
+
 / {
 	model = "Marvell PXA1936 Aloe V01 Development Board";
 	compatible = "marvell,pxa1936-dkb", "marvell,pxa1936";
@@ -286,6 +300,15 @@
 			map@d1200000 {
 				pmic-name = "88pm880";
 				vccmain-supply = <&buck1aslp>;
+			};
+
+			usim1: usim@0 {
+					compatible = "marvell,usimtray";
+					pinctrl-names = "default", "sleep";
+					pinctrl-0 = <&usim1_pmx_func>;
+					pinctrl-1 = <&usim1_pmx_func_sleep>;
+					edge-wakeup-gpio = <50>;
+					status = "okay";
 			};
 		};
 
