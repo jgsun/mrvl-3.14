@@ -265,6 +265,9 @@ enum acipc_return_code acipc_event_bind(u32 user_event,
 
 	IPC_ENTER();
 
+	if (unlikely(!acipc))
+		return ACIPC_RC_FAILURE;
+
 	for (i = 0; i < ACIPC_NUMBER_OF_EVENTS; i++) {
 		if (acipc->acipc_db.event_db[i].IIR_bit & user_event) {
 			if (acipc->acipc_db.event_db[i].cb !=
@@ -300,6 +303,9 @@ enum acipc_return_code acipc_event_unbind(u32 user_event)
 	u32 i;
 
 	IPC_ENTER();
+
+	if (unlikely(!acipc))
+		return ACIPC_RC_FAILURE;
 
 	for (i = 0; i < ACIPC_NUMBER_OF_EVENTS; i++) {
 		if (acipc->acipc_db.event_db[i].mask & user_event) {
