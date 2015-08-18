@@ -65,6 +65,11 @@
 #define MIC_DET_DBS_32MS	(3 << 1)
 #define MIC_DET_PRD_CTN		(3 << 3)
 
+#define PM886_MIC_BIAS_VOL		(1700)
+
+#define PM886_FAKE_LOW_TH		(35)
+#define PM886_FAKE_HIGH_TH		(79)
+
 struct pm886_hs_info {
 	struct pm88x_chip *chip;
 	struct device *dev;
@@ -86,6 +91,8 @@ struct pm886_hs_info {
 	int vol_down_press_th;
 	int mic_det_th;
 	int press_release_th;
+	int fake_low_th;
+	int fake_high_th;
 	int hs_status, hk_status;
 	unsigned int hk_avg, hk_num;
 	u32 hook_count;
@@ -328,18 +335,17 @@ static void pm886_hook_work(struct pm886_hs_info *info)
 
 	dev_dbg(info->dev, "voltage %d avg %d\n", voltage, info->hk_avg);
 	/*
-	 * below numbers are got by experience:
-	 * SS hs: hook vol = ~50; false hook = ~35, so set false_th = 40
-	 * iphone hs: hook vol = 5; false_hook = ~33.
-	 * these value can be adjust for specific hs
-	 * on pxa1908 hook voltage is ~27.
+	 * fake_low_th and fake_high_th is used to filter
+	 * the first time fake hook, these values depends on the
+	 * board type, we should adjust it by test.
 	 */
 	if (voltage < info->hook_press_th) {
 		if (info->hk_avg
 		    && (abs(info->hk_avg - voltage) > PM886_HK_DELTA))
 			goto FAKE_HOOK;
 		else if (!info->hk_avg)
-			if (voltage > 35 && voltage < info->hook_press_th - 40)
+			if (voltage > hs_info->fake_low_th
+				&& voltage < info->fake_high_th)
 				goto FAKE_HOOK;
 	}
 
@@ -608,6 +614,15 @@ static int pm886_headset_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Get regulator error\n");
 	}
 
+	hs_info->hook_press_th = PM886_HOOK_PRESS_TH;
+	hs_info->vol_up_press_th = PM886_VOL_UP_PRESS_TH;
+	hs_info->vol_down_press_th = PM886_VOL_DOWN_PRESS_TH;
+	hs_info->mic_det_th = PM886_MIC_DET_TH;
+	hs_info->press_release_th = PM886_PRESS_RELEASE_TH;
+	hs_info->mic_bias_volt = PM886_MIC_BIAS_VOL;
+	hs_info->fake_low_th = PM886_FAKE_LOW_TH;
+	hs_info->fake_high_th = PM886_FAKE_HIGH_TH;
+
 	if (IS_ENABLED(CONFIG_OF)) {
 		if (of_property_read_u32(pdev->dev.of_node,
 			"marvell,headset-flag", &hs_info->headset_flag))
@@ -634,13 +649,12 @@ static int pm886_headset_probe(struct platform_device *pdev)
 		if (of_property_read_u32(pdev->dev.of_node,
 			"marvell,micbias-volt", &hs_info->mic_bias_volt))
 			dev_dbg(&pdev->dev, "Do not get micbias voltage\n");
-	} else {
-		hs_info->hook_press_th = PM886_HOOK_PRESS_TH;
-		hs_info->vol_up_press_th = PM886_VOL_UP_PRESS_TH;
-		hs_info->vol_down_press_th = PM886_VOL_DOWN_PRESS_TH;
-		hs_info->mic_det_th = PM886_MIC_DET_TH;
-		hs_info->press_release_th = PM886_PRESS_RELEASE_TH;
-		hs_info->mic_bias_volt = 1700;
+		if (of_property_read_u32(pdev->dev.of_node,
+			"marvell,fake-low-th", &hs_info->fake_low_th))
+			dev_dbg(&pdev->dev, "Do not get low fake threshold\n");
+		if (of_property_read_u32(pdev->dev.of_node,
+			"marvell,fake-high-th", &hs_info->fake_high_th))
+			dev_dbg(&pdev->dev, "Do not get high fake threshold\n");
 	}
 
 	/*
