@@ -22,8 +22,6 @@
 #include <linux/mfd/88pm88x.h>
 #include <linux/clk/mmpfuse.h>
 
-__attribute__((weak)) bool buck1slp_is_ever_changed = false;
-
 static int pm88x_i2c_probe(struct i2c_client *client,
 		       const struct i2c_device_id *id)
 {
@@ -125,32 +123,19 @@ MODULE_DEVICE_TABLE(i2c, pm88x_i2c_id);
 #ifdef CONFIG_PM_SLEEP
 static int pm88x_i2c_suspend(struct device *dev)
 {
-	struct pm88x_chip *chip = dev_get_drvdata(dev);
 	struct regulator *buck1slp;
 	int fuse_slpvolt = 0;
 
-	if (!buck1slp_is_ever_changed) {
-		pr_info("%s: buck1_sleep is not being used by other modules.\n",
-			__func__);
-		if ((chip->type == PM886) ||
-				((chip->type == PM880) && buck1slp_ever_used_by_map)) {
-			buck1slp = regulator_get(NULL, "buck1slp");
-			if (IS_ERR(buck1slp)) {
-				pr_info("%s: get buck1slp fails.\n", __func__);
-				return 0;
-			}
-
-			pr_info("%s: buck1_sleep is configured by AP.\n", __func__);
-
-			fuse_slpvolt = get_fuse_suspd_voltage();
-			regulator_set_voltage(buck1slp, fuse_slpvolt, fuse_slpvolt);
-			regulator_put(buck1slp);
-
-			buck1slp_ever_used_by_map = false;
-		}
-	} else {
-		pr_info("%s: buck1_sleep is being used by other modules.\n", __func__);
+	buck1slp = regulator_get(NULL, "buck1slp");
+	if (IS_ERR(buck1slp)) {
+		pr_info("%s: get buck1slp fails.\n", __func__);
+		return 0;
 	}
+
+	fuse_slpvolt = get_fuse_suspd_voltage();
+
+	regulator_set_voltage_max(buck1slp, fuse_slpvolt, fuse_slpvolt);
+	regulator_put(buck1slp);
 
 	return 0;
 }

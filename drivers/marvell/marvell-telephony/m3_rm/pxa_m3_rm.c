@@ -51,7 +51,6 @@
 #define GEU_FUSE_VAL_APCFG3 0x10C
 #define ACQ_MIN_DDR_FREQ (312000)
 
-bool buck1slp_is_ever_changed;
 static int m3_gnss_open_count;
 static int m3_senhub_open_count;
 static bool chip_fused;
@@ -467,12 +466,11 @@ static int m3_open(struct inode *inode, struct file *filp)
 				pr_err("get vccmain ldo fail\n");
 				m3_regulator.reg_vccm = NULL;
 			}
-			buck1slp_is_ever_changed= true;
 
 			if (m3_regulator.reg_vccm) {
 				pr_info("set vccmain to %duV\n", vccm_vol.cm3_on);
-				regulator_set_voltage(m3_regulator.reg_vccm,
-						      vccm_vol.cm3_on, vccm_vol.cm3_on);
+				regulator_set_voltage_max(m3_regulator.reg_vccm,
+							  700000, vccm_vol.cm3_on);
 			}
 		}
 		if (!IS_ERR(m3_pctrl.pwron))
@@ -566,7 +564,6 @@ static int m3_close(struct inode *inode, struct file *filp)
 			if (m3_regulator.reg_vccm) {
 				pr_info("%s: put vccmain.\n", __func__);
 				regulator_put(m3_regulator.reg_vccm);
-				buck1slp_is_ever_changed = false;
 			}
 		}
 	}

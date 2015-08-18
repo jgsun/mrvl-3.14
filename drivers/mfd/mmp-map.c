@@ -41,7 +41,6 @@ static int map_offset, aux_offset;
 static struct map_private *audio_map_priv;
 static void *regmap_aux;
 static bool pmic_is_88pm880;
-bool buck1slp_ever_used_by_map;
 
 #define to_clk_audio(clk) (container_of(clk, struct clk_audio, hw))
 
@@ -1541,9 +1540,9 @@ void map_set_sleep_vol(struct map_private *map_priv, int on)
 				map_priv->vccmain =
 					regulator_get(map_priv->dev,
 						      "vccmain");
-				ret = regulator_set_voltage(map_priv->vccmain,
-							    map_priv->sleep_vol,
-							    map_priv->sleep_vol);
+				ret = regulator_set_voltage_max(map_priv->vccmain,
+								700000,
+								map_priv->sleep_vol);
 				if (ret) {
 					pr_err("%s: set vccmain fails: %d\n",
 					       __func__, ret);
@@ -1559,7 +1558,6 @@ void map_set_sleep_vol(struct map_private *map_priv, int on)
 		if (pmic_is_88pm880) {
 			if (map_priv->vccmain) {
 				regulator_put(map_priv->vccmain);
-				buck1slp_ever_used_by_map = true;
 				map_priv->vccmain = NULL;
 			}
 			return;
