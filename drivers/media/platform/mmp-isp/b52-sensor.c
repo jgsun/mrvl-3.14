@@ -2264,22 +2264,23 @@ static int b52_sensor_probe(struct i2c_client *client,
 		return ret;
 detect_done:
 	/*add the module name into subdev name if it be detected*/
-	if (sensor->cur_mod_id >= 0 && sensor->cur_mod_id <= 255
-		&& sensor->drvdata->module[sensor->cur_mod_id].name) {
-		if (strlen(sd->name) +
-			strlen(sensor->drvdata->module[sensor->cur_mod_id].name) >
-			V4L2_SUBDEV_NAME_SIZE - 2)
-			dev_err(dev, "The sensor/module name is too long, can't make them together.\n");
-		else {
-			sd->name[strlen(sd->name)] = ',';
-			strncat(sd->name, sensor->drvdata->module[sensor->cur_mod_id].name,
-				strlen(sensor->drvdata->module[sensor->cur_mod_id].name));
-			sd->name[V4L2_SUBDEV_NAME_SIZE - 1] = '\0';
-			dev_info(dev, "The subdev name with module name: %s\n", sd->name);
-		}
-	} else
-		dev_err(dev, "can't get the module name, check the module support list.\n");
-
+	if (sensor->drvdata->module && sensor->drvdata->num_module > 0) {
+		if (sensor->cur_mod_id >= 0 && sensor->cur_mod_id <= 255
+			&& sensor->drvdata->module[sensor->cur_mod_id].name) {
+			if (strlen(sd->name) +
+				strlen(sensor->drvdata->module[sensor->cur_mod_id].name) >
+				V4L2_SUBDEV_NAME_SIZE - 2)
+				dev_err(dev, "The sensor/module name is too long, can't make them together.\n");
+			else {
+				sd->name[strlen(sd->name)] = ',';
+				strncat(sd->name, sensor->drvdata->module[sensor->cur_mod_id].name,
+					strlen(sensor->drvdata->module[sensor->cur_mod_id].name));
+				sd->name[V4L2_SUBDEV_NAME_SIZE - 1] = '\0';
+				dev_info(dev, "The subdev name with module name: %s\n", sd->name);
+			}
+		} else
+			dev_err(dev, "can't get the module name, check the module support list.\n");
+	}
 	ret = b52_sensor_alloc_fmt_regs(sensor);
 	if (ret)
 		return ret;
