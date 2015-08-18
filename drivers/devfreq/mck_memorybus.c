@@ -673,7 +673,7 @@ static ssize_t disable_store(struct device *dev, struct device_attribute *attr,
 
 	is_disabled = !!is_disabled;
 	if (is_disabled == atomic_read(&data->is_disabled)) {
-		dev_info(dev, "[WARNING] ddr fc is already %s\n",
+		dev_info_ratelimited(dev, "[WARNING] ddr fc is already %s\n",
 			atomic_read(&data->is_disabled) ?
 			"disabled" : "enabled");
 		return size;
