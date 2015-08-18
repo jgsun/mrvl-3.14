@@ -75,7 +75,20 @@
 		pinctrl-single,pins = <GPIO32 AF0>;
 		MFP_LPM_DRIVE_HIGH;
 		};
-
+	twsi0_pmx_func: twsi0_pmx_func{
+		pinctrl-single,pins = <
+			GPIO79 AF1
+			GPIO80 AF1
+		>;
+		MFP_LPM_FLOAT;
+	};
+	twsi0_pmx_gpio: twsi0_pmx_gpio {
+		pinctrl-single,pins = <
+			GPIO79 AF0
+			GPIO80 AF0
+		>;
+		MFP_LPM_FLOAT;
+	};
 };
 
 &disp {
@@ -97,6 +110,12 @@
 			};
 
 			twsi0: i2c@d4011000 {
+				pinctrl-names = "default","gpio";
+				pinctrl-0 = <&twsi0_pmx_func>;
+				pinctrl-1 = <&twsi0_pmx_gpio>;
+				i2c-gpio = <&gpio 79 0 &gpio 80 0>;
+				status = "okay";
+
 				vibrator: vibrator@5a {
 					compatible = "ti,drv2604-vibrator";
 					reg = <0x5a>;

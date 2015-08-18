@@ -81,6 +81,13 @@
 			>;
 			DS_FAST;PULL_UP;EDGE_BOTH;LPM_NONE;
 	};
+	sensor_i2c_pmx: sensor_i2c_pmx {
+		pinctrl-single,pins = <
+			GPIO79 AF0
+			GPIO80 AF0
+		>;
+		MFP_LPM_FLOAT;
+	};
 };
 
 &disp {
@@ -248,6 +255,16 @@
 					};
 			};
 			sensori2c: i2c-gpio@8{
+				compatible = "i2c-gpio";
+				gpios = <&gpio 80 0 &gpio 79 0>;
+				i2c-gpio,delay-us = <3>;
+				i2c-gpio,timeout-ms = <100>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				pinctrl-names = "default";
+				pinctrl-0 = <&sensor_i2c_pmx>;
+				status = "okay";
+
 				ltr_55x@23 {
 					compatible = "LITEON,ltr_55x";
 					reg = <0x23>;

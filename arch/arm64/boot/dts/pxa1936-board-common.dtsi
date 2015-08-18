@@ -778,21 +778,6 @@
 					MFP_LPM_PULL_DW;
 				};
 
-				twsi0_pmx_func: twsi0_pmx_func {
-					/* gpio53/54: AF2 */
-					pinctrl-single,pins = <
-						GPIO53 AF2
-						GPIO54 AF2
-					>;
-					MFP_LPM_FLOAT;
-				};
-				twsi0_pmx_gpio: twsi0_pmx_gpio {
-					pinctrl-single,pins = <
-						GPIO53 AF0
-						GPIO54 AF0
-					>;
-					MFP_LPM_FLOAT;
-				};
 				twsi1_pmx_func: twsi1_pmx_func {
 					/* gpio87/88: AF5 */
 					pinctrl-single,pins = <
@@ -886,13 +871,6 @@
 					MFP_DEFAULT;
 				};
 
-				sensor_i2c_pmx: sensor_i2c_pmx {
-					pinctrl-single,pins = <
-						GPIO79 AF0
-						GPIO80 AF0
-					>;
-					MFP_LPM_FLOAT;
-				};
 
 				sensor_pins: sensor_pins {
 					pinctrl-single,pins = <
@@ -1102,13 +1080,8 @@
 
 			sensori2c: i2c-gpio@8 {
 				compatible = "i2c-gpio";
-				gpios = <&gpio 80 0 &gpio 79 0>;
 				i2c-gpio,delay-us = <3>;
 				i2c-gpio,timeout-ms = <100>;
-				#address-cells = <1>;
-				#size-cells = <0>;
-				pinctrl-names = "default";
-				pinctrl-0 = <&sensor_i2c_pmx>;
 				status = "okay";
 			};
 
