@@ -56,6 +56,8 @@
 		marvell,mic-det-th = <600>;
 		marvell,press-release-th = <600>;
 		marvell,micbias-supply = <&ldo14>;
+		marvell,fake-low-th = <35>;
+		marvell,fake-high-th = <79>;
 		status = "okay";
 	};
 	dvc {
