@@ -50,8 +50,8 @@ struct cpuidle_driver arm64_idle_driver = {
 	},
 	.states[POWER_MODE_CORE_POWERDOWN] = {
 		.enter = arm64_enter_state,
-		.exit_latency = 350,
-		.target_residency = 700,
+		.exit_latency = 20,
+		.target_residency = 40,
 		.flags = CPUIDLE_FLAG_TIME_VALID |
 			 CPUIDLE_FLAG_TIMER_STOP,
 		.name = "C2",
@@ -109,25 +109,10 @@ struct cpuidle_driver arm64_idle_driver = {
 	.state_count = 13,
 };
 
-static struct cpuidle_state states_saved;
-
-void cpuidle_c2_latency_modify(void)
-{
-	states_saved.exit_latency =
-		arm64_idle_driver.states[POWER_MODE_CORE_POWERDOWN].exit_latency;
-	states_saved.target_residency =
-		arm64_idle_driver.states[POWER_MODE_CORE_POWERDOWN].target_residency;
-
-	arm64_idle_driver.states[POWER_MODE_CORE_POWERDOWN].exit_latency = 20;
-	arm64_idle_driver.states[POWER_MODE_CORE_POWERDOWN].target_residency = 40;
-}
-
 void cpuidle_c2_latency_recover(void)
 {
-	arm64_idle_driver.states[POWER_MODE_CORE_POWERDOWN].exit_latency =
-		states_saved.exit_latency;
-	arm64_idle_driver.states[POWER_MODE_CORE_POWERDOWN].target_residency =
-		states_saved.target_residency;
+	arm64_idle_driver.states[POWER_MODE_CORE_POWERDOWN].exit_latency = 350;
+	arm64_idle_driver.states[POWER_MODE_CORE_POWERDOWN].target_residency = 700;
 }
 
 static unsigned int states_disabled_cpu0;
