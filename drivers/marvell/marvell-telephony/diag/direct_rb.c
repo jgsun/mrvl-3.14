@@ -48,6 +48,8 @@ struct direct_rbctl direct_rbctl;
 static dev_t dev_nr;
 static int direct_dump_flag;
 
+static struct wakeup_source diag_rx_wakeup;
+
 struct buffer_item {
 	struct list_head entry;
 	unsigned len;
@@ -577,7 +579,7 @@ static void direct_rb_broadcast_msg(unsigned proc)
 static u32 acipc_cb_diag_cb(u32 status)
 {
 	if (direct_rb_schedule_rx(&direct_rbctl)) {
-		__pm_wakeup_event(&acipc_wakeup, 2000);
+		__pm_wakeup_event(&diag_rx_wakeup, 2000);
 		direct_rbctl.stat_interrupt++;
 	}
 	return 0;
@@ -725,9 +727,11 @@ static int __init direct_rb_init(void)
 
 	register_cp_link_status_notifier(&cp_link_status_notifier);
 	register_cp_mem_set_notifier(&cp_mem_set_notifier);
+	wakeup_source_init(&diag_rx_wakeup, "diag_rx_wakeups");
 	diag_acipc_init();
 	rc = diag_setup_cdev(dir_ctl);
 	if (rc < 0) {
+		wakeup_source_trash(&diag_rx_wakeup);
 		diag_acipc_exit();
 		unregister_cp_link_status_notifier(&cp_link_status_notifier);
 		unregister_cp_mem_set_notifier(&cp_mem_set_notifier);
@@ -754,6 +758,7 @@ static void __exit direct_rb_exit(void)
 	spin_unlock_irqrestore(&dir_ctl->rb_rx_lock, flags);
 
 	diag_acipc_exit();
+	wakeup_source_trash(&diag_rx_wakeup);
 	unregister_cp_link_status_notifier(&cp_link_status_notifier);
 	unregister_cp_mem_set_notifier(&cp_mem_set_notifier);
 	misc_deregister(&msocketDirectDump_dev);
