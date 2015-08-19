@@ -655,13 +655,10 @@ static void pm88x_charger_set_supply_type(struct pm88x_charger_info *info,
 		/*
 		 * unknown type means that
 		 * 1) there is no charger from USB driver point-of-view.
-		 *    but charging depends on cable_online now, so it has
-		 *    no effect.
-		 * 2) or charger type is not got from USB yet, in this case
-		 *    we set 100mA here to avoid voltage drop, which may
-		 *    cause USB to get the wrong vbus voltage.
+		 *    but charging depends on cable_online, so it has no effect.
+		 * 2) or charger type is not got from USB yet
 		 */
-		info->limit_cur = 100;
+		info->limit_cur = 500;
 		info->type_is_valid = false;
 		break;
 	default:
