@@ -221,7 +221,7 @@ static int S5K4H5_erase_chip(struct v4l2_subdev *sd)
 	return 0;
 }
 
-static int S5K4H5_otp_erase(struct v4l2_subdev *sd,
+static int __maybe_unused S5K4H5_otp_erase(struct v4l2_subdev *sd,
 							char page, char len)
 {
 	int i;
