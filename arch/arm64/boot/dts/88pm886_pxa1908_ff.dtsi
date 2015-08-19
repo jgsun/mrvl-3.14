@@ -190,5 +190,6 @@
 		 */
 		/* marvell,enable-usb-id-detection; */
 		marvell,usb-id-gpadc = "88pm88x-gpadc1";
+		vbus-high-th = <5250>;
 	};
 };
