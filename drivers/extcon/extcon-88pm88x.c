@@ -82,7 +82,7 @@ struct pm88x_vbus_info {
 	int			vbus_gpio;
 	int			id_gpadc;
 	bool			detect_usb_id;
-
+	int			vbus_high_th;
 	struct delayed_work	pxa_notify;
 };
 
@@ -122,8 +122,13 @@ struct volt_threshold {
 	int range_id;
 };
 
-/* change according to chip: 5250mV and 5160mV */
-static const struct volt_threshold vbus_volt[] = {
+/*
+ * change according to chip: 5250mV and 5160mV
+ * for 88pm886, different chips may have different OVPs,
+ * so threshold 5250mv should not be constant,
+ * we may use vbus-high-th to modify its value later.
+ */
+static struct volt_threshold vbus_volt[] = {
 	[0] = {.lo = 0, .hi = 4000, .range_id = OFFLINE_RANGE},
 	[1] = {.lo = 3500, .hi = 5250, .range_id = ONLINE_RANGE},
 	[2] = {.lo = 5160, .hi = 6000, .range_id = ABNORMAL_RANGE},
@@ -508,6 +513,13 @@ static int pm88x_vbus_probe(struct platform_device *pdev)
 			pm88x_vbus->id_irq - regmap_irq_chip_get_base(chip->irq_data);
 		pm88x_vbus->id_gpadc -= PM88X_IRQ_GPADC0;
 		pm88x_gpadc_config(pm88x_vbus);
+	}
+
+	ret = of_property_read_u32(node, "vbus-high-th", &pm88x_vbus->vbus_high_th);
+	if (!ret) {
+		vbus_volt[ONLINE_RANGE].hi = pm88x_vbus->vbus_high_th;
+		vbus_volt[ABNORMAL_RANGE].lo = pm88x_vbus->vbus_high_th - 90;
+		dev_info(&pdev->dev, "reset vbus-high-th %d.\n", vbus_volt[ONLINE_RANGE].hi);
 	}
 
 	platform_set_drvdata(pdev, pm88x_vbus);
