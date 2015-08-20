@@ -911,7 +911,7 @@
 
 			data-path {
 				compatible = "marvell,data-path";
-				version = <2>;
+				version = <1>;
 				status = "disabled";
 			};
 		};
