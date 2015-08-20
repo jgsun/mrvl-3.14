@@ -428,7 +428,7 @@ static inline int dp_data_rx(struct data_path *dp,
 	dp->stat.rx_bytes += total_length;
 	dp->stat.rx_packets++;
 
-	if (static_key_false(&data_path.rx_copy)) {
+	if (static_key_true(&data_path.rx_copy)) {
 		headroom = psd_get_headroom(desc->cid);
 		skb = dev_alloc_skb(desc->packet_length + headroom);
 		if (likely(skb)) {
@@ -1163,8 +1163,8 @@ static struct data_path data_path = {
 	.free_list = LLIST_HEAD_INIT(data_path.free_list),
 	.max_pending_reclaim_req = MAX_PENDING_RECLAIM_REQ,
 	.rx_copy_lock = __MUTEX_INITIALIZER(data_path.rx_copy_lock),
-	.rx_copy = STATIC_KEY_INIT_FALSE,
-	.copy_on_rx = false,
+	.rx_copy = STATIC_KEY_INIT_TRUE,
+	.copy_on_rx = true,
 };
 
 static struct psd_driver dp_drvier = {
