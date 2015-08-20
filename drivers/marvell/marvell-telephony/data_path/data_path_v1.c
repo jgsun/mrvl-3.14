@@ -467,7 +467,7 @@ static int dp_data_rx(struct data_path *dp, unsigned char *data,
 		p += offset_len;
 		remains -= offset_len;
 
-		if (static_key_false(&data_path.rx_copy)) {
+		if (static_key_true(&data_path.rx_copy)) {
 			headroom = psd_get_headroom(hdr->cid);
 			skb = dev_alloc_skb(iplen + headroom);
 			if (likely(skb)) {
@@ -1466,8 +1466,8 @@ static struct data_path data_path = {
 	.tx_sched_delay_in_ms = TX_SCHED_DELAY,
 	.tx_q_min_sched_len = TX_MIN_SCHED_LEN,
 	.rx_copy_lock = __MUTEX_INITIALIZER(data_path.rx_copy_lock),
-	.rx_copy = STATIC_KEY_INIT_FALSE,
-	.copy_on_rx = false,
+	.rx_copy = STATIC_KEY_INIT_TRUE,
+	.copy_on_rx = true,
 	.local_ap_rptr = 0,
 	.rxs = NULL,
 };
