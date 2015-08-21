@@ -142,6 +142,57 @@ static void amipc_ping_worker(struct work_struct *work);
 static void *shm_map(phys_addr_t start, size_t size);
 static DECLARE_WORK(ping_work, amipc_ping_worker);
 
+static void *memset_aligned(void *buf, int c, size_t n)
+{
+	u64 cc = c & 0xff;
+	union {
+		long p;
+		u8 *p8;
+		u16 *p16;
+		u32 *p32;
+		u64 *p64;
+	} addr;
+
+	addr.p8 = buf;
+
+	cc = cc | (cc << 8);
+	cc = cc | (cc << 16);
+	cc = cc | (cc << 32);
+
+	if (n >= 1 && addr.p & 0x01) {
+		*addr.p8++ = cc;
+		n--;
+	}
+	if (n >= 2 && addr.p & 0x02) {
+		*addr.p16++ = cc;
+		n -= 2;
+	}
+	if (n >= 4 && addr.p & 0x04) {
+		*addr.p32++ = cc;
+		n -= 4;
+	}
+
+	while (n >= 8) {
+		*addr.p64++ = cc;
+		n -= 8;
+	}
+
+	if (n >= 4) {
+		*addr.p32++ = cc;
+		n -= 4;
+	}
+	if (n >= 2) {
+		*addr.p16++ = cc;
+		n -= 2;
+	}
+	if (n >= 1) {
+		*addr.p8++ = cc;
+		n--;
+	}
+
+	return buf;
+}
+
 static void init_statistic_info(void)
 {
 	int i;
@@ -681,9 +732,9 @@ finish:
 		break;
 	case AMIPC_TEST_CRL:
 		if (TEST_CRL_CLR == amipc_arg.event) {
-			memset((void *)amipc->ipc_tx, 0,
+			memset_aligned((void *)amipc->ipc_tx, 0,
 			sizeof(struct ipc_event_type) * AMIPC_EVENT_LAST);
-			memset((void *)amipc->ipc_rx, 0,
+			memset_aligned((void *)amipc->ipc_rx, 0,
 			sizeof(struct ipc_event_type) * AMIPC_EVENT_LAST);
 		} else if (TEST_CRL_SET_TX == amipc_arg.event) {
 			if (0 == amipc_arg.data1)
@@ -887,7 +938,7 @@ static int command_block_show(struct seq_file *m, void *unused)
 		seq_puts(m, "x:2 --> send ping command\n");
 	} else if (1 == dbg_cmd_index) {
 		if (amipc->ipc_tx)
-			memset((void *)amipc->ipc_tx, 0,
+			memset_aligned((void *)amipc->ipc_tx, 0,
 			sizeof(struct ipc_event_type) * AMIPC_EVENT_LAST * 2);
 		init_statistic_info();
 	} else if (2 == dbg_cmd_index) {
@@ -1144,7 +1195,7 @@ enum amipc_return_code amipc_setbase(phys_addr_t base_addr, int len)
 	} else
 		pr_info("share memory already map\n");
 	if (ddr_mem)
-		memset((void *)amipc->ipc_tx, 0, len);
+		memset_aligned((void *)amipc->ipc_tx, 0, len);
 	return AMIPC_RC_OK;
 }
 EXPORT_SYMBOL(amipc_setbase);
