@@ -21,6 +21,7 @@
 #include <linux/delay.h>
 #include <linux/extcon.h>
 #include <linux/of_device.h>
+#include <linux/irq.h>
 
 #define PM88X_VBUS_LOW_TH		(0x1a)
 #define PM88X_VBUS_UPP_TH		(0x2a)
@@ -330,7 +331,7 @@ static void pm88x_set_id_cable_state(struct pm88x_vbus_info *pm88x_vbus)
 	int ret, data;
 
 	if ((pm88x_vbus->id_gpadc < PM88X_GPADC0) || (pm88x_vbus->id_gpadc > PM88X_GPADC3)) {
-		dev_err(pm88x_vbus->dev, "%s: GPADC number is error.\n", __func__);
+		dev_err_ratelimited(pm88x_vbus->dev, "%s: GPADC number is error.\n", __func__);
 		return;
 	}
 
@@ -343,17 +344,19 @@ static void pm88x_set_id_cable_state(struct pm88x_vbus_info *pm88x_vbus)
 			     OTG_IDPIN_TH >> 4);
 		regmap_write(pm88x_vbus->chip->gpadc_regmap, pm88x_vbus->gpadc.upp_th, 0xff);
 		ret = extcon_set_cable_state(&pm88x_vbus->edev, "USB-ID", false);
-		dev_info(pm88x_vbus->dev, "%s: USB-HOST cable is not attached\n", __func__);
+		dev_info_ratelimited(pm88x_vbus->dev,
+			"%s: USB-HOST cable is not attached\n", __func__);
 	} else {
 		regmap_write(pm88x_vbus->chip->gpadc_regmap, pm88x_vbus->gpadc.low_th, 0);
 		regmap_write(pm88x_vbus->chip->gpadc_regmap, pm88x_vbus->gpadc.upp_th,
 			     OTG_IDPIN_TH >> 4);
 		ret = extcon_set_cable_state(&pm88x_vbus->edev, "USB-ID", true);
-		dev_info(pm88x_vbus->dev, "%s: USB-HOST cable is attached\n", __func__);
+		dev_info_ratelimited(pm88x_vbus->dev,
+			"%s: USB-HOST cable is attached\n", __func__);
 	}
 
 	if (ret != 0)
-		dev_err(pm88x_vbus->dev,
+		dev_err_ratelimited(pm88x_vbus->dev,
 			"%s: fail to set cable state, ret=%d\n", __func__, ret);
 }
 
@@ -388,6 +391,18 @@ static void dump_vbus_ov_status(struct pm88x_vbus_info *info)
 		 usb_lim_ok, vbus_sw_ov, vbus_sw_en);
 }
 
+static void disable_id_irq(struct pm88x_vbus_info *pm88x_vbus)
+{
+	if (pm88x_vbus->detect_usb_id)
+		disable_irq(pm88x_vbus->id_irq);
+}
+
+static void enable_id_irq(struct pm88x_vbus_info *pm88x_vbus)
+{
+	if (pm88x_vbus->detect_usb_id)
+		enable_irq(pm88x_vbus->id_irq);
+}
+
 static irqreturn_t pm88x_vbus_irq_handler(int irq, void *_pm88x_vbus)
 {
 	int current_range;
@@ -412,10 +427,13 @@ static irqreturn_t pm88x_vbus_irq_handler(int irq, void *_pm88x_vbus)
 	config_vbus_threshold(pm88x_vbus->chip, current_range);
 
 	/* close the USB_SW for online, open the USB_SW for offline to save power */
-	if (current_range == ONLINE_RANGE)
+	if (current_range == ONLINE_RANGE) {
 		pm88x_vbus_sw_ctrl(pm88x_vbus->chip, true);
-	else
+		disable_id_irq(pm88x_vbus);
+	} else {
 		pm88x_vbus_sw_ctrl(pm88x_vbus->chip, false);
+		enable_id_irq(pm88x_vbus);
+	}
 
 out:
 	dump_vbus_ov_status(pm88x_vbus);
@@ -429,7 +447,11 @@ static irqreturn_t pm88x_id_irq_handler(int irq, void *_pm88x_vbus)
 {
 	struct pm88x_vbus_info *pm88x_vbus = _pm88x_vbus;
 
-	dev_info(pm88x_vbus->chip->dev, "88pm88x idpin interrupt is served..\n");
+	/*
+	 * limit the print log to avoid CPU hard LOCKUP
+	 * when there is interference on idpin.
+	 */
+	dev_info_ratelimited(pm88x_vbus->chip->dev, "88pm88x idpin interrupt is served..\n");
 
 	pm88x_set_id_cable_state(pm88x_vbus);
 
@@ -567,6 +589,15 @@ static int pm88x_vbus_probe(struct platform_device *pdev)
 
 	if (pm88x_vbus->detect_usb_id) {
 		pm88x_vbus_config(pm88x_vbus);
+		/*
+		 * VBUS and USB-ID is exclusive, disable idpin interrupt if USB cable
+		 * is plugged-in, so we can avoid the potential interference on id pin.
+		 */
+		if (current_range == ONLINE_RANGE) {
+			irq_set_status_flags(pm88x_vbus->id_irq, IRQ_NOAUTOEN);
+			dev_info(&pdev->dev, "USB is online, disable id interrupt\n");
+		}
+
 		ret = devm_request_threaded_irq(pm88x_vbus->dev,
 						pm88x_vbus->id_irq,
 						NULL, pm88x_id_irq_handler,
