@@ -47,6 +47,7 @@
 #include "pxa_cp_load.h"
 #include "debugfs.h"
 #include "shm_map.h"
+#include "lib.h"
 
 #define CMSOCKDEV_NR_DEVS PORTQ_NUM_MAX
 
@@ -1406,7 +1407,7 @@ static void cp_keysection_data_init(void)
 	mutex_lock(&cpks_lock);
 	if (cpks) {
 		network_mode = cpks->network_mode;
-		memset(cpks, 0, sizeof(*cpks));
+		memset_aligned(cpks, 0, sizeof(*cpks));
 		cpks->network_mode = network_mode;
 		cpks->ap_pcm_master = PMIC_MASTER_FLAG;
 	}

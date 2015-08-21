@@ -29,6 +29,7 @@
 #include "psd_shm_v2.h"
 #include "psd_rb_v2.h"
 #include "shm_map.h"
+#include "lib.h"
 
 static int debugfs_show_info(struct seq_file *s, void *data)
 {
@@ -418,7 +419,7 @@ void psd_rb_data_init(struct psd_rbctl *rbctl)
 	volatile struct ul_descriptor *high_desc;
 
 	mutex_lock(&rbctl->va_lock);
-	memset((void *)skctl, 0, sizeof(*skctl));
+	memset_aligned((void *)skctl, 0, sizeof(*skctl));
 
 	for (i = 0; i < PSD_UL_CH_CNT; i++) {
 		defl_len += rbctl->ul_defl_chan_len[i];

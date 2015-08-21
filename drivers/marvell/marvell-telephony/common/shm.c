@@ -29,6 +29,7 @@
 #include "shm.h"
 #include "shm_map.h"
 #include "debugfs.h"
+#include "lib.h"
 
 static int debugfs_show_ks_info(struct seq_file *s, void *data)
 {
@@ -211,7 +212,7 @@ void shm_rb_data_init(struct shm_rbctl *rbctl)
 	rbctl->cp_resumed_num = 0;
 
 	mutex_lock(&rbctl->va_lock);
-	memset(rbctl->skctl_va, 0, sizeof(*rbctl->skctl_va));
+	memset_aligned(rbctl->skctl_va, 0, sizeof(*rbctl->skctl_va));
 	mutex_unlock(&rbctl->va_lock);
 }
 
