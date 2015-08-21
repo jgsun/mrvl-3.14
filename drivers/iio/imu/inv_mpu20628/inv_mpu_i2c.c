@@ -167,7 +167,7 @@ int mpu_memory_write(struct inv_mpu_state *st, u8 mpu_addr, u16 mem_addr,
 	msgs[2].len = len + 1;
 
 	INV_I2C_INC_MPUWRITE(3 + 3 + (2 + len));
-#if CONFIG_MPU_DEBUG
+#ifdef CONFIG_MPU_DEBUG
 	{
 		char *write = NULL;
 		write = wr_pr_debug_begin(data, len, write);
@@ -240,7 +240,7 @@ int mpu_memory_read(struct inv_mpu_state *st, u8 mpu_addr, u16 mem_addr,
 
 	INV_I2C_INC_MPUWRITE(3 + 3 + 3);
 	INV_I2C_INC_MPUREAD(len);
-#if CONFIG_MPU_DEBUG
+#ifdef CONFIG_MPU_DEBUG
 	{
 		char *read = NULL;
 		read = wr_pr_debug_begin(data, len, read);
