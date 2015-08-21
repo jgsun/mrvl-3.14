@@ -1719,15 +1719,23 @@ static long b52_sensor_ioctl(struct v4l2_subdev *sd,
 				unsigned int cmd, void *arg)
 {
 	int ret;
+	enum OTP_TYPE org_otp_type;
 	struct b52_sensor *sensor = to_b52_sensor(sd);
 
 	switch (cmd) {
 	case VIDIOC_PRIVATE_B52ISP_SENSOR_OTP:
 		sensor->otp.user_otp = (struct sensor_otp *)arg;
+		org_otp_type = sensor->otp.otp_type;
 		sensor->otp.otp_type = sensor->otp.user_otp->otp_type;
 		if (sensor->otp.otp_type == SENSOR_TO_ISP)
 			ret = b52_sensor_reinit(sensor);
 		ret = b52_sensor_call(sensor, update_otp, &sensor->otp);
+		/*
+		 * The sensor_init will call the update_otp as well
+		 * and with the otp_type value set by kernel,
+		 * so need set back the original otp_type.
+		 */
+		sensor->otp.otp_type = org_otp_type;
 		sensor->otp.user_otp = NULL;
 		break;
 	case VIDIOC_PRIVATE_B52ISP_SENSOR_REINIT:
