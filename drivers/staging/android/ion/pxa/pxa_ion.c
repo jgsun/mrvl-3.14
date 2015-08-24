@@ -19,6 +19,8 @@
 #ifdef CONFIG_ARM_SMMU
 #include <linux/dma-mapping.h>
 #include <linux/dma-buf.h>
+#include <linux/mm.h>
+#include <linux/vmalloc.h>
 #include <asm/dma-iommu.h>
 #endif
 #include "../ion.h"
@@ -224,11 +226,68 @@ err_attach:
 	kfree(meta);
 	return NULL;
 }
+
+int pxa_setup_user_sgt(struct user_map_data data, struct sg_table *table)
+{
+	struct page **pages = NULL;
+	struct scatterlist *sg;
+	int nr, i;
+	int ret = 0;
+
+	if (data.flags & PXA_USER_BUFFER_TYPE_PHYS) {
+		ret = sg_alloc_table(table, 1, GFP_KERNEL);
+		if (ret)
+			return -EINVAL;
+
+		sg = table->sgl;
+		sg_set_page(sg, pfn_to_page(PFN_DOWN(data.start)), data.size, 0);
+		/* dma_address will be re-written when do dma map,
+		 * it was needed when do iommu unmap */
+		sg->dma_address = data.dma_address;
+		sg_dma_len(sg) = sg->length;
+	} else if (data.flags & PXA_USER_BUFFER_TYPE_VIRT) {
+		nr = PAGE_ALIGN(data.size) >> PAGE_SHIFT;
+		ret = sg_alloc_table(table, nr, GFP_KERNEL);
+		if (ret) {
+			pr_err("%s: sg_alloc_table failed\n", __func__);
+			return -EINVAL;
+		}
+
+		pages = vmalloc(sizeof(struct page *) * nr);
+		if (pages == NULL) {
+			pr_err("%s: can't allocate pages\n", __func__);
+			return -ENOMEM;
+		}
+		ret = get_user_pages(current, current->mm, data.start, nr, 1, 0, pages, NULL);
+		if (ret <= 0 || ret < nr) {
+			pr_err("%s: get_user_pages return %d\n", __func__, ret);
+			vfree(pages);
+			return -EINVAL;
+		}
+		sg = table->sgl;
+		for (i = 0; i < nr; i++) {
+			sg_set_page(sg, pages[i], PAGE_SIZE, 0);
+			/* dma_address will be re-written when do dma map,
+			 * it was needed when do iommu unmap */
+			sg->dma_address = data.dma_address + i * PAGE_SIZE;
+			sg_dma_len(sg) = PAGE_SIZE;
+			sg = sg_next(sg);
+		}
+		vfree(pages);
+		return 0;
+	} else {
+		pr_err("%s: invalid data.flags 0x%x\n", __func__, data.flags);
+		return -EINVAL;
+	}
+
+	return ret;
+}
 #endif
 
 static long pxa_ion_ioctl(struct ion_client *client, unsigned int cmd,
 							unsigned long arg)
 {
+	int ret = 0;
 	switch (cmd) {
 #ifdef CONFIG_ARM_SMMU
 	case ION_IOC_PHYS:
@@ -259,12 +318,84 @@ static long pxa_ion_ioctl(struct ion_client *client, unsigned int cmd,
 		dma_buf_put(dmabuf);
 		break;
 	}
+	case ION_PXA_IOC_MAP_DMA:
+	{
+		DEFINE_DMA_ATTRS(attrs);
+		struct user_map_data data;
+		struct sg_table *table;
+
+		if (copy_from_user(&data, (void __user *)arg,
+					sizeof(struct user_map_data)))
+			return -EFAULT;
+
+		table = kzalloc(sizeof(struct sg_table), GFP_KERNEL);
+		if (!table) {
+			pr_err("%s: kzalloc sg_table failed\n", __func__);
+			ret  = -ENOMEM;
+			goto err;
+		}
+
+		ret = pxa_setup_user_sgt(data, table);
+		if (ret) {
+			pr_err("%s: pxa_setup_user_sgt failed\n", __func__);
+			goto err1;
+		}
+
+		dma_set_attr(DMA_ATTR_SKIP_CPU_SYNC, &attrs);
+		ret = dma_map_sg_attrs(pxa_ion_platform_dev, table->sgl, table->nents,
+				DMA_BIDIRECTIONAL, &attrs);
+		if (ret <= 0) {
+			pr_err("%s: dma_map_sg_attrs error ret = 0x%x\n", __func__, ret);
+			goto err1;
+		}
+		data.dma_address = table->sgl->dma_address;
+		if (copy_to_user((void __user *)arg, &data,
+					sizeof(struct user_map_data)))
+			ret = -EFAULT;
+err1:
+		pr_debug("%s mapped dma_address 0x%pda\n", __func__, &data.dma_address);
+		kfree(table);
+err:
+		break;
+	}
+	case ION_PXA_IOC_UNMAP_DMA:
+	{
+		DEFINE_DMA_ATTRS(attrs);
+		struct user_map_data data;
+		struct sg_table *table;
+		int ret = 0;
+
+		if (copy_from_user(&data, (void __user *)arg,
+					sizeof(struct user_map_data)))
+			return -EFAULT;
+
+		table = kzalloc(sizeof(struct sg_table), GFP_KERNEL);
+		if (!table)
+			return -ENOMEM;
+
+		ret = pxa_setup_user_sgt(data, table);
+		if (ret) {
+			kfree(table);
+			return ret;
+		}
+
+		ret = arm_iommu_power_switch(pxa_ion_platform_dev, 1);
+		if (!ret) {
+			dma_set_attr(DMA_ATTR_SKIP_CPU_SYNC, &attrs);
+			dma_unmap_sg_attrs(pxa_ion_platform_dev, table->sgl, table->nents,
+					DMA_BIDIRECTIONAL, &attrs);
+			arm_iommu_power_switch(pxa_ion_platform_dev, 0);
+		}
+
+		kfree(table);
+		break;
+	}
 #endif
 	default:
 		return -EINVAL;
 	}
 
-	return 0;
+	return ret;
 }
 
 static int pxa_ion_probe(struct platform_device *pdev)

@@ -174,6 +174,32 @@ struct ion_phys_data {
 	unsigned int flags;
 };
 
+/**
+ * struct user_map_data - passed to/from userspace for a cpu virt/phys addr and DMA addr pair
+ * @start:	 a physical or virtual address of the buffer exported
+ * @dma_address: dma address of the buffer
+ * @flags:	 indicates the start is a physical address or virtual address, 1 for phys
+ * @size:	 buffer size
+ */
+struct user_map_data {
+	unsigned long start;
+	dma_addr_t dma_address;
+	unsigned int flags;
+	unsigned int size;
+};
+
+#define PXA_USER_BUFFER_TYPE_PHYS	(1 << 0)
+#define PXA_USER_BUFFER_TYPE_VIRT	(1 << 1)
+
+/**
+ * DOC: ION_PXA_IOC_DMA - get the DMA address of the buffer
+ *
+ * Takes an user_map_data returns the DMA address.
+ */
+#define ION_PXA_IOC_MAP_DMA	1
+#define ION_PXA_IOC_UNMAP_DMA	2
+
+
 #define ION_IOC_MAGIC		'I'
 
 /**
