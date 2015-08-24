@@ -220,7 +220,7 @@ socket_match(const struct sk_buff *skb, struct xt_action_param *par,
 				       (sk->sk_state == TCP_TIME_WAIT &&
 					inet_twsk(sk)->tw_transparent));
 
-		xt_socket_put_sk(sk);
+		sock_gen_put(sk);
 
 		if (wildcard || !transparent)
 			sk = NULL;
@@ -393,7 +393,7 @@ socket_mt6_v1_v2(const struct sk_buff *skb, struct xt_action_param *par)
 				       (sk->sk_state == TCP_TIME_WAIT &&
 					inet_twsk(sk)->tw_transparent));
 
-		xt_socket_put_sk(sk);
+		sock_gen_put(sk);
 
 		if (wildcard || !transparent)
 			sk = NULL;
