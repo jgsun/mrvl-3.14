@@ -364,6 +364,39 @@ static void ms100_touch_up(struct ms100_ts_data *ts, s32 id)
 #endif
 }
 
+static int file_open;
+static struct file *g_file;
+static s32 ms100_point_store(const char *path, unsigned char *buf, u32 buf_len)
+{
+	mm_segment_t old_fs;
+	static struct file *file;
+	static int flags = O_RDWR | O_CREAT | O_TRUNC, ret;
+
+	if (!file_open) {
+		file = filp_open(path, flags, 0644);
+		file_open = 1;
+		if (IS_ERR(file) || !file || !file->f_dentry) {
+			pr_err("filp_open(%s) for MT1 failed\n", path);
+			return -ENODEV;
+		}
+		MS100_INFO("===================store points===============\n");
+	}
+
+	old_fs = get_fs();
+	set_fs(get_ds());
+	ret = vfs_write(file, (char __user *)buf, buf_len, &file->f_pos);
+	set_fs(old_fs);
+
+	if (ret < 0) {
+		pr_err("Error writing file for MT1: %s\n", path);
+		filp_close(file, NULL);
+		return -EIO;
+	}
+	g_file = file;
+
+	return 0;
+}
+
 static void ms100_ts_work_func(struct work_struct *work)
 {
 	struct ms100_ts_data *ts = NULL;
@@ -373,6 +406,7 @@ static void ms100_ts_work_func(struct work_struct *work)
 		MS100_READ_COOR_ADDR >> 8,
 		MS100_READ_COOR_ADDR & 0xFF
 	};
+	u8 p_save[100];
 	u8 touch_num = 0;
 	u8 finger = 0;
 	u8 key_value = 0;
@@ -474,6 +508,24 @@ static void ms100_ts_work_func(struct work_struct *work)
 						input_w, input_p);
 				pre_touch |= 0x01 << i;
 				pos += 7;
+
+				if (point_save == 1) {
+					st_len = 0;
+					st_len += sprintf(p_save + st_len,
+							"%1d,", id);
+					st_len += sprintf(p_save + st_len,
+							"%5d,", input_x);
+					st_len += sprintf(p_save + st_len,
+							  "%5d,", input_y);
+					st_len += sprintf(p_save + st_len,
+							  "%2d,", input_w);
+					st_len += sprintf(p_save + st_len,
+							  "%3d,", input_p);
+					st_len += sprintf(p_save + st_len,
+							  "\n");
+					ms100_point_store("/data/mtouch1_driver_data.txt",
+						p_save, st_len);
+				}
 
 				id = coor_data[pos] & 0x0F;
 			} else {
@@ -667,7 +719,6 @@ static s8 ms100_request_irq(struct ms100_ts_data *ts)
 
 static s8 ms100_request_input_dev(struct ms100_ts_data *ts)
 {
-	s8 phys[32];
 	u8 index = 0;
 	s8 ret;
 
@@ -697,9 +748,8 @@ static s8 ms100_request_input_dev(struct ms100_ts_data *ts)
 	input_set_abs_params(ts->input_dev, ABS_MT_PRESSURE, 0, 255, 0, 0);
 	input_set_abs_params(ts->input_dev, ABS_MT_TRACKING_ID, 0, 255, 0, 0);
 
-	sprintf(phys, "input/ts");
 	ts->input_dev->name = ms100_ts_name;
-	ts->input_dev->phys = phys;
+	ts->input_dev->phys = "input/ts";
 	ts->input_dev->id.bustype = BUS_I2C;
 	ts->input_dev->id.vendor = 0xDEAF;
 	ts->input_dev->id.product = 0xBEEC;
@@ -753,7 +803,7 @@ exit_fw_shakehand:
 	return -1;
 }
 
-static s32 ms100_fw_download(struct i2c_client *client,
+static s32 __maybe_unused ms100_fw_download(struct i2c_client *client,
 	const struct firmware *firmware) {
 	u8 i2c_snd_buf[2000];
 #if READ
@@ -1002,7 +1052,7 @@ static void ms100_request_fw_callback(const struct firmware *firmware,
 		if (ret < 0)
 			goto exit_fw_callback;
 #if MS100_USE_FW_HEX
-		ret = ms100_fw_download(ts->client, &fw);
+		/* ret = ms100_fw_download(ts->client, &fw); */
 #else
 		ret = ms100_fw_download(ts->client, firmware);
 #endif
@@ -1012,6 +1062,500 @@ static void ms100_request_fw_callback(const struct firmware *firmware,
 exit_fw_callback:
 	if (!use_update)
 		release_firmware(firmware);
+}
+
+static int reg_addr_1 = -1;
+static int reg_addr_2 = -1;
+static const struct firmware *fw;
+static int flag;
+static int rawdata;
+static int read_once;
+static int ms100_proc_help(char *buf)
+{
+	int len = 0;
+
+	len += sprintf(buf + len,
+		"============================== help =======================\n");
+	len += sprintf(buf + len,
+		" '+' to update firmware stored at /sdcard/mtouch1_fw.hex\n");
+	len += sprintf(buf + len,
+		" 'h/H' help\n");
+	len += sprintf(buf + len,
+		" 'r/R 0xXXXX ' single read\n");
+	len += sprintf(buf + len,
+		" 'r/R 0xXXXX 0xXXXX' multi read from first addr to second\n");
+	len += sprintf(buf + len,
+		" 'w/W 0xXXXX 0xXX' to write reg address 0xXXXX with value 0xXX\n");
+	len += sprintf(buf + len,
+		" 's/S' to save point data at /data/mtouch1_driver_data.txt\n");
+	len += sprintf(buf + len,
+		" 'c/C' to close point data save function\n");
+	len += sprintf(buf + len,
+		" 'p/P' to print raw_data\n");
+	len += sprintf(buf + len,
+		"============================== help =====================\n");
+
+	return len;
+}
+
+static int ms100_proc_print_rawdata(char *buf, struct i2c_client *client)
+{
+	int ret = 0, row = 0, col = 0, len = 0;
+	short dcell;
+	char data[962] = {
+		MS100_REG_RAWDATA >> 8,
+		MS100_REG_RAWDATA & 0xff,
+	};
+	int mt1_tx_config[] = {15, 14, 11, 10, 7, 6, 5, 4, 3, 2, 1, 0, 16, 17,
+		18, 19, 20, 21, 22, 23, 24, 25, 26, 27};
+	int mt1_rx_config[] = {0, 1, 2, 3, 5, 7, 8, 9, 10, 11, 12, 13, 14};
+	int mt1_tx_len = sizeof(mt1_tx_config)/sizeof(mt1_tx_config[0]);
+	int mt1_rx_len = sizeof(mt1_rx_config)/sizeof(mt1_rx_config[0]);
+
+	ret = ms100_i2c_read(client, data, 962);
+	if (ret < 0) {
+		pr_err("88ms100 read reg failed!\n");
+		 return -EINVAL;
+	}
+
+	len += sprintf(buf + len, "\t\t\t\t tx_l = %d, rx_l = %d\n",
+		       mt1_tx_len, mt1_rx_len);
+	len += sprintf(buf + len, "	  R%-4.1d", mt1_rx_config[0]);
+	for (col = 1; col < mt1_rx_len; col++)
+		len += sprintf(buf + len, " R%-2d  ", mt1_rx_config[col]);
+	len += sprintf(buf + len, "\n");
+
+	for (; row < mt1_tx_len; row++) {
+		len += sprintf(buf + len, "T%-2d", mt1_tx_config[row]);
+		for (col = 0; col < mt1_rx_len; col++) {
+			dcell = data[16*mt1_tx_config[row]*2 +
+				mt1_rx_config[col]*2 + 1 + 2];
+			dcell <<= 8;
+			dcell += data[16*mt1_tx_config[row]*2 +
+				mt1_rx_config[col]*2 + 2];
+			len += sprintf(buf + len, " %5d", dcell);
+		}
+		len += sprintf(buf + len, "\n");
+	}
+
+	return len;
+}
+
+static int ms100_proc_open(struct inode *inode, struct file *file)
+{
+	int ret = 0;
+
+	file->private_data = PDE_DATA(inode);
+
+	return ret;
+}
+
+static int ms100_proc_close(struct inode *inode, struct file *file)
+{
+	int ret = 0;
+
+	file->private_data = NULL;
+
+	return ret;
+}
+
+static ssize_t ms100_proc_read(struct file *file, char __user *buffer,
+			size_t count, loff_t *offset)
+{
+	int ret = 0;
+	size_t len = 0;
+	struct ms100_ts_data *ts = (struct ms100_ts_data *)file->private_data;
+	struct i2c_client *client = ts->client;
+	int i, j, temp, temp1;
+	u8 r_buf[18] = {0};
+	char *buf;
+
+	buf = kmalloc(8000, GFP_KERNEL);
+
+	if (rawdata) {
+		len = ms100_proc_print_rawdata(buf, client);
+		rawdata = 0;
+		goto out_ret;
+	}
+
+	if (flag) {
+		len = ms100_proc_help(buf);
+		goto out_ret;
+	}
+
+	if (reg_addr_1 == -1) {
+		if (read_once) {
+			goto out_ret;
+		} else {
+			len = ms100_proc_help(buf);
+			read_once = 0;
+			goto out_ret;
+		}
+	} else if (reg_addr_2 == -1) {
+		temp = reg_addr_1 / 16;
+		temp *= 16;
+		r_buf[0] = temp >> 8;
+		r_buf[1] = temp & 0xff;
+		ret = ms100_i2c_read(client, r_buf, 18);
+		if (ret < 0) {
+			pr_err("88ms100 read reg failed!\n");
+			return -EINVAL;
+		}
+
+		len += sprintf(buf + len,
+		"	      00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f\n");
+		len += sprintf(buf + len, "[0x%04x]: ", temp);
+		for (i = 0; i < 16; i++) {
+			len += sprintf(buf + len, " %02x", r_buf[i + 2]);
+					pr_info(" %02x", r_buf[i + 2]);
+		}
+		len += sprintf(buf + len, "\n");
+		goto out_ret;
+	} else if (reg_addr_1 < 0 || reg_addr_2 < 0) {
+		if (!rawdata) {
+			len = ms100_proc_help(buf);
+
+			 goto out_ret;
+		}
+	} else {
+		int count1;
+
+		temp = reg_addr_1 / 16;
+		temp1 = reg_addr_2 / 16;
+		count1 = temp1 - temp;
+		temp *= 16;
+		r_buf[0] = temp >> 8;
+		r_buf[1] = temp & 0xff;
+		len += sprintf(buf + len,
+		"	      00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f\n");
+		if (count1 > 0) {
+			for (i = 0; i <= count1; i++) {
+				ret = ms100_i2c_read(client, r_buf, 18);
+				if (ret < 0) {
+					pr_err("88ms100 read reg failed!\n");
+					return -EINVAL;
+				}
+				len += sprintf(buf + len, "[0x%04x]: ", temp);
+				for (j = 0; j < 16; j++) {
+					len += sprintf(buf + len,
+						" %02x", r_buf[j + 2]);
+					pr_info(" %02x, i = %d j = %d",
+						r_buf[j + 2], i, j);
+				}
+				len += sprintf(buf + len, "\n");
+				temp += 16;
+				r_buf[0] = temp >> 8;
+				r_buf[1] = temp & 0xff;
+
+			}
+		} else {
+			ret = ms100_i2c_read(client, r_buf, 17);
+			if (ret < 0) {
+				pr_err("88ms100 read reg failed!\n");
+				return -EINVAL;
+			}
+			len += sprintf(buf + len, "[0x%04x]: ", temp);
+			for (i = 0; i < 16; i++) {
+				len += sprintf(buf + len, " %02x",
+						r_buf[i + 2]);
+					pr_info(" %02x", r_buf[i + 2]);
+			}
+			len += sprintf(buf + len, "\n");
+		}
+		goto out_ret;
+	}
+
+	return len;
+
+out_ret:
+
+	len = simple_read_from_buffer(buffer, count, offset, buf, len);
+	kfree(buf);
+
+	return len;
+}
+
+static struct firmware firmware = {0, NULL};
+
+static s32 ms100_update_firmware(int glove)
+{
+	struct file *fp = NULL;
+	struct firmware fw;
+	char path[100];
+	struct inode *inode;
+	off_t fsize;
+	char *fm_buf;
+	mm_segment_t old_fs;
+
+#if MS100_USE_FW_HEX
+	if (glove == 1)
+		sprintf(path, "/sdcard/mtouch1_fw_glove.hex");
+	else
+		sprintf(path, "/sdcard/mtouch1_fw_noglove.hex");
+#else
+	sprintf(path, "/sdcard/mtouch1_fw.bin");
+#endif
+
+	fp = filp_open(path, O_RDONLY, 0);
+	if (IS_ERR(fp) || !fp || !fp->f_dentry) {
+		pr_err("filp_open(%s) for MT1 failed\n", path);
+		return -ENODEV;
+	}
+	inode = fp->f_dentry->d_inode;
+	fsize = inode->i_size;
+	if (firmware.data == NULL) {
+		firmware.data = kmalloc(fsize + 1, GFP_ATOMIC);
+	} else if (firmware.size < fsize) {
+		kfree(firmware.data);
+		firmware.data = kmalloc(fsize + 1, GFP_ATOMIC);
+	}
+	fm_buf = (char *)firmware.data;
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+	fp->f_op->read(fp, fm_buf, fsize, &(fp->f_pos));
+	set_fs(old_fs);
+	filp_close(fp, NULL);
+
+	fm_buf[fsize] = '\0';
+	fw.size = firmware.size = fsize;
+	fw.data = fm_buf;
+	gpio_direction_output(ts->data->reset, 0);
+	MS100_MSLEEP(2);
+	gpio_direction_output(ts->data->reset, 1);
+	MS100_MSLEEP(10);
+	use_update = 1;
+	ms100_request_fw_callback(&fw, ts);
+
+	return 0;
+}
+
+static int glove_mode;
+
+static ssize_t ms100_proc_write(struct file *file, const char __user *buffer,
+			size_t count, loff_t *off)
+{
+	unsigned val;
+	struct ms100_ts_data *ts = (struct ms100_ts_data *)file->private_data;
+	struct i2c_client *client = ts->client;
+	char msg[32];
+	size_t msg_size, len = count;
+	int ret = 0;
+	u8 w_buf[3] = {0};
+	char *offset = msg;
+
+	msg_size = min(len, (sizeof(msg)-1));
+	memset(msg, '\0', sizeof(msg));
+
+	if (copy_from_user(msg, buffer, msg_size))
+		return -EFAULT;
+
+	msg[msg_size] = '\0';
+
+	while (*offset == ' ')
+		offset++;
+
+	if ('h' == *offset || 'H' == *offset) {
+		flag = 1;
+		return len;
+	} else if ('s' == *offset || 'S' == *offset) {
+		point_save = 1;
+	} else if ('c' == *offset || 'C' == *offset) {
+		point_save = 0;
+		if (g_file) {
+			filp_close(g_file, NULL);
+			g_file = NULL;
+		}
+		file_open = 0;
+	} else if ('p' == *offset || 'P' == *offset) {
+		rawdata = 1;
+		flag = 0;
+		read_once = 1;
+	} else if ('+' == *offset) {
+		glove_mode = 1;
+		ret = ms100_update_firmware(glove_mode);
+		if (ret < 0) {
+			MS100_INFO("ret = %d,func = %s", ret, __func__);
+			gpio_direction_output(ts->data->reset, 0);
+			MS100_MSLEEP(20);
+			gpio_direction_output(ts->data->reset, 1);
+
+			MS100_MSLEEP(10);
+#if MS100_USE_FW_HEX
+			request_firmware(&fw, "mtouch1_fw.hex", &client->dev);
+#else
+			request_firmware(&fw, "mtouch1_fw.bin", &client->dev);
+#endif
+			ms100_request_fw_callback(fw, ts);
+			use_update = 0;
+			pr_err(" read sdcard firmware error\n");
+			return len;
+		}
+		return len;
+	} else if ('-' == *offset) {
+		glove_mode = 0;
+		ret = ms100_update_firmware(glove_mode);
+		if (ret < 0) {
+			MS100_INFO("ret = %d,func = %s", ret, __func__);
+			gpio_direction_output(ts->data->reset, 0);
+			MS100_MSLEEP(20);
+			gpio_direction_output(ts->data->reset, 1);
+
+			MS100_MSLEEP(10);
+#if MS100_USE_FW_HEX
+			request_firmware(&fw, "mtouch1_fw.hex", &client->dev);
+#else
+			request_firmware(&fw, "mtouch1_fw.bin", &client->dev);
+#endif
+			ms100_request_fw_callback(fw, ts);
+			use_update = 0;
+			pr_err(" read sdcard firmware error\n");
+			return len;
+		}
+		return len;
+	} else if ('r' == *offset || 'R' == *offset) {
+		offset++;
+
+		while (*offset == ' ')
+			offset++;
+
+		if (strlen(offset) > 2) {
+			if ((*(offset + 6) != '\n') &&
+					(*(offset + 6) != ' ')) {
+				pr_err(" first addr must be 0xXXXX\n");
+				flag = 1;
+				return -EINVAL;
+			}
+			if (kstrtouint(offset, 16, &val) < 0)
+				return -EINVAL;
+			pr_info("addr1 = %x\n", val);
+			reg_addr_1 = val;
+			flag = 0;
+			while (*offset == ' ')
+				offset++;
+			if (strlen(offset) > 2) {
+				if ((*(offset + 6) != '\n') &&
+						(*(offset + 6) != ' ')) {
+					pr_err(" second addr must be 0xXXXX\n");
+					flag = 1;
+					return -EINVAL;
+				}
+				if (kstrtouint(offset, 16, &val) < 0)
+					return -EINVAL;
+				reg_addr_2 = val;
+				pr_info("addr2 = %x\n", val);
+			} else {
+				reg_addr_2 = -1;
+				if (kstrtouint(offset, 16, &val) < 0)
+					return -EINVAL;
+
+			}
+			return len;
+
+		} else {
+			pr_info("invalid input!\n");
+			reg_addr_1 = -1;
+			flag = 1;
+			if (kstrtouint(offset, 16, &val) < 0)
+				return -EINVAL;
+		}
+	} else if ('w' == *offset || 'W' == *offset) {
+		u8 val1 = 0;
+
+		if (strlen(offset) > 5) {
+			offset++;
+			while (*offset == ' ')
+				offset++;
+			if ((*(offset + 6) != '\n') && (*(offset + 6) != ' ')) {
+				pr_err("addr must be 0xXXXX\n");
+				flag = 1;
+				return -EINVAL;
+			}
+			if (kstrtouint(offset, 16, &val) < 0)
+				return -EINVAL;
+			w_buf[0] = val >> 8;
+			w_buf[1] = val & 0xff;
+			while (*offset == ' ')
+				offset++;
+			if ((*(offset + 4)) != '\n' && (*(offset + 4) != ' ')) {
+				pr_err("val must be 0xXX\n");
+				flag = 1;
+				return -EINVAL;
+			}
+
+			if (kstrtouint(offset, 16, &val) < 0)
+				return -EINVAL;
+			w_buf[2] = val1;
+			ret = ms100_i2c_write(client, w_buf, 3);
+			flag = 0;
+			if (ret < 0) {
+				pr_err("88ms100 write reg failed!\n");
+				return -EINVAL;
+			}
+			return len;
+		} else {
+			pr_info("Invalid input!\n");
+			flag = 1;
+			if (kstrtouint(offset, 16, &val) < 0)
+				return -EINVAL;
+		}
+	} else {
+		pr_info("Invalid Input!\n");
+		flag = 1;
+		return -EINVAL;
+	}
+
+	return len;
+}
+
+static const struct file_operations proc_file = {
+	.owner =	THIS_MODULE,
+	.read =		ms100_proc_read,
+	.write =	ms100_proc_write,
+	.open =		ms100_proc_open,
+	.release =	ms100_proc_close
+};
+
+static struct proc_dir_entry *proc_root;
+static const char *proc_dir_name = "88ms100-ts";
+static const char *proc_dev_name = "88ms100_reg";
+static int ms100_proc_probe(struct ms100_ts_data *ts)
+{
+	proc_root = proc_mkdir(proc_dir_name, NULL);
+
+	ts->proc_file = proc_create_data(proc_dev_name, S_IRUGO |
+				S_IWUSR, proc_root, &proc_file, ts);
+
+	if (ts->proc_file == NULL) {
+		pr_err("88ms100 failed to creat proc file\n");
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static struct dentry *debugfs_dir;
+static struct dentry *debugfs_dev;
+static const char *debugfs_dir_name = "88ms100-ts";
+static const char *debugfs_dev_name = "88ms100_reg";
+
+static int __maybe_unused ms100_debugfs_probe(struct ms100_ts_data *ts)
+{
+	debugfs_dir = debugfs_create_dir(debugfs_dir_name, NULL);
+
+	if (!debugfs_dir) {
+		pr_err("888ms100 failed to create debugfs directory\n");
+		return -1;
+	}
+
+	debugfs_dev = debugfs_create_file(debugfs_dev_name,
+					  0644, debugfs_dir, ts, &proc_file);
+
+	if (!debugfs_dev) {
+		pr_err("888ms100 failed to create debugfs file\n");
+		return -1;
+	}
+
+	return 0;
 }
 
 static const struct firmware *fw;
@@ -1114,8 +1658,9 @@ static int ms100_ts_probe(struct i2c_client *client,
 	}
 
 	gpio_direction_output(ts->data->reset, 0);
-	MS100_MSLEEP(2);
+	MS100_MSLEEP(5);
 	gpio_direction_output(ts->data->reset, 1);
+	MS100_MSLEEP(10);
 	MS100_INFO("begin download fw!");
 	ret = request_firmware(&fw, fw_name, &client->dev);
 	if (ret < 0)
@@ -1154,6 +1699,10 @@ static int ms100_ts_probe(struct i2c_client *client,
 	pm_runtime_forbid(&client->dev);
 #endif
 
+	ret = ms100_proc_probe(ts);
+	if (ret < 0)
+		MS100_ERROR("Fail to register proc file node.");
+
 	return 0;
 out_i2c:
 	i2c_set_clientdata(client, NULL);
@@ -1178,7 +1727,7 @@ static int ms100_enter_sleep(struct ms100_ts_data *ts)
 	u8 retry = 0;
 	int ret = -1;
 
-	MS100_INFO("ENter func %s.", __func__);
+	MS100_INFO("Enter func %s.", __func__);
 
 	gpio_direction_output(ts->data->irq, 0);
 	MS100_MSLEEP(5);
@@ -1244,9 +1793,9 @@ static int ms100_runtime_suspend(struct device *dev)
 static int ms100_runtime_resume(struct device *dev)
 {
 	struct ms100_ts_data *ts;
-	int ret = -1;
+	int ret = 0;
 
-	MS100_INFO("Enter func %s.", __func__);
+	MS100_INFO("Enter %s", __func__);
 	ts = i2c_get_clientdata(i2c_connect_client);
 #if MS100_LOSE_POWER_SLEEP
 	if (ts->data->set_power)
@@ -1254,19 +1803,30 @@ static int ms100_runtime_resume(struct device *dev)
 #endif
 
 #if MS100_LOSE_POWER_SLEEP
-	gpio_direction_output(ts->data->reset, 0);
-	MS100_MSLEEP(20);
-	gpio_direction_output(ts->data->reset, 1);
-	MS100_MSLEEP(20);
-#if MS100_USE_FW_HEX
-	request_firmware(&fw, "mtouch1_fw.hex", dev);
-#else
-	request_firmware(&fw, "mtouch1_fw.bin", dev);
-#endif
-	ms100_request_fw_callback(fw, ts);
-	use_update = 0;
+	if (firmware.data != NULL) {
+		gpio_direction_output(ts->data->reset, 0);
+		MS100_MSLEEP(5);
+		gpio_direction_output(ts->data->reset, 1);
+		MS100_MSLEEP(10);
 
-	ret = ms100_wakeup_sleep(ts);
+		ms100_request_fw_callback(&firmware, ts);
+	} else {
+		pr_err("88ms100 resume: failed to read firmware from /sdcard/");
+#if MS100_USE_FW_HEX
+		ret = request_firmware(&fw, "mtouch1_fw.hex", dev);
+#else
+		ret = request_firmware(&fw, "mtouch1_fw.bin", dev);
+#endif
+		gpio_direction_output(ts->data->reset, 0);
+		MS100_MSLEEP(5);
+		gpio_direction_output(ts->data->reset, 1);
+		MS100_MSLEEP(10);
+
+		ms100_request_fw_callback(fw, ts);
+		use_update = 0;
+	}
+
+		ret = ms100_wakeup_sleep(ts);
 #endif
 	if (ts->use_irq)
 		ms100_irq_enable(ts);
@@ -1303,7 +1863,17 @@ static int ms100_ts_remove(struct i2c_client *client)
 	if (ts->data->set_power)
 		ts->data->set_power(0);
 
+	if (ts->data->reset)
+		gpio_free(ts->data->reset);
+
+	kfree(ts->data);
 	kfree(ts);
+	if (firmware.data != NULL)
+		kfree(firmware.data);
+
+	remove_proc_entry(proc_dev_name, proc_root);
+	remove_proc_entry(proc_dir_name, NULL);
+
 	return 0;
 }
 
@@ -1314,14 +1884,14 @@ static const struct i2c_device_id ms100_ts_id[] = {
 };
 
 static struct i2c_driver ms100_ts_driver = {
-	.probe          = ms100_ts_probe,
-	.remove         = ms100_ts_remove,
-	.id_table       = ms100_ts_id,
+	.probe		= ms100_ts_probe,
+	.remove		= ms100_ts_remove,
+	.id_table	= ms100_ts_id,
 	.driver = {
-		.name   = MS100_I2C_NAME,
-		.owner  = THIS_MODULE,
+		.name	= MS100_I2C_NAME,
+		.owner	= THIS_MODULE,
 #ifdef CONFIG_PM_RUNTIME
-		.pm     = &ms100_ts_pmops,
+		.pm	= &ms100_ts_pmops,
 #endif
 		.of_match_table = of_match_ptr(marvell_ts_dt_ids),
 	},
@@ -1352,6 +1922,6 @@ static void __exit ms100_ts_exit(void)
 late_initcall(ms100_ts_init);
 module_exit(ms100_ts_exit);
 
-MODULE_AUTHOR("Yi Zeng <zengy@marvell.com>");
+MODULE_AUTHOR("Marvell");
 MODULE_DESCRIPTION("88MS100 Touch Controller Driver");
 MODULE_LICENSE("GPL");
