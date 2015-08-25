@@ -27,6 +27,7 @@
 #include "plat_cam.h"
 
 static int otp_ctrl = -1;
+static int pwdone_delay = 500;
 static enum b52_sensor_mode s_mode;
 module_param(otp_ctrl, int, 0644);
 
@@ -1936,6 +1937,8 @@ static int b52_detect_sensor(struct b52_sensor *sensor)
 		pr_err("%s, sensor power up error\n", __func__);
 		goto error;
 	}
+
+	usleep_range(pwdone_delay, pwdone_delay+50);
 
 	ret = b52_sensor_call(sensor, detect_sensor);
 
