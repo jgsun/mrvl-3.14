@@ -674,8 +674,21 @@ extern struct pm80x_chip *chip_g;
 extern int pm80x_init(struct i2c_client *client);
 extern int pm80x_deinit(void);
 
+#ifdef CONFIG_MFD_88PM8XX_DVC
 extern int pm8xx_dvc_setvolt(unsigned int buckid, unsigned int lvl, int uv);
 extern int pm8xx_dvc_getvolt(unsigned int buckid, unsigned int lvl, int *uv);
+#else
+static inline int pm8xx_dvc_setvolt(unsigned int buckid, unsigned int lvl, int uv)
+{
+	return 0;
+}
+
+static inline int pm8xx_dvc_getvolt(unsigned int buckid, unsigned int lvl, int *uv)
+{
+	return 0;
+}
+#endif
+
 extern void extern_set_buck1_slp_volt(int on);
 
 extern int get_gpadc_volt(struct pm80x_chip *chip, int gpadc_id);
