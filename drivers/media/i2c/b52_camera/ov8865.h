@@ -464,9 +464,9 @@ struct regval_tab OV8865_res_init[] = {
 	{0x380a, 0x09},
 	{0x380b, 0x90},
 	{0x380c, 0x07},
-	{0x380d, 0x98},
+	{0x380d, 0x90},
 	{0x380e, 0x09},
-	{0x380f, 0xa6},
+	{0x380f, 0xf6},
 	{0x3813, 0x02},
 	{0x3814, 0x01},
 	{0x3821, 0x46},
@@ -496,7 +496,6 @@ struct regval_tab OV8865_res_init[] = {
 	{0x5002, 0x08},
 	{0x5901, 0x00},
 
-	{0x0100, 0x01},
 };
 
 
@@ -506,10 +505,9 @@ struct regval_tab OV8865_fmt_raw10[] = {
 struct regval_tab OV8865_res_2M[] = {
 /*Raw 10bit 1632x1224 30fps 4lane 720M bps/lane*/
 
-	{0x0100, 0x01},
 };
 struct regval_tab OV8865_res_8M[] = {
-	{0x0100, 0x01},
+
 };
 struct regval_tab OV8865_id[] = {
 	{0x300b, 0x88, 0xff},
@@ -517,7 +515,7 @@ struct regval_tab OV8865_id[] = {
 };
 struct regval_tab OV8865_vts[] = {
 	{0x380e, 0x09, 0x7f},
-	{0x380f, 0xdc, 0xff},
+	{0x380f, 0xf6, 0xff},
 };
 struct regval_tab OV8865_stream_on[] = {
 	{0x0100, 0x01, 0xff},
@@ -585,8 +583,8 @@ struct b52_sensor_resolution OV8865_res[] = {
 	[0] = {
 		 .width = 3264,
 		 .height = 2448,
-		 .hts = 0x0794*2,
-		 .min_vts = 0x09dc,
+		 .hts = 0x0790*2,
+		 .min_vts = 0x09f6,
 		 .prop = SENSOR_RES_BINING1,
 		 .regs = {
 			.tab = OV8865_res_8M,
@@ -596,8 +594,8 @@ struct b52_sensor_resolution OV8865_res[] = {
 	[1] = {
 		 .width = 1632,
 		 .height = 1224,
-		 .hts = 0x0794*2,
-		 .min_vts = 0x09dc,
+		 .hts = 0x0790*2,
+		 .min_vts = 0x09f6,
 		 .prop = SENSOR_RES_BINING2,
 		 .regs = {
 			.tab = OV8865_res_2M,
@@ -648,7 +646,7 @@ struct b52_sensor_data b52_ov8865 = {
 		.numerator = 100,
 		.denominator = 0x10,
 	},
-	.vts_range = {0x09dc, 0x7fff},
+	.vts_range = {0x09f6, 0x7fff},
 	.gain_range = {
 		[B52_SENSOR_AG] = {0x0010, 0x00f8},
 		[B52_SENSOR_DG] = {0x0010, 0x0010},
@@ -690,7 +688,7 @@ struct b52_sensor_data b52_ov8865 = {
 	.expo_shift = 0x08,
 	.calc_dphy = 1,
 	.nr_lane = 4,
-	.mipi_clk_bps = 988000000,
+	.mipi_clk_bps = 728000000,
 	.ops = &ov8865_ops,
 	.module = OV8865_MODULE_INFO,
 	.num_module = N_OV8865_MODULE_INFO,

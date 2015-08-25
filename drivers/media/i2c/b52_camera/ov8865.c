@@ -80,91 +80,55 @@ static int OV8865_get_dphy_desc(struct v4l2_subdev *sd,
 	return 0;
 }
 
-#if 0
 static int OV8865_get_pixelclock(struct v4l2_subdev *sd, u32 *rate, u32 mclk)
 {
 	int temp1, temp2;
-	int pll2_prediv0, pll2_prediv2x, pll2_mult, pll2_divs;
+	int Pll2_prediv0, Pll2_prediv2x, Pll2_multiplier, Pll2_divs;
 	int Sys_divider2x, Sys_prediv, Sclk_pdiv;
-	int pll2_prediv2x_map[] = {2, 3, 4, 5, 6, 8, 12, 16};
+	int Pll2_prediv0_map[] = {1, 2};
+	int Pll2_prediv2x_map[] = {2, 3, 4, 5, 6, 8, 12, 16};
 	int Sys_divider2x_map[] = {2, 3, 4, 5, 6, 7, 8, 10};
 	int Sys_prediv_map[] = {1, 2, 4, 1};
 int Sclk_pdiv_map[] = {1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
 	struct b52_sensor *sensor = to_b52_sensor(sd);
 
 	b52_sensor_call(sensor, i2c_read, 0x0312, &temp1, 1);
-	temp2 = temp1 & 0x10;
-	if (temp2 == 0x10)
-		pll2_prediv0 = 2;
-	else
-		pll2_prediv0 = 1;
-
+	temp2 = (temp1>>4) & 0x01;
+	Pll2_prediv0 = Pll2_prediv0_map[temp2];
 	b52_sensor_call(sensor, i2c_read, 0x030b, &temp1, 1);
 	temp2 = temp1 & 0x07;
-	pll2_prediv2x = pll2_prediv2x_map[temp2];
-	b52_sensor_call(sensor, i2c_read, 0x030d, &temp1, 1);
-	b52_sensor_call(sensor, i2c_read, 0x030c, &temp2, 1);
-	/*pll2_mult = ((temp2 & 0x03) << 8) + temp1;*/
-	pll2_mult = (temp2 << 8) + temp1;
+	Pll2_prediv2x = Pll2_prediv2x_map[temp2];
+	b52_sensor_call(sensor, i2c_read, 0x030c, &temp1, 1);
+	b52_sensor_call(sensor, i2c_read, 0x030d, &temp2, 1);
+
+	Pll2_multiplier = (temp1<<8) + temp2;
+	if (!Pll2_multiplier)
+		Pll2_multiplier = 1;
+
 	b52_sensor_call(sensor, i2c_read, 0x030f, &temp1, 1);
-	/*sys_pre_div = 1 + (temp1 & 0xF);*/
-	pll2_divs = 1 + (temp1 & 0xF);
+	temp2 = temp1 & 0x0f;
+	Pll2_divs = temp2 + 1;
 	b52_sensor_call(sensor, i2c_read, 0x030e, &temp1, 1);
-	/*sys_div = sys_div_map[temp1 & 0x7];*/
-	Sys_divider2x = Sys_divider2x_map[temp1 & 0x7];
-
-
-	temp1 = OV8865_read_i2c(sensor, 0x3106);
+	temp2 = temp1 & 0x07;
+	Sys_divider2x = Sys_divider2x_map[temp2];
+	b52_sensor_call(sensor, i2c_read, 0x3106, &temp1, 1);
 	temp2 = (temp1>>4) & 0x0f;
 	Sclk_pdiv = Sclk_pdiv_map[temp2];
 	temp2 = (temp1>>2) & 0x03;
 	Sys_prediv = Sys_prediv_map[temp2];
 
-	*rate = mclk * 2 / pll2_prediv0 / pll2_prediv2x * pll2_mult
-		/ pll2_divs * 2 / Sys_divider2x / Sys_prediv / Sclk_pdiv;
-
-	pr_err("OV8865_get_pixelclock %d", *rate);
-
-	return 0;
-}
-
-#endif
-
-static int OV8865_get_pixelclock(struct v4l2_subdev *sd, u32 *rate, u32 mclk)
-{
-	int temp1, temp2;
-	int pll2_prediv0, pll2_prediv2x, pll2_mult, sys_pre_div, sys_div;
-	int pll2_prediv2x_map[] = {2, 3, 4, 5, 6, 8, 12, 16};
-	int sys_div_map[] = {2, 3, 4, 5, 6, 7, 8, 10};
-	struct b52_sensor *sensor = to_b52_sensor(sd);
-
-	b52_sensor_call(sensor, i2c_read, 0x0312, &temp1, 1);
-	temp2 = temp1 & 0x10;
-	if (temp2 == 0x10)
-		pll2_prediv0 = 2;
-	else
-		pll2_prediv0 = 1;
-
-	b52_sensor_call(sensor, i2c_read, 0x030b, &temp1, 1);
-	temp2 = temp1 & 0x07;
-	pll2_prediv2x = pll2_prediv2x_map[temp2];
-	b52_sensor_call(sensor, i2c_read, 0x030d, &temp1, 1);
-	b52_sensor_call(sensor, i2c_read, 0x030c, &temp2, 1);
-	pll2_mult = ((temp2 & 0x03) << 8) + temp1;
-	b52_sensor_call(sensor, i2c_read, 0x030f, &temp1, 1);
-	sys_pre_div = 1 + (temp1 & 0xF);
-	b52_sensor_call(sensor, i2c_read, 0x030e, &temp1, 1);
-	sys_div = sys_div_map[temp1 & 0x7];
-	*rate = mclk * 2 / pll2_prediv0 / pll2_prediv2x * pll2_mult
-			/ sys_pre_div * 2 / sys_div;
+	*rate = mclk * 2 / Pll2_prediv0 / Pll2_prediv2x * Pll2_multiplier /
+		Pll2_divs * 2 / Sys_divider2x /	Sys_prediv / Sclk_pdiv;
+	/*
+	* ov8865 process 2 pixels in each pixelclock, double the
+	* pixelclock and hts value to fix the exposure time error issue
+	*/
 	*rate = *rate * 2;
 
 	pr_err("OV8865_get_pixelclock %d", *rate);
 
 	return 0;
 }
-
-
 
 static int OV8865_read_OTP(struct b52_sensor *sensor,
 			struct b52_sensor_otp *otp, u32 *flag, u8 *lenc)
