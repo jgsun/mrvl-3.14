@@ -2172,7 +2172,7 @@ struct b52_sensor_data b52_hi551 = {
 	},
 	.vts_range = {0x07d4, 0x7fff},
 	.gain_range = {
-		[B52_SENSOR_AG] = {0x0010, 0xffff},
+		[B52_SENSOR_AG] = {0x0010, 0x0080},
 		[B52_SENSOR_DG] = {0x0010, 0x0010},
 	},
 	.expo_range = {0x0010, 0x07d4},
