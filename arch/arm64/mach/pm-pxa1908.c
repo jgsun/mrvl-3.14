@@ -229,9 +229,9 @@ static int pxa1908_suspend_check(void)
 
 	ret = pxa1908_pm_check_constraint();
 	pr_info("========wake up events status =========\n");
-	pr_info("BEFORE SUSPEND AWUCRS:0x%x, PWRMODE_STATUS: 0x%x\n",
-			__raw_readl(mpmu_base + AWUCRS),
-			__raw_readl(mpmu_base + PWRMODE_STATUS));
+	if (__raw_readl(mpmu_base + PWRMODE_STATUS) != 0)
+		pr_err("MPMU Power status register not cleared!\n");
+	pr_info("BEFORE SUSPEND AWUCRS:0x%x\n", __raw_readl(mpmu_base + AWUCRS));
 	pr_info("CORE_STATUS: 0x%x, CPSR: 0x%x, PWR_STATUS: 0x%x\n",
 			core_status, cpsr, pwr_status);
 
@@ -467,6 +467,8 @@ static u32 wakeup_source_check(void)
 	pr_info("CORE_STATUS: 0x%x, CPSR: 0x%x, PWR_STATUS: 0x%x\n",
 			core_status, cpsr, pwr_status);
 	check_pwrmode_status(pwrmode_status);
+	/* Must clear PWRMODE_STATUS each time when system exits suspend */
+	__raw_writel(0xFFFF, mpmu + PWRMODE_STATUS);
 	check_cp_status(cpsr);
 	check_gps_status(pwr_status);
 	pr_info("AWUCRS:0x%x, CWUCRS:0x%x\n", awucrs, cwucrs);
