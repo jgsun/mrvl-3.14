@@ -27,7 +27,6 @@
 #include "plat_cam.h"
 
 static int otp_ctrl = -1;
-static int pwdone_delay = 500;
 static enum b52_sensor_mode s_mode;
 module_param(otp_ctrl, int, 0644);
 
@@ -1030,6 +1029,7 @@ static int b52_sensor_s_power(struct v4l2_subdev *sd, int on)
 {
 	int ret = 0;
 	int reset_delay = 100;
+	int pwdone_delay = 500;
 	struct sensor_power *power;
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct b52_sensor *sensor = to_b52_sensor(sd);
@@ -1138,6 +1138,12 @@ static int b52_sensor_s_power(struct v4l2_subdev *sd, int on)
 			usleep_range(reset_delay, reset_delay + 10);
 			gpiod_set_value_cansleep(power->rst, 0);
 		}
+
+		/*delay between power on and read/write sensor register*/
+		if (sensor->drvdata->pwdone_delay)
+			pwdone_delay = sensor->drvdata->pwdone_delay;
+		usleep_range(pwdone_delay, pwdone_delay + 50);
+
 	} else {
 		if (WARN_ON(power->ref_cnt == 0))
 			return -EINVAL;
@@ -1937,8 +1943,6 @@ static int b52_detect_sensor(struct b52_sensor *sensor)
 		pr_err("%s, sensor power up error\n", __func__);
 		goto error;
 	}
-
-	usleep_range(pwdone_delay, pwdone_delay+50);
 
 	ret = b52_sensor_call(sensor, detect_sensor);
 

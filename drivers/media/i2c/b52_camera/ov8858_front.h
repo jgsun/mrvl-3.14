@@ -635,6 +635,7 @@ struct b52_sensor_data b52_ov8858_front = {
 	.ops = &ov8858r2a_ops,
 	.module = ov8858r2a_MODULE_INFO,
 	.num_module = N_OV8858R2A_MODULE_INFO,
+	.pwdone_delay = 500,
 };
 
 #endif
