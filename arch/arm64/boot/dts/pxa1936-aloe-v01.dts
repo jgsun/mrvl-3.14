@@ -13,7 +13,6 @@
 &pmx {
 	mfp_pins_group_0: mfp_pins_group_0 {
 		pinctrl-single,pins = <
-			DF_IO9 AF0
 			DF_IO10 AF0
 			DF_IO11 AF0
 			DF_IO12 AF0
@@ -66,6 +65,20 @@
 			MMC1_CD AF1 /* Above pins not used by sdh1, configured as GPIO */
 		>;
 		MFP_DEFAULT;
+	};
+
+	hsensor_pmx_func: hsensor_pmx_func {
+		pinctrl-single,pins = <
+			DF_IO9 AF1
+		>;
+		DS_FAST;PULL_UP;EDGE_NONE;LPM_NONE;
+	};
+
+	hsensor_pmx_func_sleep: hsensor_pmx_func_sleep {
+		pinctrl-single,pins = <
+			DF_IO9 AF1
+		>;
+		DS_FAST;PULL_UP;EDGE_BOTH;LPM_NONE;
 	};
 
 	usim1_pmx_func: usim1_pmx_func {
@@ -314,6 +327,20 @@
 				};
 
 			};
+
+			hsensor: mh251@0 {
+				compatible = "marvell,hsensor";
+				pinctrl-names = "default", "sleep";
+				pinctrl-0 = <&hsensor_pmx_func>;
+				pinctrl-1 = <&hsensor_pmx_func_sleep>;
+				interrupts = <66 0x0>;
+				irq-gpios = <&gpio 66 0>;
+				interrupt-parent = <&gpio>;
+				dovdd_1v8-supply = <&buck2>;
+				edge-wakeup-gpio = <66>;
+				status = "okay";
+			};
+
 			map@d1200000 {
 				pmic-name = "88pm880";
 				vccmain-supply = <&buck1aslp>;

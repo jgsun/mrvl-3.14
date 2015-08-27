@@ -1,0 +1,7 @@
+mst_mh251 hall senser module
+
+Example:
+
+hsensor:mh251@0 {
+		compatible = "marvell,hsensor";
+};
