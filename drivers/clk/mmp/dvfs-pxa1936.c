@@ -274,6 +274,18 @@ unsigned int get_helan3_svc_version(void)
 	return svc_version;
 }
 
+static int pxa1936_get_d1_volt(void)
+{
+	unsigned int d1_volt = 0;
+	if (get_chipfab() == TSMC)
+		d1_volt = 950000;
+	else
+		d1_volt = 0;
+
+	fill_d1_voltage(d1_volt);
+	return 0;
+}
+
 unsigned int convert_svc_version(unsigned int uiFabRev)
 {
 	if (uiSVCRev == 0) {
@@ -457,6 +469,7 @@ static int __init __init_read_droinfo(void)
 	fuseinfo.iddq_1030 = uiSIDD1p30;
 	fuseinfo.skusetting = uiskusetting;
 	plat_fill_fuseinfo(&fuseinfo);
+	pxa1936_get_d1_volt();
 
 	pr_info(" \n");
 	pr_info("     *************************** \n");

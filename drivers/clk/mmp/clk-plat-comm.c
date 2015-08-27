@@ -396,6 +396,19 @@ int get_ddr_800M_4x(void)
 	return ddr_800M_4x_status;
 }
 
+static int fuse_d1_volt;
+
+int fill_d1_voltage(int volt)
+{
+	fuse_d1_volt = volt;
+	return 0;
+}
+
+int get_d1_voltage(void)
+{
+	return fuse_d1_volt;
+}
+
 static struct comm_fuse_info comm_fuseinfo;
 
 int plat_fill_fuseinfo(struct comm_fuse_info *info)
