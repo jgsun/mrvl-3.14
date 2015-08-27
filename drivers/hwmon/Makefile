@@ -156,6 +156,7 @@ obj-$(CONFIG_SENSORS_BMA2X2)	+= bma2x2.o
 obj-$(CONFIG_SENSORS_LTR558_I2C)	+= ltr_558als.o
 obj-$(CONFIG_SENSOR_EPL2182)	+= epl2182.o
 obj-$(CONFIG_SENSORS_LTR55X_I2C)	+= ltr55x.o
+obj-$(CONFIG_SENSORS_MH251)	+= mh251.o
 obj-$(CONFIG_PMBUS)		+= pmbus/
 obj-y				+= bmi160/
 

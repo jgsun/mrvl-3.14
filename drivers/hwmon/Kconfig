@@ -1698,6 +1698,12 @@ config SENSOR_EPL2182
 
 	  To compile this driver as a module, choose M here.
 
+config SENSORS_MH251
+	tristate "MST MH251 hall sensor device"
+	default n
+	help
+	Say Y here if you have a MST MH251 device on the board, else say N
+
 if ACPI
 
 comment "ACPI drivers"
