@@ -38,14 +38,14 @@ static int notrace mcpm_powerdown_finisher(unsigned long arg)
 
 static int mmp_pm_enter(suspend_state_t state)
 {
-	int *real_idx = &mmp_suspend->suspend_state;
+	unsigned int real_idx = mmp_suspend->suspend_state;
 
 	if (mmp_suspend->ops->pre_suspend_check) {
 		if (mmp_suspend->ops->pre_suspend_check())
 			return -EAGAIN;
 	}
 
-	cpu_suspend((unsigned long)real_idx, mcpm_powerdown_finisher);
+	cpu_suspend((unsigned long)&real_idx, mcpm_powerdown_finisher);
 
 	if (mmp_suspend->ops->post_chk_wakeup)
 		detect_wakeup_status = mmp_suspend->ops->post_chk_wakeup();
@@ -53,7 +53,7 @@ static int mmp_pm_enter(suspend_state_t state)
 	if (mmp_suspend->ops->post_clr_wakeup)
 		mmp_suspend->ops->post_clr_wakeup(detect_wakeup_status);
 
-	if (*real_idx != mmp_suspend->suspend_state)
+	if (real_idx != mmp_suspend->suspend_state)
 		pr_info("WARNING!Suspend didn't enter expected lpm!\n");
 
 	mcpm_cpu_powered_up();
