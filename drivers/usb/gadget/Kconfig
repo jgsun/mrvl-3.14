@@ -577,6 +577,12 @@ config USB_F_MASS_STORAGE
 config USB_F_FS
 	tristate
 
+config USB_F_MTP
+	tristate
+
+config USB_F_PTP
+        tristate
+
 choice
 	tristate "USB Gadget Drivers"
 	default USB_ETH
