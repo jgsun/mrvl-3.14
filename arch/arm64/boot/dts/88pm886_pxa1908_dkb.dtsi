@@ -132,9 +132,9 @@
 		flash-timer = <500>;	/* ms */
 		cls-ov-set = <4600>;	/* mV */
 		cls-uv-set = <1500>;	/* mV */
-		cfd-bst-vset = <5250>;	/* mV */
+		cfd-bst-vset = <4500>;	/* mV */
 		bst-uvvbat-set = <3100>;/* mV */
-		max-flash-current = <1200>;	/* mA */
+		max-flash-current = <700>;	/* mA */
 		max-torch-current = <200>;	/* mA */
 		torch-force-max-current = <0>;
 	};
