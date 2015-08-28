@@ -303,6 +303,10 @@ static struct b52_sensor_module OV13850R2A_MODULE_INFO[] = {
 		.id = 0x0d,
 		.name = "0x000d",
 	},
+	[2] = {
+		.id = 0x09,
+		.name = "0x0009",
+	},
 };
 
 #define N_OV13850R2A_I2C_ATTR ARRAY_SIZE(OV13850R2A_i2c_attr)
