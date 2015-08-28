@@ -365,6 +365,7 @@ config MFD_88PM88X
 	bool "Marvell 88PM88X"
 	depends on I2C=y
 	select REGMAP_I2C
+	select REGMAP_IRQ
 	select MFD_CORE
 	help
 	  This supports for Marvell 88PM88x Series Power Management IC:
