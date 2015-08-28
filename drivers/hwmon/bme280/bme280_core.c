@@ -1737,7 +1737,7 @@ int bme_probe(struct device *dev, struct bme_data_bus *data_bus)
 	err = bme_check_chip_id(data_bus);
 	if (err) {
 		PERR("Bosch Sensortec Device not found, chip id mismatch!\n");
-		goto exit;
+		goto exit_regulator;
 	} else {
 		PNOTICE("Bosch Sensortec Device %s detected.\n", BME_NAME);
 	}
@@ -1745,7 +1745,7 @@ int bme_probe(struct device *dev, struct bme_data_bus *data_bus)
 	data = kzalloc(sizeof(struct bme_client_data), GFP_KERNEL);
 	if (!data) {
 		err = -ENOMEM;
-		goto exit;
+		goto exit_regulator;
 	}
 
 	dev_set_drvdata(dev, data);
@@ -1784,8 +1784,9 @@ int bme_probe(struct device *dev, struct bme_data_bus *data_bus)
 error_sysfs:
 	bme_input_delete(data);
 exit_free:
-	regulator_disable(data->data_bus.avdd);
 	kfree(data);
+exit_regulator:
+	regulator_disable(data_bus->avdd);
 exit:
 	return err;
 }
