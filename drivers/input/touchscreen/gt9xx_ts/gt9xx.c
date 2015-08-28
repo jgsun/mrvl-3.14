@@ -29,8 +29,8 @@
 #include <linux/regulator/consumer.h>
 
 #if GTP_GESTURE_WAKEUP
-		int gestureflag = 1;
-		int gestureswitch = 1;
+		int gestureflag = 0;
+		int gestureswitch = 0;
 		int edge_wakeup_gpio = -1;
 #endif
 
@@ -44,6 +44,7 @@ int gtp_int_gpio;
 int gtp_keyled_gpio;
 static int led_flag = 0;
 static struct regulator *vdd_ana;
+static int power_status = 0;
 
 u8 config[GTP_CONFIG_MAX_LENGTH + GTP_ADDR_LENGTH]
                 = {GTP_REG_CONFIG_DATA >> 8, GTP_REG_CONFIG_DATA & 0xff};
@@ -2682,14 +2683,20 @@ static int gtp_power_switch(struct i2c_client *client, int on)
 */
 	if (on) {
 		GTP_DEBUG("GTP power on.");
-		ret = regulator_enable(vdd_ana);
+		if (power_status == 0) {
+			ret = regulator_enable(vdd_ana);
+			power_status = 1;
+		}
 		udelay(2);
 //		ret = regulator_enable(vcc_i2c);
 	} else {
 		GTP_DEBUG("GTP power off.");
 //		ret = regulator_disable(vcc_i2c);
 		udelay(2);
-		ret = regulator_disable(vdd_ana);
+		if (power_status == 1) {
+			ret = regulator_disable(vdd_ana);
+			power_status = 0;
+		}
 	}
 	return ret;
 
