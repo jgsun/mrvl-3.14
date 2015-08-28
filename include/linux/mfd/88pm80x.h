@@ -689,8 +689,12 @@ static inline int pm8xx_dvc_getvolt(unsigned int buckid, unsigned int lvl, int *
 }
 #endif
 
+#ifdef CONFIG_MFD_88PM800
 extern void extern_set_buck1_slp_volt(int on);
 
+#else
+static inline void extern_set_buck1_slp_volt(int on) {}
+#endif
 extern int get_gpadc_volt(struct pm80x_chip *chip, int gpadc_id);
 extern int get_gpadc_bias_volt(struct pm80x_chip *chip, int gpadc_id, int bias);
 extern int extern_get_gpadc_bias_volt(int gpadc_id, int bias);
