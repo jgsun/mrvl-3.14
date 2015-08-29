@@ -237,13 +237,17 @@ static int __init __init_read_droinfo(void)
 	return 0;
 }
 
+static unsigned long ddr667_2x_freqs_cmb_tb[VL_MAX] = {
+	0, 624000, 624000, 624000, 624000, 624000, 667000, 667000
+};
+
 /* components frequency combination */
 /* FIXME: adjust according to SVC */
 static unsigned long freqs_cmb_1908[VM_RAIL_MAX][VL_MAX] = {
 	/* CORE */
 	{ 0, 624000, 624000, 832000, 832000, 1057000, 1248000, 1526000 },
 	/* DDR */
-	{ 0, 312000, 312000, 416000, 528000, 528000, 624000, 667000},
+	{ 0, 624000, 624000, 667000, 667000, 667000, 667000, 667000},
 	/* AXI */
 	{ 208000, 208000, 208000, 312000, 312000, 312000, 312000, 312000 },
 	/* GC3D */
@@ -278,8 +282,8 @@ static int vm_millivolts_1908_svcsec[][VL_MAX] = {
 	{1025, 1075, 1075, 1125, 1125, 1175, 1225, 1300},
 	{1025, 1075, 1075, 1125, 1125, 1175, 1225, 1300},
 	{975,  975,  988,  988,  988,  1000, 1063, 1125},/* Profile2 */
-	{975,  975,  988,  988,  1000, 1013, 1075, 1138},
-	{975,  975,  988,  988,  1000, 1025, 1075, 1163},
+	{975,  975,  988,  988,  988,  1013, 1075, 1138},
+	{975,  975,  988,  988,  988,  1025, 1075, 1163},
 
 	{975,  975,  988,  988,  1013, 1038, 1088, 1175},
 	{975,  975,  988,  1000, 1013, 1038, 1100, 1200}, /* Profile6 */
@@ -359,12 +363,18 @@ int __init setup_pxa1908_dvfs_platinfo(void)
 	enum dvfs_comp idx;
 	struct dvc_plat_info *plat_info = &dvc_pxa1908_info;
 	unsigned long (*freqs_cmb)[VL_MAX];
+	int i;
 
 	__init_read_droinfo();
 
 	/* FIXME: Here may need to identify chip stepping and profile */
 	dvc_pxa1908_info.millivolts =
 		vm_millivolts_1908_svcsec[uiprofile];
+
+	if (ddr_mode == DDR_667M_2X) {
+		for (i = 0; i < VL_MAX; i++)
+			freqs_cmb_1908[DDR][i] = ddr667_2x_freqs_cmb_tb[i];
+	}
 	freqs_cmb = freqs_cmb_1908;
 	plat_set_vl_min(0);
 	plat_set_vl_max(dvc_pxa1908_info.num_volts);

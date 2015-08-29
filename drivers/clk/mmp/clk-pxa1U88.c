@@ -299,6 +299,10 @@ static void pxa1U88_dynpll_init(struct pxa1U88_clk_unit *pxa_unit)
 	int idx;
 	struct clk *clk;
 	struct mmp_clk_unit *unit = &pxa_unit->unit;
+	enum ddr_type ddr_type = ddr_mode;
+
+	if (ddr_mode == DDR_667M_2X)
+		ddr_type = DDR_667M;
 
 	pllx_vco_params[PLL2].cr_reg = pxa_unit->mpmu_base + MPMU_PLL2CR;
 	pllx_vco_params[PLL2].pll_swcr = pxa_unit->apbs_base + APB_SPARE_PLL2CR;
@@ -320,7 +324,7 @@ static void pxa1U88_dynpll_init(struct pxa1U88_clk_unit *pxa_unit)
 		/* vco */
 		pllx_vco_params[idx].lock_reg = pxa_unit->mpmu_base + MPMU_POSR;
 		pllx_vco_params[idx].default_rate =
-			pll_dfrate[ddr_mode][idx][VCO];
+			pll_dfrate[ddr_type][idx][VCO];
 		clk = helanx_clk_register_vco(pllx_platinfo[idx].vco_name,
 			0, pllx_platinfo[idx].vcoclk_flag, pllx_platinfo[idx].vco_flag,
 			&pllx_platinfo[idx].lock, &pllx_vco_params[idx]);
@@ -328,7 +332,7 @@ static void pxa1U88_dynpll_init(struct pxa1U88_clk_unit *pxa_unit)
 		mmp_clk_add(unit, pllx_platinfo[idx].vcodtidx, clk);
 		/* pll */
 		pllx_pll_params[idx].default_rate =
-			pll_dfrate[ddr_mode][idx][OUT];
+			pll_dfrate[ddr_type][idx][OUT];
 		clk = helanx_clk_register_pll(pllx_platinfo[idx].out_name,
 			pllx_platinfo[idx].vco_name,
 			pllx_platinfo[idx].outclk_flag, pllx_platinfo[idx].out_flag,
@@ -337,7 +341,7 @@ static void pxa1U88_dynpll_init(struct pxa1U88_clk_unit *pxa_unit)
 		mmp_clk_add(unit, pllx_platinfo[idx].outdtidx, clk);
 		/* pllp */
 		pllx_pllp_params[idx].default_rate =
-			pll_dfrate[ddr_mode][idx][OUTP];
+			pll_dfrate[ddr_type][idx][OUTP];
 		clk = helanx_clk_register_pll(pllx_platinfo[idx].outp_name,
 			pllx_platinfo[idx].vco_name,
 			pllx_platinfo[idx].outpclk_flag, pllx_platinfo[idx].outp_flag,
@@ -1409,6 +1413,7 @@ static void __init pxa1U88_acpu_init(struct pxa1U88_clk_unit *pxa_unit)
 {
 	struct mmp_clk_unit *unit = &pxa_unit->unit;
 	struct clk *clk;
+	int i;
 
 	core_params.apmu_base = pxa_unit->apmu_base;
 	core_params.mpmu_base = pxa_unit->mpmu_base;
@@ -1424,13 +1429,24 @@ static void __init pxa1U88_acpu_init(struct pxa1U88_clk_unit *pxa_unit)
 	ddr_params.mpmu_base = pxa_unit->mpmu_base;
 	ddr_params.ddr_opt = lpddr533_oparray;
 	ddr_params.ddr_opt_size = ARRAY_SIZE(lpddr533_oparray);
+	if (ddr_mode == DDR_533M)
+		BUG_ON("mode DDR_533M is not supported now.\n");
 	if (ddr_mode == DDR_667M) {
 		ddr_params.ddr_opt = lpddr667_oparray;
 		ddr_params.ddr_opt_size =
 			ARRAY_SIZE(lpddr667_oparray);
+	} else if (ddr_mode == DDR_667M_2X) {
+		/* change DDR667 4x mode by default to 2x mode */
+		i = ARRAY_SIZE(lpddr667_oparray) - 1;
+		if (lpddr667_oparray[i].dclk == 667)
+			lpddr667_oparray[i].mode_4x_en = 0;
+
+		ddr_params.ddr_opt = lpddr667_oparray;
+		ddr_params.ddr_opt_size = ARRAY_SIZE(lpddr667_oparray);
 	} else if (ddr_mode == DDR_800M) {
 		ddr_params.ddr_opt = lpddr800_oparray;
 		ddr_params.ddr_opt_size = ARRAY_SIZE(lpddr800_oparray);
+		BUG_ON("mode DDR_800M is not supported now.\n");
 	}
 	mmp_clk_parents_lookup(ddr_params.parent_table,
 		ddr_params.parent_table_size);
