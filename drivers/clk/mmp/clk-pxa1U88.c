@@ -1300,41 +1300,41 @@ static struct ddr_opt lpddr533_oparray[] = {
 	},
 };
 
+/* enable 208/312/416/624 4x, 667 4x default.*/
 static struct ddr_opt lpddr667_oparray[] = {
 	{
-		.dclk = 156,
+		.dclk = 208,
+		.mode_4x_en = 1,
 		.ddr_tbl_index = 2,
 		.ddr_lpmtbl_index = 0,
-		.ddr_clk_sel = 0x0,
+		.ddr_clk_sel = 0x1,
 	},
 	{
 		.dclk = 312,
+		.mode_4x_en = 1,
 		.ddr_tbl_index = 4,
 		.ddr_lpmtbl_index = 0,
 		.ddr_clk_sel = 0x0,
 	},
 	{
 		.dclk = 416,
+		.mode_4x_en = 1,
 		.ddr_tbl_index = 6,
 		.ddr_lpmtbl_index = 0,
 		.ddr_clk_sel = 0x1,
 	},
-	{
-		.dclk = 528,
-		.ddr_tbl_index = 8,
-		.ddr_lpmtbl_index = 0,
-		.ddr_clk_sel = 0x4,
-	},
 	/* FIXME: if we really need 624M PP? Here for verification */
 	{
 		.dclk = 624,
-		.ddr_tbl_index = 10,
+		.mode_4x_en = 1,
+		.ddr_tbl_index = 8,
 		.ddr_lpmtbl_index = 0,
 		.ddr_clk_sel = 0x6,
 	},
 	{
 		.dclk = 667,
-		.ddr_tbl_index = 12,
+		.mode_4x_en = 1,	/*adjust with ddr mode*/
+		.ddr_tbl_index = 10,
 		.ddr_lpmtbl_index = 0,
 		.ddr_clk_sel = 0x5,
 	},
@@ -1396,6 +1396,7 @@ static struct axi_params axi_params = {
 
 static struct ddr_combclk_relation aclk_dclk_relationtbl_1U88[] = {
 	{.dclk_rate = 156000000, .combclk_rate = 156000000},
+	{.dclk_rate = 208000000, .combclk_rate = 156000000},
 	{.dclk_rate = 312000000, .combclk_rate = 156000000},
 	{.dclk_rate = 416000000, .combclk_rate = 208000000},
 	{.dclk_rate = 528000000, .combclk_rate = 208000000},
