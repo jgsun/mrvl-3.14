@@ -9,6 +9,7 @@
 #include <dt-bindings/clock/marvell-pxa1U88.h>
 #include <linux/debugfs-pxa.h>
 #include <linux/cputype.h>
+#include <linux/clk/mmpcpdvc.h>
 
 #include "clk.h"
 #include "clk-pll-helanx.h"
@@ -1409,6 +1410,50 @@ static struct ddr_combclk_relation aclk_dclk_relationtbl_1U88[] = {
 	{.dclk_rate = 797000000, .combclk_rate = 208000000},
 };
 
+static struct ddr_dfc_info ddrdfcinfo;
+
+static void find_ddr_level(struct ddr_opt *ddr_op_array)
+{
+	int i;
+	ddrdfcinfo.ddr_idle = 0;
+	for (i = 0; i < sizeof(ddr_op_array); i++) {
+		if (ddrdfcinfo.ddr_active == 0) {
+			if (((ddr_op_array[i].mode_4x_en == 1)
+				&& (ddr_op_array[i].dclk > 312))
+				|| ((ddr_op_array[i].mode_4x_en == 0)
+				&& (ddr_op_array[i].dclk >= 312))) {
+				ddrdfcinfo.ddr_active = i;
+			}
+		}
+		if (ddrdfcinfo.ddr_high == 0) {
+			if (((ddr_op_array[i].mode_4x_en == 1)
+				&& (ddr_op_array[i].dclk >= 624))
+				|| ((ddr_op_array[i].mode_4x_en == 0)
+				&& (ddr_op_array[i].dclk >= 416))) {
+				ddrdfcinfo.ddr_high = i;
+			}
+		}
+		if (ddrdfcinfo.ddr_active && ddrdfcinfo.ddr_high)
+			break;
+	}
+	return;
+}
+
+static void init_ddr_dfc(void)
+{
+	memset(&ddrdfcinfo, 0, sizeof(ddrdfcinfo));
+	if (ddr_mode == DDR_533M)
+		find_ddr_level(lpddr533_oparray);
+	else if (ddr_mode == DDR_667M)
+		find_ddr_level(lpddr667_oparray);
+	else if (ddr_mode == DDR_800M)
+		find_ddr_level(lpddr800_oparray);
+
+	fillddrdfcinfo(&ddrdfcinfo);
+
+	return;
+}
+
 static void __init pxa1U88_acpu_init(struct pxa1U88_clk_unit *pxa_unit)
 {
 	struct mmp_clk_unit *unit = &pxa_unit->unit;
@@ -1557,6 +1602,7 @@ static void __init pxa1U88_clk_init(struct device_node *np)
 #if defined(CONFIG_PXA_DVFS)
 	if (!board_is_fpga())
 		setup_pxa1908_dvfs_platinfo();
+	init_ddr_dfc();
 #endif
 
 	mmp_clk_init(np, &pxa_unit->unit, PXA1U88_NR_CLKS);
