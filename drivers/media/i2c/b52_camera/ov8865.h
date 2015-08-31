@@ -14,11 +14,16 @@
 #include <media/b52-sensor.h>
 
 #define OTP_DRV_START_ADDR  0x7010
-#define OTP_DRV_LENC_START_ADDR 0x7028
-#define OTP_DRV_LENC_SIZE  240
+#define OTP_DRV_LENC_START_ADDR 0x703a
+#define OTP_DRV_LENC_SIZE  62
 #define OTP_DRV_LSC_REG_ADDR  0x5800
-#define bg_ratio_typical 0x122
-#define rg_ratio_typical 0x137
+
+/*
+ * The typical value should always in line with the golden module,
+ * otherwise with lead raw data abnormal.
+ */
+#define DEFAULT_RG_TYPICAL_RATIO 0x12f
+#define DEFAULT_BG_TYPICAL_RATIO 0x11f
 
 /* raw10,XVCLK=24Mhz, SCLK=4x120Mhz, MIPI 640Mbps, DACCLK=240Mhz */
 struct regval_tab OV8865_res_init[] = {

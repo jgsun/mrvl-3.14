@@ -169,7 +169,7 @@ static int OV8865_get_pixelclock(struct v4l2_subdev *sd, u32 *rate, u32 mclk)
 static int OV8865_read_OTP(struct b52_sensor *sensor,
 			struct b52_sensor_otp *otp, u32 *flag, u8 *lenc)
 {
-	int otp_flag, otp_base, temp, i, checksum, checksum2;
+	int otp_flag, otp_base, i;
 	/*read OTP into buffer*/
 	OV8865_write_i2c(sensor, 0x3d84, 0xC0);
 	OV8865_write_i2c(sensor, 0x3d88, 0x70); /*OTP start address*/
@@ -193,21 +193,15 @@ static int OV8865_read_OTP(struct b52_sensor *sensor,
 		*flag = 0x80; /*valid info in OTP*/ /*0xC0->0x80*/
 		(*otp).module_id = OV8865_read_i2c(sensor, otp_base);
 		(*otp).lens_id = OV8865_read_i2c(sensor, otp_base + 1);
-		temp = OV8865_read_i2c(sensor, otp_base + 7);
-		(*otp).rg_ratio = (OV8865_read_i2c(sensor, otp_base + 5) << 2)
-							+ ((temp >> 6) & 0x03);
-		(*otp).bg_ratio = (OV8865_read_i2c(sensor, otp_base + 6) << 2)
-							+ ((temp >> 4) & 0x03);
+
 	} else {
 		*flag = 0x00; /*not info in OTP*/
 		(*otp).module_id = 0;
 		(*otp).lens_id = 0;
-		(*otp).rg_ratio = 0;
-		(*otp).bg_ratio = 0;
 	}
-	pr_err("OTP_INF OV8865:Module=0x%x, Lens=0x%x, rg_rt=0x%x, bg_rt=0x%x\n",
-			(*otp).module_id, (*otp).lens_id,
-			(*otp).rg_ratio, (*otp).bg_ratio);
+
+	pr_err("OTP_INF OV8865:Module=0x%x, Lens=0x%x\n",
+			(*otp).module_id, (*otp).lens_id);
 
 #if 0
 	/*OTP VCM Calibration*/
@@ -237,8 +231,6 @@ static int OV8865_read_OTP(struct b52_sensor *sensor,
 	/*OTP Lenc Calibration*/
 	otp_flag = OV8865_read_i2c(sensor, 0x703a);/*0x7028*/
 	otp_base = 0;
-	checksum = 0;
-	checksum2 = 0;
 	if ((otp_flag & 0xc0) == 0x40)
 		otp_base = 0x703b; /*base address of Lenc Calibration group 1*/
 	else if ((otp_flag & 0x30) == 0x10)
@@ -248,14 +240,10 @@ static int OV8865_read_OTP(struct b52_sensor *sensor,
 
 
 	if (otp_base != 0) {
+		*flag |= 0x10;
 		for (i = 0; i < 62; i++) {
 			lenc[i] = OV8865_read_i2c(sensor, otp_base + i);
-			/*checksum2 += lenc[i];*/
 		}
-		/*checksum2 = (checksum2)%255 + 1;
-		checksum = OV8865_read_i2c(sensor, otp_base + 240);
-		if (checksum == checksum2)*/
-			*flag |= 0x10;
 	} else {
 		for (i = 0; i < 62; i++)
 			lenc[i] = 0;
@@ -265,24 +253,65 @@ static int OV8865_read_OTP(struct b52_sensor *sensor,
 	for (i = 0x7010; i <= 0x70f4; i++)
 		OV8865_write_i2c(sensor, i, 0x0);
 
-	/*set 0x5002 to 0x08*/
-	OV8865_write_i2c(sensor, 0x5002, 0x08);
-
 	return *flag;
 }
 
-static int OV8865_update_wb(struct b52_sensor *sensor,
-			struct b52_sensor_otp *otp, u32 *flag)
+static int check_otp_info(struct b52_sensor *sensor)
 {
-	int rg, bg, r_gain, g_gain, b_gain, base_gain;
+	int flag, addr = 0x0;
+
+	flag = OV8865_read_i2c(sensor, 0x7020);
+	addr = 0;
+	if ((flag & 0xc0) == 0x40)
+		addr = 0x7021;/*base address of WB Calibration group 1*/
+	else if ((flag & 0x30) == 0x10)
+		addr = 0x7026;/*base address of WB Calibration group 2*/
+	else if ((flag & 0x0c) == 0x04)
+		addr = 0x702b;/*base address of WB Calibration group 3*/
+
+	return addr;
+}
+
+static int read_otp_wb(struct b52_sensor *sensor, int addr,
+				struct b52_sensor_otp *otp)
+{
+	int temp;
+
+	temp = OV8865_read_i2c(sensor, addr + 4);
+	otp->rg_ratio = (OV8865_read_i2c(sensor, addr)<<2)
+					+ ((temp>>6) & 0x03);
+	otp->bg_ratio = (OV8865_read_i2c(sensor, addr + 1)<<2)
+					+ ((temp>>4) & 0x03);
+	otp->user_data[0] = 0;
+	otp->user_data[1] = 0;
+
+	return 0;
+}
+
+static int OV8865_update_wb(struct b52_sensor *sensor,
+			struct b52_sensor_otp *otp)
+{
+	int otp_addr;
+	int r_gain, g_gain, b_gain, base_gain;
+	int rg_typical_ratio, bg_typical_ratio;
+
 	/*apply OTP WB Calibration*/
-	if ((*flag) & 0x40) {
-		rg = (*otp).rg_ratio;
-		bg = (*otp).bg_ratio;
-		/*calculate sensor WB gain, 0x400 = 1x gain*/
-		r_gain = 1000 * rg_ratio_typical / rg;
+
+	otp_addr = check_otp_info(sensor);
+	read_otp_wb(sensor, otp_addr, otp);
+
+	if (otp->golden_rg_ratio && otp->golden_bg_ratio) {
+		rg_typical_ratio = otp->golden_rg_ratio;
+		bg_typical_ratio = otp->golden_bg_ratio;
+	} else {
+		rg_typical_ratio = DEFAULT_RG_TYPICAL_RATIO;
+		bg_typical_ratio = DEFAULT_BG_TYPICAL_RATIO;
+	}
+
+		r_gain = (rg_typical_ratio * 1000) / otp->rg_ratio;
+		b_gain = (bg_typical_ratio * 1000) / otp->bg_ratio;
 		g_gain = 1000;
-		b_gain = 1000 * bg_ratio_typical / bg;
+
 		/*find gain<1000*/
 		if (r_gain < 1000 || b_gain < 1000) {
 			if (r_gain < b_gain)
@@ -308,8 +337,7 @@ static int OV8865_update_wb(struct b52_sensor *sensor,
 			OV8865_write_i2c(sensor, 0x501C, b_gain >> 6);
 			OV8865_write_i2c(sensor, 0x501D, b_gain & 0x003f);
 		}
-	}
-	return *flag;
+	return 0;
 }
 static int OV8865_update_lenc(struct b52_sensor *sensor,
 			struct b52_sensor_otp *otp, u32 *flag, u8 *lenc)
@@ -327,19 +355,15 @@ static int OV8865_update_lenc(struct b52_sensor *sensor,
 
 static void OV8865_otp_access_start(struct b52_sensor *sensor)
 {
-	int temp;
-	temp = OV8865_read_i2c(sensor, 0x5002);
-	OV8865_write_i2c(sensor, 0x5002, temp&(~0x08));
-	usleep_range(10000, 10010);
+	/* need stream on sensor before read OTP data*/
 	OV8865_write_i2c(sensor, 0x0100, 0x01);
+	OV8865_write_i2c(sensor, 0x5002, 0x00);
+	usleep_range(5000, 5010);
 }
 
 static void OV8865_otp_access_end(struct b52_sensor *sensor)
 {
-	int temp;
-	temp = OV8865_read_i2c(sensor, 0x5002);
-	OV8865_write_i2c(sensor, 0x5002, temp|(0x08));
-	usleep_range(10000, 10010);
+	OV8865_write_i2c(sensor, 0x5002, 0x08);
 	OV8865_write_i2c(sensor, 0x0100, 0x00);
 }
 
@@ -352,7 +376,6 @@ static int OV8865_update_otp(struct v4l2_subdev *sd,
 	struct b52_sensor *sensor = to_b52_sensor(sd);
 	pr_err("OV8865_update_otp %d", otp->otp_type);
 
-return 0;
 
 	if (otp->otp_type ==  SENSOR_TO_SENSOR) {
 		/*access otp data start*/
@@ -361,14 +384,11 @@ return 0;
 		/*read otp data firstly*/
 		ret = OV8865_read_OTP(sensor, otp, &flag, lenc);
 
-		/*access otp data end*/
-		OV8865_otp_access_end(sensor);
-
 		if (ret < 0)
 			goto fail;
 		/*apply some otp data, include awb and lenc*/
 		if (otp->otp_ctrl & V4L2_CID_SENSOR_OTP_CONTROL_WB) {
-			ret = OV8865_update_wb(sensor, otp, &flag);
+			ret = OV8865_update_wb(sensor, otp);
 			if (ret < 0)
 				goto fail;
 		}
@@ -377,6 +397,9 @@ return 0;
 			if (ret < 0)
 				goto fail;
 		}
+
+		/*access otp data end*/
+		OV8865_otp_access_end(sensor);
 		return 0;
 	} else
 		return -1;
