@@ -916,10 +916,10 @@ static ssize_t fts_tpfwver_show(struct device *dev,
 	mutex_lock(&g_device_mutex);
 
 	if (fts_read_reg(client, FT_REG_FW_VER, &fwver) < 0)
-		num_read_chars = snprintf(buf, PAGE_SIZE,
+		num_read_chars = snprintf(buf, FTS_PAGE_SIZE,
 					"get tp fw version fail!\n");
 	else
-		num_read_chars = snprintf(buf, PAGE_SIZE, "%02X\n", fwver);
+		num_read_chars = snprintf(buf, FTS_PAGE_SIZE, "%02X\n", fwver);
 
 	mutex_unlock(&g_device_mutex);
 
@@ -1071,12 +1071,12 @@ static ssize_t fts_fwupgradeapp_store(struct device *dev,
        //mt65xx_eint_mask(CUST_EINT_TOUCH_PANEL_NUM);
 	if(0==fts_ctpm_fw_upgrade_with_app_file(client, fwname))
 	{
-		num_read_chars = snprintf(buf, PAGE_SIZE,
+		num_read_chars = snprintf(buf, FTS_PAGE_SIZE,
 					"FTP firmware upgrade success!\n");
 	}
 	else
 	{
-		num_read_chars = snprintf(buf, PAGE_SIZE,
+		num_read_chars = snprintf(buf, FTS_PAGE_SIZE,
 					"FTP firmware upgrade fail!\n");
 	}
 
@@ -1243,7 +1243,7 @@ static ssize_t ft5x0x_debug_read(struct file *filp, char __user *page, size_t le
 	//u8 tx = 0, rx = 0;
 	//int i, j;
 
-	unsigned char buf[PAGE_SIZE];
+	unsigned char buf[FTS_PAGE_SIZE];
 	int num_read_chars = 0;
 	int readlen = 0;
 	u8 regvalue = 0x00, regaddr = 0x00;
