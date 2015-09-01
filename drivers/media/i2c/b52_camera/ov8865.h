@@ -528,11 +528,11 @@ struct regval_tab OV8865_stream_off[] = {
 struct regval_tab OV8865_expo[] = {
 	{0x3500, 0x00, 0x0f},
 	{0x3501, 0x00, 0xff},
-	{0x3502, 0x00, 0xff},
+	{0x3502, 0x00, 0xf0},
 };
 struct regval_tab OV8865_ag[] = {
-	{0x3508, 0x00, 0xff},
-	{0x3509, 0x00, 0xff},
+	{0x3508, 0x00, 0x1f},
+	{0x3509, 0x80, 0xff},
 };
 struct regval_tab OV8865_af[] = {
 	{0x3618, 0x00, 0xff},
@@ -686,7 +686,7 @@ struct b52_sensor_data b52_ov8865 = {
 		.num = N_OV8865_VFLIP,
 	},
 	.flip_change_phase = 0,
-	.gain_shift = 0x00,
+	.gain_shift = 0x03,
 	.expo_shift = 0x08,
 	.calc_dphy = 1,
 	.nr_lane = 4,
