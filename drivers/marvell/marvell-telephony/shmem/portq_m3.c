@@ -319,14 +319,14 @@ EXPORT_SYMBOL(m3_shm_ch_deinit);
 int m3_ioctl_handler(unsigned int cmd, unsigned long arg)
 {
 	switch (cmd) {
-	case MSOCKET_IOC_ERRTO: /* m3 timeout */
+	case MSOCKET_IOC_M3_ERRTO: /* m3 timeout */
 		pr_info("MSOCK: MSOCKET_IOC_ERRTO is received!\n");
 		amipc_dump_debug_info();
 		portq_grp_disconnect(portq_grp_m3);
 		portq_broadcast_msg(portq_grp_m3, MsocketLinkdownProcId);
 		return 0;
 
-	case MSOCKET_IOC_RECOVERY: /* m3 recovery */
+	case MSOCKET_IOC_M3_RECOVERY: /* m3 recovery */
 		reinit_completion(&m3_peer_sync);
 		portq_grp_connect(portq_grp_m3);
 		pr_info("MSOCK: MSOCKET_IOC_RECOVERY is received!\n");

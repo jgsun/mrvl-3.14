@@ -671,48 +671,34 @@ static long msocket_ioctl(struct file *filp,
 			  unsigned int cmd, unsigned long arg)
 {
 	struct portq *portq;
-	int port;
+	int port, type = _IOC_TYPE(cmd);
 
-	/*
-	 * extract the type and number bitfields, and don't decode
-	 * wrong cmds: return ENOTTY (inappropriate ioctl) before access_ok()
-	 */
-	if (_IOC_TYPE(cmd) != MSOCKET_IOC_MAGIC)
-		return -ENOTTY;
-	if (_IOC_NR(cmd) > MSOCKET_IOC_MAXNR)
-		return -ENOTTY;
+	switch (type) {
+	case MSOCKET_IOC_MAGIC:
+		if (cmd == MSOCKET_IOC_BIND) {
+			port = arg;
 
-	if (cp_is_aponly() && (MSOCKET_IOC_ERRTO != cmd)
-		&& (MSOCKET_IOC_RECOVERY != cmd))
-		return -1;
-
-	switch (cmd) {
-	case MSOCKET_IOC_BIND:
-		port = arg;
-
-		portq = portq_open(port);
-		if (IS_ERR(portq)) {
-			pr_info("MSOCK: binding port %d error, %p\n",
-			       port, portq);
-			return (long)portq;
-		} else {
-			filp->private_data = portq;
-			pr_info("MSOCK: binding port %d, success.\n",
-			       port);
-			pr_info("MSOCK: port %d is opened by process id:%d (\"%s\")\n",
-			       port, current->tgid, current->comm);
-			return 0;
-		}
-		break;
-	case MSOCKET_IOC_UP:
-	case MSOCKET_IOC_DOWN:
-	case MSOCKET_IOC_PMIC_QUERY:
-	case MSOCKET_IOC_CONNECT:
-	case MSOCKET_IOC_RESET_CP_REQUEST:
-	case MSOCKET_IOC_NETWORK_MODE_CP_NOTIFY:
-		return cp_ioctl_handler(cmd, arg);
-	case MSOCKET_IOC_ERRTO:
-	case MSOCKET_IOC_RECOVERY:
+			portq = portq_open(port);
+			if (IS_ERR(portq)) {
+				pr_info("MSOCK: binding port %d error, %p\n",
+				       port, portq);
+				return (long)portq;
+			} else {
+				filp->private_data = portq;
+				pr_info("MSOCK: binding port %d, success.\n",
+				       port);
+				pr_info("MSOCK: port %d is opened by process id:%d (\"%s\")\n",
+				       port, current->tgid, current->comm);
+				return 0;
+			}
+		} else
+			return -ENOIOCTLCMD;
+	case MSOCKET_IOC_CP_MAGIC:
+		if (cp_is_aponly())
+			return -ENODEV;
+		else
+			return cp_ioctl_handler(cmd, arg);
+	case MSOCKET_IOC_M3_MAGIC:
 		return m3_ioctl_handler(cmd, arg);
 	default:
 		return -ENOIOCTLCMD;
@@ -950,13 +936,13 @@ static int __init msocket_init(void)
 	}
 
 	/* create proc file */
-	if (!proc_create(PROC_CP_FILE_NAME, 0666, NULL, &msocket_cp_proc_fops)) {
+	if (!proc_create(PROC_CP_FILE_NAME, 0644, NULL, &msocket_cp_proc_fops)) {
 		pr_err("%s: create proc failed\n", __func__);
 		rc = -1;
 		goto proc_err;
 	}
 
-	if (!proc_create(PROC_M3_FILE_NAME, 0666, NULL, &msocket_m3_proc_fops)) {
+	if (!proc_create(PROC_M3_FILE_NAME, 0644, NULL, &msocket_m3_proc_fops)) {
 		pr_err("%s: create proc failed\n", __func__);
 		rc = -1;
 		remove_proc_entry(PROC_CP_FILE_NAME, NULL);

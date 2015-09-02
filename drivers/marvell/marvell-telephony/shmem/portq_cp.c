@@ -996,7 +996,7 @@ int cp_ioctl_handler(unsigned int cmd, unsigned long arg)
 	int status;
 
 	switch (cmd) {
-	case MSOCKET_IOC_UP:
+	case MSOCKET_IOC_CP_UP:
 		pr_info("MSOCK: MSOCKET_UP is received!\n");
 		/*
 		 * in the case AP initiative reset CP, AP will first
@@ -1017,7 +1017,7 @@ int cp_ioctl_handler(unsigned int cmd, unsigned long arg)
 		}
 		return 0;
 
-	case MSOCKET_IOC_DOWN:
+	case MSOCKET_IOC_CP_DOWN:
 		pr_info("MSOCK: MSOCKET_DOWN is received!\n");
 		if (likely(pgrp_cp.is_open)) {
 			portq_grp_dump(portq_grp_cp_main);
@@ -1027,7 +1027,7 @@ int cp_ioctl_handler(unsigned int cmd, unsigned long arg)
 		notify_cp_link_status(MsocketLinkdownProcId, NULL);
 		return 0;
 
-	case MSOCKET_IOC_PMIC_QUERY:
+	case MSOCKET_IOC_CP_PMIC_QUERY:
 		pr_info("MSOCK: MSOCKET_PMIC_QUERY is received!\n");
 		status = cpks->cp_pcm_master == PMIC_MASTER_FLAG;
 		if (copy_to_user((void *)arg, &status, sizeof(int)))
@@ -1035,16 +1035,16 @@ int cp_ioctl_handler(unsigned int cmd, unsigned long arg)
 		else
 			return 0;
 
-	case MSOCKET_IOC_CONNECT:
+	case MSOCKET_IOC_CP_CONNECT:
 		pr_info("MSOCK: MSOCKET_IOC_CONNECT is received!\n");
 		portq_grp_connect(portq_grp_cp_main);
 		return 0;
 
-	case MSOCKET_IOC_RESET_CP_REQUEST:
+	case MSOCKET_IOC_CP_RESET_REQUEST:
 		pr_info("MSOCK: MSOCKET_IOC_RESET_CP_REQUEST is received!\n");
 		acipc_reset_cp_request();
 		return 0;
-	case MSOCKET_IOC_NETWORK_MODE_CP_NOTIFY:
+	case MSOCKET_IOC_CP_NETWORK_MODE_NOTIFY:
 		/*notify CP network mode*/
 		mutex_lock(&cpks_lock);
 		if (cpks) {
