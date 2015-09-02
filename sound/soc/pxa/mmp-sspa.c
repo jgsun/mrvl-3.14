@@ -176,7 +176,7 @@ static int mmp_sspa_set_dai_fmt(struct snd_soc_dai *cpu_dai,
 		return 0;
 	}
 	/* reset port settings */
-	sspa_sp = SSPA_SP_WEN | SSPA_SP_FIX;
+	sspa_sp = SSPA_SP_WEN | SSPA_SP_S_RST | SSPA_SP_FFLUSH | SSPA_SP_FIX;
 	sspa_ctrl = 0;
 
 	switch (fmt & SND_SOC_DAIFMT_MASTER_MASK) {
