@@ -26,7 +26,7 @@
 #define DEFAULT_BG_TYPICAL_RATIO 0x11f
 
 /*
- * Sysclk 148.2Mhz mipi speed 728 Mbps/lane
+ * Sysclk 148.2Mhz mipi speed 754 Mbps/lane
  * HTS:1940, VTS:2544
  * 3264 x 2448 30fps 4lane 26Mhz input clock
  */
@@ -38,7 +38,7 @@ struct regval_tab OV8865_res_init[] = {
 	{0x0100, 0x00},
 	{0x0100, 0x00},
 	{0x3638, 0xff},
-	{0x0302, 0x1c},
+	{0x0302, 0x1d},
 	{0x0303, 0x00},
 	{0x0304, 0x03},
 	{0x030b, 0x02},
@@ -536,7 +536,7 @@ struct b52_sensor_data b52_ov8865 = {
 	.expo_shift = 0x08,
 	.calc_dphy = 1,
 	.nr_lane = 4,
-	.mipi_clk_bps = 728000000,
+	.mipi_clk_bps = 754000000,
 	.ops = &ov8865_ops,
 	.module = OV8865_MODULE_INFO,
 	.num_module = N_OV8865_MODULE_INFO,
