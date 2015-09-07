@@ -837,7 +837,7 @@
 
 			cp-load {
 				compatible = "marvell,cp_load";
-				cp-type = <3>; /* pxa1908 */
+				cp-type = <0x31393138>; /* pxa1918 */
 				lpm-qos = <PM_QOS_CPUIDLE_BLOCK_AXI>;
 				remap-smc-funcid = <0xd0002001>;
 				status = "disabled";
