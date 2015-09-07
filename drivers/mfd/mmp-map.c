@@ -32,6 +32,7 @@
 #include <linux/io.h>
 #include <linux/uaccess.h>
 #include "mmp-map-fw.h"
+#include <linux/clk/mmpfuse.h>
 
 #define DRV_NAME      "mmp-map"
 #define DRIVER_VERSION  "1.00"
@@ -1765,7 +1766,15 @@ static int mmp_map_parse_dt(struct platform_device *pdev,
 	ret = of_property_read_u32(np, "sleep_vol", &sleep_vol);
 	/* if sleep_vol is not specificed, do not set audio mode voltage */
 	if (ret >= 0) {
-		map_priv->sleep_vol = sleep_vol;
+		/* Get audio mode voltage from dvfs file. It will override
+		 * dts setting.
+		 * The helan3 tsmc chip voltage setting is 950mv,
+		 * It is different from other chip.
+		 */
+		if (get_d1_voltage())
+			map_priv->sleep_vol = get_d1_voltage();
+		else
+			map_priv->sleep_vol = sleep_vol;
 
 		of_property_read_string(np, "pmic-name", &pmic_name);
 		if (!strcmp(pmic_name, "88pm880"))
