@@ -331,6 +331,113 @@ static void OV8865_otp_access_end(struct b52_sensor *sensor)
 	OV8865_write_i2c(sensor, 0x0100, 0x00);
 }
 
+static int OV8865_read_data(struct v4l2_subdev *sd,
+				struct b52_sensor_otp *otp)
+{
+	int i, len, otp_flag, otp_base, tmp_len = 0;
+	int ret = 0;
+	char *paddr = NULL;
+	char *bank_grp = NULL;
+	struct b52_sensor *sensor = to_b52_sensor(sd);
+
+	if (!otp->user_otp) {
+		pr_err("%s:user otp haven't init\n", __func__);
+		return 0;
+	}
+
+	OV8865_otp_access_start(sensor);
+	/*read module data, return 0*/
+	len = otp->user_otp->module_data_len;
+	if (len > 0) {
+		bank_grp = devm_kzalloc(sd->dev, len, GFP_KERNEL);
+		for (i = 0; i < len; i++)
+			bank_grp[i] = 0;
+		paddr = otp->user_otp->module_data;
+		if (copy_to_user(paddr, &bank_grp[0], len)) {
+			ret = -EIO;
+			goto err;
+		}
+		devm_kfree(sd->dev, bank_grp);
+	}
+
+	/* read vcm otp */
+	len = otp->user_otp->vcm_otp_len;
+	if (len > 0) {
+		bank_grp = devm_kzalloc(sd->dev, len, GFP_KERNEL);
+		/*load vcm OTP only */
+		OV8865_write_i2c(sensor, 0x3d84, 0xC0);
+		OV8865_write_i2c(sensor, 0x3d88, 0x70);/*VCM OTP start address*/
+		OV8865_write_i2c(sensor, 0x3d89, 0x30);
+		OV8865_write_i2c(sensor, 0x3d8A, 0x70);/*VCM OTP end address*/
+		OV8865_write_i2c(sensor, 0x3d8B, 0x39);
+		OV8865_write_i2c(sensor, 0x3d81, 0x01);/*load otp data*/
+		usleep_range(5000, 5010);/*delay 10ms*/
+
+		otp_base = 0;
+		otp_flag = OV8865_read_i2c(sensor, 0x7030);
+
+		if ((otp_flag & 0xc0) == 0x40)
+			otp_base = 0x7031; /*group 1*/
+		else if ((otp_flag & 0x30) == 0x10)
+			otp_base = 0x7034; /*group 2*/
+		else if ((otp_flag & 0x0c) == 0x04)
+			otp_base = 0x7037; /*group 3*/
+
+		if (otp_base != 0) {
+			for (i = 0; i < len; i++)
+				bank_grp[i] = OV8865_read_i2c(sensor, otp_base + i);
+			pr_info("%s:got vcm OTP data: 0x%x,0x%x,0x%x\n",
+				__func__, bank_grp[0], bank_grp[1], bank_grp[2]);
+		} else {
+			for (i = 0; i < len; i++)
+				bank_grp[i] = 0;
+		}
+		/* Clear OTP data */
+		for (i = 0x7030; i <= 0x7039; i++)
+			OV8865_write_i2c(sensor, i, 0x0);
+		paddr = (char *)otp->user_otp->otp_data + tmp_len;
+		if (copy_to_user(paddr, &bank_grp[0], len)) {
+			ret = -EIO;
+			goto err;
+		}
+		tmp_len += len;
+		devm_kfree(sd->dev, bank_grp);
+	}
+
+	/* read wb otp, return 0 */
+	len = otp->user_otp->wb_otp_len;
+	if (len > 0) {
+		bank_grp = devm_kzalloc(sd->dev, len, GFP_KERNEL);
+		for (i = 0; i < len; i++)
+			bank_grp[i] = 0;
+		paddr = (char *)otp->user_otp->otp_data + tmp_len;
+		if (copy_to_user(paddr, &bank_grp[0], len)) {
+			ret = -EIO;
+			goto err;
+		}
+		tmp_len += len;
+		devm_kfree(sd->dev, bank_grp);
+	}
+
+	/*read lsc otp, return 0 */
+	len = otp->user_otp->lsc_otp_len;
+	if (len > 0) {
+		bank_grp = devm_kzalloc(sd->dev, len, GFP_KERNEL);
+		for (i = 0; i < len; i++)
+			bank_grp[i] = 0;
+		paddr = (char *)(otp->user_otp->otp_data + tmp_len);
+		if (copy_to_user(paddr, &bank_grp[0], len)) {
+			ret = -EIO;
+			goto err;
+		}
+		devm_kfree(sd->dev, bank_grp);
+	}
+err:
+	devm_kfree(sd->dev, bank_grp);
+	OV8865_otp_access_end(sensor);
+	return ret;
+}
+
 static int OV8865_update_otp(struct v4l2_subdev *sd,
 				struct b52_sensor_otp *otp)
 {
@@ -364,6 +471,9 @@ static int OV8865_update_otp(struct v4l2_subdev *sd,
 
 		/*access otp data end*/
 		OV8865_otp_access_end(sensor);
+		return 0;
+	} else if (otp->otp_type ==  SENSOR_TO_ISP) {
+		OV8865_read_data(sd, otp);
 		return 0;
 	} else
 		return -1;
