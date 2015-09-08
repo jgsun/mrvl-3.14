@@ -1047,11 +1047,14 @@ void cpu_dcstat_event(struct clk *clk, unsigned int cpuid,
 
 			cpuidle_qos = LPM_C0;
 			if (cpuidle_qos_min != PM_QOS_CPUIDLE_BLOCK_DEFAULT_VALUE) {
-				if (cpuidle_qos_min == LPM_D2_UDR)
+				if (cpuidle_qos_min >= LPM_D2 &&
+					cpuidle_qos_min <= LPM_D2_UDR)
 					cpuidle_qos = LPM_D1;
-				else if (cpuidle_qos_min == LPM_D1)
+				else if (cpuidle_qos_min > LPM_D1P &&
+						cpuidle_qos_min <= LPM_D1)
 					cpuidle_qos = LPM_D1P;
-				else if (cpuidle_qos_min == LPM_D1P)
+				else if (cpuidle_qos_min > LPM_MP2 &&
+						cpuidle_qos_min <= LPM_D1P)
 					cpuidle_qos = LPM_MP2;
 			}
 
@@ -1060,11 +1063,12 @@ void cpu_dcstat_event(struct clk *clk, unsigned int cpuid,
 
 			if (active_flag == 0) {
 				dc_stat_info = &per_cpu(cpu_dc_stat, cpuid);
-				if (LPM_D1P == lpm_min)
+				if (lpm_min > LPM_MP2 && lpm_min <= LPM_D1P)
 					idle_dcstat_info.D1P_idle_start = ktime_temp;
-				else if (LPM_D1 == lpm_min)
+				else if (lpm_min > LPM_D1P && lpm_min <= LPM_D1)
 					idle_dcstat_info.D1_idle_start = ktime_temp;
-				else if (LPM_D2 == lpm_min)
+				else if (lpm_min >= LPM_D2 &&
+						lpm_min <= LPM_D2_UDR)
 					idle_dcstat_info.D2_idle_start = ktime_temp;
 				/* all_m2 */
 				if (lpm_min >= LPM_MP2 && lpm_min <= LPM_D2 &&
@@ -1072,11 +1076,12 @@ void cpu_dcstat_event(struct clk *clk, unsigned int cpuid,
 					idle_dcstat_info.all_m2_start = ktime_temp;
 
 #ifdef CONFIG_VOLDC_STAT
-				if (LPM_D1P == lpm_min)
+				if (lpm_min > LPM_MP2 && lpm_min <= LPM_D1P)
 					vol_dcstat_event(VLSTAT_LPM_ENTRY, 3, 0);
-				else if (LPM_D1 == lpm_min)
+				else if (lpm_min > LPM_D1P && lpm_min <= LPM_D1)
 					vol_dcstat_event(VLSTAT_LPM_ENTRY, 4, 0);
-				else if (LPM_D2 == lpm_min)
+				else if (lpm_min >= LPM_D2 &&
+						lpm_min <= LPM_D2_UDR)
 					vol_dcstat_event(VLSTAT_LPM_ENTRY, 5, 0);
 #endif
 			}
