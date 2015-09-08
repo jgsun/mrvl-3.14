@@ -89,6 +89,16 @@ int cpuidle_setmode(int qos_min)
 			/* if only disable D1 mode, set the AXISD bit */
 			apcr_set |= PMUM_AXISD;
 			break;
+			/* disable VCTCXO mode, PM_QOS_CPUIDLE_BLOCK_VCTCXO */
+	case PM_QOS_CPUIDLE_BLOCK_UDR_VCTCXO:
+			apcr_clear |= PMUM_STBYEN;
+			apcr_clear |= PMUM_VCTCXOSD;
+			/* disable D2 mode */
+			apcr_set |= PMUM_DDRCORSD;
+			apcr_set |= PMUM_SLPEN;
+			apcr_set |= PMUM_APBSD;
+			apcr_set |= PMUM_AXISD;
+			break;
 			/* disable D2 mode, PM_QOS_CPUIDLE_BLOCK_UDR */
 	case PM_QOS_CPUIDLE_BLOCK_UDR:
 			/* UDR mode, POWER_MODE_UDR */
