@@ -2490,6 +2490,14 @@ static int snd_soc_dapm_add_path(struct snd_soc_dapm_context *dapm,
 	}
 
 	/* connect dynamic paths */
+	if (wsource->id == snd_soc_dapm_demux) {
+		ret = dapm_connect_demux(dapm, wsource, wsink, path, control,
+			&wsource->kcontrol_news[0]);
+		if (ret != 0)
+			goto err;
+		return 0;
+	}
+
 	switch (wsink->id) {
 	case snd_soc_dapm_adc:
 	case snd_soc_dapm_dac:
@@ -2511,6 +2519,7 @@ static int snd_soc_dapm_add_path(struct snd_soc_dapm_context *dapm,
 	case snd_soc_dapm_dai_out:
 	case snd_soc_dapm_dai_link:
 	case snd_soc_dapm_kcontrol:
+	case snd_soc_dapm_demux:
 		list_add(&path->list, &dapm->card->paths);
 		list_add(&path->list_sink, &wsink->sources);
 		list_add(&path->list_source, &wsource->sinks);
@@ -2520,12 +2529,6 @@ static int snd_soc_dapm_add_path(struct snd_soc_dapm_context *dapm,
 	case snd_soc_dapm_virt_mux:
 	case snd_soc_dapm_value_mux:
 		ret = dapm_connect_mux(dapm, wsource, wsink, path, control,
-			&wsink->kcontrol_news[0]);
-		if (ret != 0)
-			goto err;
-		break;
-	case snd_soc_dapm_demux:
-		ret = dapm_connect_demux(dapm, wsource, wsink, path, control,
 			&wsink->kcontrol_news[0]);
 		if (ret != 0)
 			goto err;
