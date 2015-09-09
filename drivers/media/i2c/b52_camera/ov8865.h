@@ -412,6 +412,7 @@ struct b52_sensor_i2c_attr OV8865_i2c_attr[] = {
 static struct b52_sensor_module OV8865_MODULE_INFO[] = {
 	[0] = {
 		.id = 0x6,
+		.name = "0x0006",
 	},
 };
 #define N_OV8865_I2C_ATTR ARRAY_SIZE(OV8865_i2c_attr)

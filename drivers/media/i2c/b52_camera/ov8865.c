@@ -346,12 +346,22 @@ static int OV8865_read_data(struct v4l2_subdev *sd,
 	}
 
 	OV8865_otp_access_start(sensor);
-	/*read module data, return 0*/
+	/*return current module name, not real module id get from OTP */
 	len = otp->user_otp->module_data_len;
 	if (len > 0) {
 		bank_grp = devm_kzalloc(sd->dev, len, GFP_KERNEL);
-		for (i = 0; i < len; i++)
-			bank_grp[i] = 0;
+		if (sensor->drvdata->module && sensor->drvdata->num_module > 0
+			&& sensor->cur_mod_id >= 0
+			&& sensor->cur_mod_id < sensor->drvdata->num_module
+			&& sensor->drvdata->module[sensor->cur_mod_id].name) {
+			for (i = 0; i < len; i++)
+				bank_grp[i] =
+				sensor->drvdata->module[sensor->cur_mod_id].name[i];
+		} else {
+			for (i = 0; i < len; i++)
+				bank_grp[i] = 0;
+		}
+
 		paddr = otp->user_otp->module_data;
 		if (copy_to_user(paddr, &bank_grp[0], len)) {
 			ret = -EIO;
