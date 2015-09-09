@@ -325,7 +325,7 @@ static void mcpm_plat_pm_down(void *arg)
 	bool skip_wfi = false, last_man = false;
 	unsigned int *idx = (unsigned int *)arg;
 	unsigned int calc_state, vote_state = 0;
-	unsigned int cluster_off;
+	unsigned int cluster_off = 0;
 
 	mpidr = read_cpuid_mpidr();
 	cpu = MPIDR_AFFINITY_LEVEL(mpidr, 0);
