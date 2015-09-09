@@ -485,8 +485,30 @@ static int OV8865_update_otp(struct v4l2_subdev *sd,
 	} else if (otp->otp_type ==  SENSOR_TO_ISP) {
 		OV8865_read_data(sd, otp);
 		return 0;
+	} else if (otp->otp_type == APPLY_TYPICAL_VALUE) {
+		if (!otp->user_otp) {
+			pr_err("user otp haven't init\n");
+			return 0;
+		}
+		if (otp->user_otp->rg_typical_ratio &&
+			otp->user_otp->bg_typical_ratio) {
+			otp->golden_rg_ratio = otp->user_otp->rg_typical_ratio;
+			otp->golden_bg_ratio = otp->user_otp->bg_typical_ratio;
+			otp->golden_gg_ratio = otp->user_otp->gg_typical_ratio;
+			pr_info("%s:got WB typical values,RG:0x%x,BG:0x%x,GG:0x%x\n",
+				__func__, otp->golden_rg_ratio,
+				otp->golden_bg_ratio, otp->golden_gg_ratio);
+		} else {
+			otp->golden_rg_ratio = DEFAULT_RG_TYPICAL_RATIO;
+			otp->golden_bg_ratio = DEFAULT_BG_TYPICAL_RATIO;
+			otp->golden_gg_ratio = 0;
+			pr_err("%s:invalid typical values,use the default values.\n",
+				__func__);
+		}
+		return 0;
 	} else
 		return -1;
+	return 0;
 fail:
 	pr_err("otp update fail\n");
 	return ret;
