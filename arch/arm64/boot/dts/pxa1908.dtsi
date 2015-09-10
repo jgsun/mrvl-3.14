@@ -685,11 +685,11 @@
 
 				mrvl,i2c-fast-mode;
 				/*
-				 *ilcr: fast mode b17~9=0x23, 390k
+				 *ilcr: fast mode b17~9=0x29, 390k
 				 *      standard mode b8~0=0x9f, 97k
 				 *iwcr: b5~0=b01010 recommended value from spec
 				 */
-				marvell,i2c-ilcr = <0x082C509f>;
+				marvell,i2c-ilcr = <0x082C529f>;
 				marvell,i2c-iwcr = <0x142a>;
 				marvell,i2c-enable-bus-rst;
 
@@ -706,7 +706,7 @@
 				lpm-qos = <PM_QOS_CPUIDLE_BLOCK_DDR>;
 
 				mrvl,i2c-fast-mode;
-				marvell,i2c-ilcr = <0x082C509f>;
+				marvell,i2c-ilcr = <0x082C529f>;
 				marvell,i2c-iwcr = <0x142a>;
 				marvell,i2c-enable-bus-rst;
 
@@ -725,7 +725,7 @@
 				reg = <0xd4037000 0x64>,
 				      <0xd403d300 0x4>;
 				mrvl,i2c-fast-mode;
-				marvell,i2c-ilcr = <0x082C509f>;
+				marvell,i2c-ilcr = <0x082C529f>;
 				marvell,i2c-iwcr = <0x142a>;
 				marvell,i2c-enable-bus-rst;
 
@@ -744,11 +744,11 @@
 
 				mrvl,i2c-fast-mode;
 				/*
-				 *ilcr: fast mode b17~9=0x23, 390k
+				 *ilcr: fast mode b17~9=0x29, 390k
 				 *      standard mode b8~0=0x9f, 97k
 				 *iwcr: b5~0=b01010 recommended value from spec
 				 */
-				marvell,i2c-ilcr = <0x082C509f>;
+				marvell,i2c-ilcr = <0x082C529f>;
 				marvell,i2c-iwcr = <0x142a>;
 				marvell,i2c-enable-bus-rst;
 
