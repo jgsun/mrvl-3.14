@@ -64,9 +64,7 @@ static int OV8865_get_mipiclock(struct v4l2_subdev *sd, u32 *rate, u32 mclk)
 	Pll1_divm = temp2 + 1;
 	*rate = mclk / Pll1_predivp * 2 / Pll1_prediv2x * Pll1_mult / Pll1_divm;
 
-
-	pr_err("OV8865_get_mipiclock %d", *rate);
-
+	pr_debug("%s: %d\n", __func__, *rate);
 	return 0;
 }
 
@@ -89,7 +87,7 @@ static int OV8865_get_pixelclock(struct v4l2_subdev *sd, u32 *rate, u32 mclk)
 	int Pll2_prediv2x_map[] = {2, 3, 4, 5, 6, 8, 12, 16};
 	int Sys_divider2x_map[] = {2, 3, 4, 5, 6, 7, 8, 10};
 	int Sys_prediv_map[] = {1, 2, 4, 1};
-int Sclk_pdiv_map[] = {1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+	int Sclk_pdiv_map[] = {1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
 	struct b52_sensor *sensor = to_b52_sensor(sd);
 
 	b52_sensor_call(sensor, i2c_read, 0x0312, &temp1, 1);
@@ -125,8 +123,7 @@ int Sclk_pdiv_map[] = {1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
 	*/
 	*rate = *rate * 2;
 
-	pr_err("OV8865_get_pixelclock %d", *rate);
-
+	pr_debug("%s: %d\n", __func__, *rate);
 	return 0;
 }
 
@@ -164,9 +161,10 @@ static int OV8865_read_OTP(struct b52_sensor *sensor,
 		(*otp).lens_id = 0;
 	}
 
-	pr_err("OTP_INF OV8865:Module=0x%x, Lens=0x%x\n",
-			(*otp).module_id, (*otp).lens_id);
+	pr_info("%s:OTP_INF OV8865:Module=0x%x, Lens=0x%x\n",
+			__func__, (*otp).module_id, (*otp).lens_id);
 
+	/*userspace cover the vcm otp*/
 #if 0
 	/*OTP VCM Calibration*/
 	otp_flag = OV8865_read_i2c(sensor, 0x7030);
@@ -260,16 +258,19 @@ static int OV8865_update_wb(struct b52_sensor *sensor,
 	int rg_typical_ratio, bg_typical_ratio;
 
 	/*apply OTP WB Calibration*/
-
 	otp_addr = check_otp_info(sensor);
 	read_otp_wb(sensor, otp_addr, otp);
 
 	if (otp->golden_rg_ratio && otp->golden_bg_ratio) {
 		rg_typical_ratio = otp->golden_rg_ratio;
 		bg_typical_ratio = otp->golden_bg_ratio;
+		pr_info("%s:use the userspace golden rg/bg ratio:0x%x,0x%x\n",
+			__func__, otp->golden_rg_ratio, otp->golden_bg_ratio);
 	} else {
 		rg_typical_ratio = DEFAULT_RG_TYPICAL_RATIO;
 		bg_typical_ratio = DEFAULT_BG_TYPICAL_RATIO;
+		pr_info("%s:invalid userspace golden rg/bg ratio,use default:0x%x,0x%x\n",
+			__func__, DEFAULT_RG_TYPICAL_RATIO, DEFAULT_BG_TYPICAL_RATIO);
 	}
 
 		r_gain = (rg_typical_ratio * 1000) / otp->rg_ratio;
@@ -342,6 +343,7 @@ static int OV8865_read_data(struct v4l2_subdev *sd,
 
 	if (!otp->user_otp) {
 		pr_err("%s:user otp haven't init\n", __func__);
+
 		return 0;
 	}
 
@@ -455,7 +457,7 @@ static int OV8865_update_otp(struct v4l2_subdev *sd,
 	int flag = 0;
 	u8 lenc[240];
 	struct b52_sensor *sensor = to_b52_sensor(sd);
-	pr_err("OV8865_update_otp %d", otp->otp_type);
+	pr_info("%s: %d\n", __func__, otp->otp_type);
 
 
 	if (otp->otp_type ==  SENSOR_TO_SENSOR) {
@@ -487,7 +489,7 @@ static int OV8865_update_otp(struct v4l2_subdev *sd,
 		return 0;
 	} else if (otp->otp_type == APPLY_TYPICAL_VALUE) {
 		if (!otp->user_otp) {
-			pr_err("user otp haven't init\n");
+			pr_err("%s: user otp haven't init\n", __func__);
 			return 0;
 		}
 		if (otp->user_otp->rg_typical_ratio &&
@@ -510,7 +512,7 @@ static int OV8865_update_otp(struct v4l2_subdev *sd,
 		return -1;
 	return 0;
 fail:
-	pr_err("otp update fail\n");
+	pr_err("%s:otp update fail\n", __func__);
 	return ret;
 }
 
