@@ -396,10 +396,10 @@ struct regval_tab OV8865_af[] = {
 	{0x3619, 0x00, 0xff},
 };
 struct regval_tab OV8865_vflip[] = {
-	{0x3820, 0x06, 0x6},
+	{0x3820, 0x00, 0x06},
 };
 struct regval_tab OV8865_hflip[] = {
-	{0x3821, 0x06, 0x6},
+	{0x3821, 0x46, 0x06},
 };
 
 struct b52_sensor_i2c_attr OV8865_i2c_attr[] = {
