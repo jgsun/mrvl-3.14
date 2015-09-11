@@ -182,8 +182,8 @@ struct ion_phys_data {
  * @size:	 buffer size
  */
 struct user_map_data {
-	unsigned long start;
-	dma_addr_t dma_address;
+	unsigned int start;
+	unsigned int dma_address;
 	unsigned int flags;
 	unsigned int size;
 };
