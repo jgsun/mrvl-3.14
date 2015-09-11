@@ -144,6 +144,7 @@ struct pm88x_battery_info {
 
 	bool			use_ntc;
 	bool			bat_temp_monitor_en;
+	bool			disable_decrease_cap_in_charging;
 	int			gpadc_det_no;
 	int			gpadc_temp_no;
 
@@ -1220,7 +1221,8 @@ static void pm88x_battery_correct_soc(struct pm88x_battery_info *info,
 		 * so we need to monitor this case and hold the battery capacity
 		 * to make sure it doesn't drop.
 		 */
-		if (ccnt_val->previous_soc > ccnt_val->soc) {
+		if (info->disable_decrease_cap_in_charging
+		    && ccnt_val->previous_soc > ccnt_val->soc) {
 			dev_info(info->dev,
 				 "%s: supplement: previous_soc = %d%%, new_soc = %d%%\n",
 				 __func__,
@@ -2286,6 +2288,8 @@ static int pm88x_battery_dt_init(struct device_node *np,
 	ret = of_property_read_u32_array(np, "power-off-extreme-th",
 					 info->power_off_extreme_th, 2);
 
+	info->disable_decrease_cap_in_charging = of_property_read_bool(np,
+				"disable-decrease-cap-in-charging");
 	return 0;
 }
 
