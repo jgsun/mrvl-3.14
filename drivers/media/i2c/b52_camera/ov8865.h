@@ -409,10 +409,12 @@ struct b52_sensor_i2c_attr OV8865_i2c_attr[] = {
 		.addr = 0x10,
 	},
 };
+/* if want to enable multi-module feature,
+ * please enable READ_MODULE_INFO otp_type at first */
 static struct b52_sensor_module OV8865_MODULE_INFO[] = {
 	[0] = {
-		.id = 0x6,
-		.name = "0x0006",
+		.id = 0x3,
+		.name = "0x0003",
 	},
 };
 #define N_OV8865_I2C_ATTR ARRAY_SIZE(OV8865_i2c_attr)
