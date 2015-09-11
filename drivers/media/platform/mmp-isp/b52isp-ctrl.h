@@ -100,6 +100,7 @@ struct b52isp_ctrls {
 	/* ISP set fps */
 	struct v4l2_ctrl *set_fps;
 	/* user config data*/
+	s32 *ev_bias_offset;
 	struct v4l2_rect af_win;
 	struct b52isp_win metering_roi;
 	struct b52isp_expo_metering metering_mode[NR_METERING_MODE];

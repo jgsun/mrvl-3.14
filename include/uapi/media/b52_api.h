@@ -173,6 +173,11 @@ struct b52isp_sharpness {
 	__u8 sha_arr[6];
 };
 
+#define EV_BIAS_NUM 13
+struct b52isp_ev {
+	__s32 ev_bias_offset[EV_BIAS_NUM];
+};
+
 enum v4l2_priv_colorfx {
 	V4L2_PRIV_COLORFX_NONE          = 0,
 	V4L2_PRIV_COLORFX_MONO_CHROME   = 1,
@@ -376,4 +381,6 @@ enum B52_flash_type {
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 15, struct b52isp_saturation)
 #define VIDIOC_PRIVATE_B52ISP_SHARPNESS\
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 16, struct b52isp_sharpness)
+#define VIDIOC_PRIVATE_B52ISP_CONFIG_EV\
+	_IOW('V', BASE_VIDIOC_PRIVATE + 17, struct b52isp_ev)
 #endif /* _B52_API_H */

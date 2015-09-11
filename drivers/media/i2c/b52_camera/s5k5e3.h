@@ -297,10 +297,6 @@ static struct b52_sensor_module s5k5e3_MODULE_INFO[] = {
 		.id = 0,
 	},
 };
-static int ev_bias_offset[] = {
-	-0x3C, -0x33, -0x33, -0x2C, -0x22, -0x0D, 0,
-	0x16, 0x2F, 0x5F, 0x7F, 0x4B, 0x5A
-};
 
 #define N_S5K5E3_I2C_ATTR ARRAY_SIZE(s5k5e3_i2c_attr)
 #define N_S5K5E3_INIT ARRAY_SIZE(s5k5e3_res_init)
@@ -436,7 +432,7 @@ struct b52_sensor_data b52_s5k5e3 = {
 		.tab = s5k5e3_vflip,
 		.num = N_S5K5E3_VFLIP,
 	},
-	.ev_bias_offset = ev_bias_offset,
+
 	.flip_change_phase =  1,
 	/* A gain format is 8.5 */
 	.gain_shift = 0x00,

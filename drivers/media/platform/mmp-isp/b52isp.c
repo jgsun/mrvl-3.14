@@ -1332,6 +1332,23 @@ static int b52isp_sharpness(struct isp_subdev *isd,
 	return 0;
 }
 
+static int b52isp_config_ev(struct isp_subdev *isd, struct b52isp_ev *ev)
+{
+	int i;
+	struct b52isp_lpipe *pipe = isd->drv_priv;
+	struct b52isp_ctrls *ctrls = &pipe->ctrls;
+
+	if (!ctrls || !ev) {
+		pr_err("%s: paramter is NULL\n", __func__);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < EV_BIAS_NUM; i++)
+		ctrls->ev_bias_offset[i] = ev->ev_bias_offset[i];
+
+	return 0;
+}
+
 /* ioctl(subdev, IOCTL_XXX, arg) is handled by this one */
 static long b52isp_path_ioctl(struct v4l2_subdev *sd,
 				unsigned int cmd, void *arg)
@@ -1388,6 +1405,9 @@ static long b52isp_path_ioctl(struct v4l2_subdev *sd,
 		break;
 	case VIDIOC_PRIVATE_B52ISP_SHARPNESS:
 		ret = b52isp_sharpness(isd, (struct b52isp_sharpness *)arg);
+		break;
+	case VIDIOC_PRIVATE_B52ISP_CONFIG_EV:
+		ret = b52isp_config_ev(isd, (struct b52isp_ev *)arg);
 		break;
 	default:
 		d_inf(1, "unknown ioctl '%c', dir=%d, #%d (0x%08x)\n",
@@ -1533,6 +1553,7 @@ static long b52isp_compat_ioctl32(struct v4l2_subdev *sd,
 	case VIDIOC_PRIVATE_B52ISP_BRIGHTNESS:
 	case VIDIOC_PRIVATE_B52ISP_SATURATION:
 	case VIDIOC_PRIVATE_B52ISP_SHARPNESS:
+	case VIDIOC_PRIVATE_B52ISP_CONFIG_EV:
 		break;
 	default:
 		d_inf(1, "unknown compat ioctl '%c', dir=%d, #%d (0x%08x)\n",

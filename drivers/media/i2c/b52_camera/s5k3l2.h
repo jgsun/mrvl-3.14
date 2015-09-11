@@ -970,10 +970,7 @@ struct b52_sensor_i2c_attr S5K3L2_i2c_attr[] = {
 		.addr = 0x2d,
 	},
 };
-static int ev_bias_offset[] = {
-	-0x3C, -0x33, -0x2A, -0x21, -0x18, -0x0C, 0,
-	0x0F, 0x1E, 0x2D, 0x3C, 0x4B, 0x5A
-};
+
 static struct b52_sensor_module S5K3L2_MODULE_INFO[] = {
 	[0] = {
 		.id = 0,
@@ -1099,7 +1096,7 @@ struct b52_sensor_data b52_s5k3l2 = {
 		.tab = S5K3L2_vflip,
 		.num = N_S5K3L2_VFLIP,
 	},
-	.ev_bias_offset = ev_bias_offset,
+
 	.flip_change_phase =  0,
 	/* A gain format is 8.5 */
 	.gain_shift = 0x00,

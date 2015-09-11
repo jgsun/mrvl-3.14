@@ -858,7 +858,7 @@ static const s64 ev_bias_qmenu[] = {
 	-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6
 };
 
-static const int ev_bias_offset[] = {
+static s32 ev_bias_offset[] = {
 	-0x3C, -0x33, -0x2A, -0x21, -0x18, -0x0C, 0,
 	0x0F, 0x1E, 0x2D, 0x3C, 0x4B, 0x5A
 };
@@ -868,8 +868,9 @@ static const int ev_ext_offset[] = {
 	0x20, 0x20, 0x20, 0x20, 0x20, 0x20
 };
 
-static int b52isp_ctrl_set_expo_bias(int idx, int id, struct b52_sensor *sensor)
+static int b52isp_ctrl_set_expo_bias(struct b52isp_ctrls *ctrls, int id)
 {
+	int idx = ctrls->expo_bias->val;
 	int low_target;
 	int high_target;
 	int offset;
@@ -886,10 +887,8 @@ static int b52isp_ctrl_set_expo_bias(int idx, int id, struct b52_sensor *sensor)
 			pr_err("exposure bias value %d is wrong\n", idx);
 			return -EINVAL;
 	}
-	if (sensor != NULL && sensor->drvdata->ev_bias_offset != NULL)
-		offset = sensor->drvdata->ev_bias_offset[idx];
-	else
-		offset = ev_bias_offset[idx];
+
+	offset = ctrls->ev_bias_offset[idx];
 
 	low_target = low_def[id] + offset;
 	low_target = clamp(low_target, 0, 0xFF);
@@ -934,7 +933,7 @@ static int b52isp_ctrl_set_expo(struct b52isp_ctrls *ctrls, int id)
 		}
 
 		if (ctrls->expo_bias->is_new)
-			b52isp_ctrl_set_expo_bias(ctrls->expo_bias->val, id, sensor);
+			b52isp_ctrl_set_expo_bias(ctrls, id);
 		break;
 
 	case V4L2_EXPOSURE_MANUAL:
@@ -2004,6 +2003,7 @@ int b52isp_init_ctrls(struct b52isp_ctrls *ctrls)
 	v4l2_ctrl_cluster(8, &ctrls->auto_focus);
 	v4l2_ctrl_cluster(3, &ctrls->auto_frame_rate);
 
+	ctrls->ev_bias_offset = ev_bias_offset;
 	ctrls->af_win = b52isp_ctrl_af_win;
 	ctrls->metering_roi = b52isp_ctrl_metering_roi;
 
