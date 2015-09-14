@@ -1286,6 +1286,7 @@ static int pxav3_execute_tuning_dvfs(struct sdhci_host *host, u32 opcode)
 	/* scale to min freq before requesting dvfs levels */
 	if (sdh_tunning_scaling2minfreq(pdev))
 		return -EPERM;
+	sdh_tuning_get_freqs();
 
 	dvfs_level_min = max(pdata->dvfs_level_min, pxa_sdh_get_lowest_dvfs_level(host));
 	do {
@@ -1309,6 +1310,7 @@ static int pxav3_execute_tuning_dvfs(struct sdhci_host *host, u32 opcode)
 		if (is_dvfs_request_ok != 1) {
 			pr_err("%s: drequest dvfs level %d fail and tuning stop\n",
 				mmc_hostname(host->mmc), dvfs_level);
+			sdh_tuning_get_freqs();
 			#ifdef CONFIG_PXA_DVFS
 			hwdvc_notifier_unregister(&dvfs_notifier);
 			#endif

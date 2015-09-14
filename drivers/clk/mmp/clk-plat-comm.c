@@ -304,6 +304,17 @@ int sdh_tunning_restorefreq(void)
 	return 0;
 }
 
+void sdh_tuning_get_freqs(void)
+{
+#ifdef CONFIG_ARM_MMP_BL_CPUFREQ
+	pr_info("sdh_tuning: clst0 cur freq=%lu\n", clk_get_rate(clk[CLST0]));
+	pr_info("sdh_tuning: clst1 cur freq=%lu\n", clk_get_rate(clk[CLST1]));
+#else
+	pr_info("sdh_tuning: cpu cur freq=%lu\n", clk_get_rate(clk[CORE]));
+#endif
+	pr_info("sdh_tuning: ddr cur freq=%lu\n", clk_get_rate(clk[DDR]));
+}
+
 static unsigned int platvl_min, platvl_max;
 
 void plat_set_vl_min(unsigned int vl_num)
