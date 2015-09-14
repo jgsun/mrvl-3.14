@@ -183,8 +183,10 @@ static int vfp_notifier(struct notifier_block *self, unsigned long cmd, void *v)
 		 * case the thread migrates to a different CPU. The
 		 * restoring is done lazily.
 		 */
-		if ((fpexc & FPEXC_EN) && vfp_current_hw_state[cpu])
-			vfp_save_state(vfp_current_hw_state[cpu], fpexc);
+		if ((fpexc & FPEXC_EN)) {
+			vfp_save_state(&(current_thread_info()->vfpstate), fpexc);
+			vfp_current_hw_state[cpu] = NULL;
+		}
 #endif
 
 		fpexc = thread->vfpstate.hard.fpexc;
