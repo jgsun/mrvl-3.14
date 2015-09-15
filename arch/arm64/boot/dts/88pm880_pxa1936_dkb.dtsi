@@ -17,8 +17,8 @@
 	marvell,pmic-bd-cfg =
 		/* enable GPADC duty cycle mode in sleep */
 		<0x2 0x06 0x10 0x10>,
-		/* set VDD to 0.9V in sleep */
-		<0x0 0x20 0xf0 0xf0>,
+		/* set VDD to 1.02V in sleep */
+		<0x0 0x20 0xf0 0xb0>,
 		/* enable digital DVC, gate BK_CLK2M */
 		<0x0 0x21 0x50 0x50>,
 		/* enable reference group low power mode */

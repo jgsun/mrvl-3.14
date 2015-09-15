@@ -21,8 +21,8 @@
 		 * disable GPADC slow mode
 		 */
 		<0x2 0x06 0x1f 0x11>,
-		/* set VDD to 0.9V in sleep */
-		<0x0 0x20 0xf0 0xf0>,
+		/* set VDD to 1.02V in sleep */
+		<0x0 0x20 0xf0 0xb0>,
 		/* enable DCC for CLK3M
 		 * enable DVC for CLK3M
 		 * enable low jitter mode
