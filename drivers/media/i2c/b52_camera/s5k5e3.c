@@ -63,3 +63,33 @@ static int S5K5E3_get_dphy_desc(struct v4l2_subdev *sd,
 	return 0;
 }
 
+static int S5K5e3_gain_convert(struct v4l2_subdev *sd, u16 isp_gain,
+		u16 *sensor_ag, u16 *sensor_dg)
+{
+
+	u16 ag_tmp, dg_tmp;
+
+	if (isp_gain >= 0x100) {
+		ag_tmp = 0x200;
+		dg_tmp = (isp_gain<<8) / 0x100;
+	} else {
+		ag_tmp = isp_gain << 1;
+		dg_tmp = 0x01 << 8;
+	}
+
+	*sensor_ag = ag_tmp;
+	*sensor_dg = dg_tmp;
+
+	return 0;
+}
+static int S5K5e3_expo_convert(struct v4l2_subdev *sd, u32 isp_expo,
+		 u32 *sensor_ae)
+{
+	u32 ae_tmp, tmp;
+
+	ae_tmp = isp_expo;
+	tmp = (ae_tmp >> 4) & 0x00ffffff;
+	*sensor_ae = tmp;
+
+	return 0;
+}

@@ -890,6 +890,31 @@ static int b52_sensor_g_csi(struct v4l2_subdev *sd,
 
 	return  0;
 }
+
+static int b52_sensor_gain_convert(struct v4l2_subdev *sd, u16 isp_gain,
+		u16 *sensor_ag, u16 *sensor_dg)
+{
+	int ret = 0;
+	struct b52_sensor *sensor = to_b52_sensor(sd);
+
+	if (sensor->drvdata->ops->convert_gain)
+		ret = sensor->drvdata->ops->convert_gain(sd, isp_gain, sensor_ag, sensor_dg);
+
+	return ret;
+}
+
+static int b52_sensor_expo_convert(struct v4l2_subdev *sd, u32 isp_expo,
+		u32 *sensor_ae)
+{
+	int ret = 0;
+	struct b52_sensor *sensor = to_b52_sensor(sd);
+
+	if (sensor->drvdata->ops->convert_expo)
+		ret = sensor->drvdata->ops->convert_expo(sd, isp_expo, sensor_ae);
+
+	return ret;
+}
+
 static struct b52_sensor_ops b52_sensor_def_ops = {
 	.init          = b52_sensor_init,
 	.i2c_read      = b52_sensor_cmd_read,
@@ -899,6 +924,8 @@ static struct b52_sensor_ops b52_sensor_def_ops = {
 	.g_cur_fmt     = b52_sensor_g_cur_fmt,
 	.get_power     = b52_sensor_get_power,
 	.put_power     = b52_sensor_put_power,
+	.gain_convert = b52_sensor_gain_convert,
+	.expo_convert = b52_sensor_expo_convert,
 	.detect_sensor = b52_sensor_detect_sensor,
 	.detect_module = b52_sensor_detect_module,
 	/* .detect_vcm    = b52_sensor_detect_vcm,*/

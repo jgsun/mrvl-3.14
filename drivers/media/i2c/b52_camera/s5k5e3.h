@@ -355,9 +355,16 @@ struct b52_sensor_resolution s5k5e3_res[] = {
 static int S5K5E3_get_pixelclock(struct v4l2_subdev *sd, u32 *rate, u32 mclk);
 static int S5K5E3_get_dphy_desc(struct v4l2_subdev *sd,
 				struct csi_dphy_desc *dphy_desc, u32 mclk);
+static int S5K5e3_gain_convert(struct v4l2_subdev *sd, u16 isp_gain,
+		u16 *sensor_ag, u16 *sensor_dg);
+static int S5K5e3_expo_convert(struct v4l2_subdev *sd, u32 isp_expo,
+		u32 *sensor_ae);
+
 struct b52_sensor_spec_ops s5k5e3_ops = {
 	.get_pixel_rate = S5K5E3_get_pixelclock,
 	.get_dphy_desc = S5K5E3_get_dphy_desc,
+	.convert_gain = S5K5e3_gain_convert,
+	.convert_expo = S5K5e3_expo_convert,
 };
 struct b52_sensor_data b52_s5k5e3 = {
 	.name = "ssa.s5k5e3",
@@ -442,6 +449,7 @@ struct b52_sensor_data b52_s5k5e3 = {
 	.num_module = N_S5K5E3_MODULE_INFO,
 	.mipi_clk_bps = 884000000,
 	.reset_delay = 100,
+	.interrupt_mode = 0,
 };
 
 #endif

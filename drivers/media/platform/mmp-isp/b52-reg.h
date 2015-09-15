@@ -234,12 +234,40 @@ extern void b52isp_set_ddr_threshold(struct work_struct *work, int up);
 #define CMD_AF_MODE             (0x13)
 #define CMD_ZOOM_IN_MODE        (0x14)
 /*firmware interrupt IDs from MCU*/
-#define CMD_WB_EXPO_GAIN        (0xf1)
+#define CMD_WB_GAIN             (0xf1)
 #define CMD_WB_EXPO             (0xf2)
-#define CMD_WB_GAIN             (0xf3)
-#define CMD_WB_FOCUS            (0xf4)
+#define CMD_WB_EXPO_GAIN        (0xf3)
+#define CMD_WB_VTS              (0Xf4)
+#define CMD_WB_VTS_GAIN         (0xf5)
+#define CMD_WB_EXPO_VTS         (0xf6)
+#define CMD_WB_EXPO_GAIN_VTS    (0xf7)
+#define CMD_WB_FOCUS            (0xfd)
 #define CMD_UPDATE_ADDR         (0xfe)
 #define CMD_DOWNLOAD_FW         (0xff)
+#define REG_FW_WAIT_READY   0x33011
+#define REG_FW_AGC_AF_FLG   0x63910
+#define REG_MCU_HOLD_FLG	0x32ce0
+#define REG_HOST_HOLD_FLG	0x32ce1
+#define REG_I2C_BUSY_FLG	0x32ce2
+#define REG_FW_AGC_FLG      0x33590
+#define REG_FW_AF_FLG       0x33da0
+#define REG_FW_EXPO_VAL     0x30220
+#define REG_FW_GAIN_VAL     0x3021e
+#define REG_FW_AF_VAL       0x33c3e
+#define REG_FW_VTS_VAL      0x30388
+#define REG_HW_DATA		    0x63720
+#define REG_HW_ADDR		    0x63722
+#define REG_HW_DEV_ID		0x63724
+#define REG_SCCBQ_CMD		0x63725
+#define REG_SCCBQ_FLG       0x63726
+
+/* interrupt mode */
+#define SCCBQ_INT_ENABLE         0x0
+#define SCCBQ_INT_DISABLE	0x01
+#define SCCBQ_READY			0x01
+#define SCCBQ_WORK_MODE	0x0B
+#define SCCBQ_SWITCH			0x40
+
 
 /* capture image */
 /* REG1:I2C choice */
@@ -668,19 +696,21 @@ extern void b52isp_set_ddr_threshold(struct work_struct *work, int up);
 #define SCCB_MASTER1_REG_BASE       (0x63600)
 #define SCCB_MASTER2_REG_BASE       (0x63700)
 
-#define REG_SCCB_SPEED              (0x00)
-#define REG_SCCB_SLAVE_ID           (0x01)
-#define REG_SCCB_ADDRESS_H          (0x02)
-#define REG_SCCB_ADDRESS_L          (0x03)
-#define REG_SCCB_OUTPUT_DATA_H      (0x04)
-#define REG_SCCB_OUTPUT_DATA_L      (0x05)
-#define REG_SCCB_2BYTE_CONTROL      (0x06)
-#define REG_SCCB_INPUT_DATA_H       (0x07)
-#define REG_SCCB_INPUT_DATA_L       (0x08)
-#define REG_SCCB_COMMAND            (0x09)
-#define REG_SCCB_STATUS             (0x0a)
-	#define SCCB_ST_BUSY	(0x1)
-	#define SCCB_ST_IDLE	(0x0)
+#define SCCBQ_SPEED_200K		(0x14)
+#define REG_SCCBQ_SPEED			(0x87)
+#define REG_SCCB_SPEED			(0x00)
+#define REG_SCCB_SLAVE_ID		(0x01)
+#define REG_SCCB_ADDRESS_H		(0x02)
+#define REG_SCCB_ADDRESS_L		(0x03)
+#define REG_SCCB_OUTPUT_DATA_H		(0x04)
+#define REG_SCCB_OUTPUT_DATA_L		(0x05)
+#define REG_SCCB_2BYTE_CONTROL		(0x06)
+#define REG_SCCB_INPUT_DATA_H		(0x07)
+#define REG_SCCB_INPUT_DATA_L		(0x08)
+#define REG_SCCB_COMMAND		(0x09)
+#define REG_SCCB_STATUS			(0x0a)
+#define SCCB_ST_BUSY			(0x1)
+#define SCCB_ST_IDLE			(0x0)
 
 /* interrupt register*/
 #define REG_INT_BASE                (0x63900)

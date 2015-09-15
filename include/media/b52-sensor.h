@@ -164,6 +164,8 @@ struct b52_sensor_spec_ops {
 			struct csi_dphy_desc *dphy_desc, u32 mclk);
 	int (*update_otp)(struct v4l2_subdev *sd, struct b52_sensor_otp *otp);
 	int (*s_power)(struct v4l2_subdev *sd, int onoff);
+	int (*convert_gain)(struct v4l2_subdev *sd, u16 isp_gain, u16 *sensor_ag, u16 *sensor_dg);
+	int (*convert_expo)(struct v4l2_subdev *sd, u32 isp_expo, u32 *sensor_ae);
 };
 
 enum sensor_i2c_len {
@@ -235,6 +237,8 @@ struct b52_sensor_data {
 	/* the bias must have 13 item*/
 	int *ev_bias_offset;
 
+	int interrupt_mode;
+	u8 dgain_channel;
 	u8 gain_shift;
 	u8 expo_shift;
 	int calc_dphy;
@@ -289,6 +293,8 @@ struct b52_sensor_ops {
 	/*just use for detect sensor, without firmware */
 	int (*i2c_read_without_fw)(struct v4l2_subdev *, u16 addr, u16 *val);
 	int (*i2c_write_without_fw)(struct v4l2_subdev *, u16 addr, u16 val);
+	int (*gain_convert)(struct v4l2_subdev *, u16 isp_gain, u16 *sensor_ag, u16 *sensor_dg);
+	int (*expo_convert)(struct v4l2_subdev *, u32 isp_expo, u32 *sensor_ae);
 };
 
 struct sensor_power {

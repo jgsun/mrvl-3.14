@@ -220,6 +220,8 @@ struct regval_tab  S5K4H5_ag[] = {
 	{0x0205, 0x20, 0xff},
 };
 struct regval_tab  S5K4H5_dg[] = {
+	{0x020e, 0x01, 0xff},
+	{0x020f, 0x00, 0xff},
 };
 struct regval_tab S5K4H5_vflip[] = {
 	{0x0101, 0x00, 0x02},
@@ -256,6 +258,7 @@ static struct b52_sensor_module S5K4H5_MODULE_INFO[] = {
 #define N_S5K4H5_EXPO ARRAY_SIZE(S5K4H5_expo)
 #define N_S5K4H5_FRATIONALEXPO ARRAY_SIZE(S5K4H5_frationalexp)
 #define N_S5K4H5_AG ARRAY_SIZE(S5K4H5_ag)
+#define N_S5K4H5_DG ARRAY_SIZE(S5K4H5_dg)
 #define N_S5K4H5_VFLIP ARRAY_SIZE(S5K4H5_vflip)
 #define N_S5K4H5_HFLIP ARRAY_SIZE(S5K4H5_hflip)
 #define N_S5K4H5_STREAM_ON ARRAY_SIZE(S5K4H5_stream_on)
@@ -306,12 +309,18 @@ static int S5K4H5_get_dphy_desc(struct v4l2_subdev *sd,
 static int S5K4H5_update_otp(struct v4l2_subdev *sd,
 				struct b52_sensor_otp *opt);
 static int S5K4H5_s_power(struct v4l2_subdev *sd, int on);
+static int S5K4H5_gain_convert(struct v4l2_subdev *sd, u16 isp_gain,
+		u16 *sensor_ag, u16 *sensor_dg);
+static int S5K4H5_expo_convert(struct v4l2_subdev *sd, u32 isp_expo,
+		u32 *sensor_ae);
 
 struct b52_sensor_spec_ops S5K4H5_ops = {
 	.get_pixel_rate = S5K4H5_get_pixelclock,
 	.get_dphy_desc = S5K4H5_get_dphy_desc,
 	.update_otp = S5K4H5_update_otp,
 	.s_power = S5K4H5_s_power,
+	.convert_gain = S5K4H5_gain_convert,
+	.convert_expo = S5K4H5_expo_convert,
 };
 struct b52_sensor_data b52_s5k4h5 = {
 	.name = "samsung.s5k4h5",
@@ -368,8 +377,8 @@ struct b52_sensor_data b52_s5k4h5 = {
 			.num = N_S5K4H5_AG,
 		},
 		[B52_SENSOR_DG] = {
-			.tab = NULL,
-			.num = 0,
+			.tab = S5K4H5_dg,
+			.num = N_S5K4H5_DG,
 		},
 	},
 	.hflip = {
@@ -382,6 +391,7 @@ struct b52_sensor_data b52_s5k4h5 = {
 	},
 	.ev_bias_offset = ev_bias_offset,
 	.flip_change_phase =  0,
+	.dgain_channel = 4,
 	/* A gain format is 8.5 */
 	.gain_shift = 0x00,
 	/* A expo format is 2 byte */
@@ -393,6 +403,7 @@ struct b52_sensor_data b52_s5k4h5 = {
 	.module = S5K4H5_MODULE_INFO,
 	.num_module =  N_S5K4H5_MODULE_INFO,
 	.reset_delay = 10000,
+	.interrupt_mode = 0,
 };
 
 #endif

@@ -27,7 +27,9 @@
 #include <media/b52-vcm.h>
 #include <linux/workqueue.h>
 
+static struct b52_sensor *g_sensor;
 static u64 of_jiffies;
+
 static bool mac_of;
 static DEFINE_MUTEX(cmd_mutex);
 static void __iomem *b52_base;
@@ -62,20 +64,15 @@ static __u8 b52isp_cmd_id;
 static inline void __b52_enable_mac_clk(u8 mac_id, int enable);
 static int b52_set_aecagc_reg(struct v4l2_subdev *sd, int p_num);
 static int b52_set_vcm_reg(struct v4l2_subdev *sd, int p_num);
+static int b52_aec_irq_handler(u8 flag);
+static int b52isp_write_aec_sensor(u16 gain_tmp, u16 dgain_tmp, u32 expo_tmp, u16 vts_tmp);
+static int b52isp_sccbq_write_aec(u16 aec_data, u16 reg, u8 addr);
 static struct delayed_work rdy_work;
 #define FRAME_TIME_MS 50
 
 #ifdef CONFIG_ISP_USE_TWSI3
 static void *sensor;
 static struct work_struct twsi_work;
-#define	REG_FW_AGC_AF_FLG	0x63910
-#define	REG_FW_AGC_FLG		0x33590
-#define	REG_FW_AF_FLG		0x33da0
-#define	REG_FW_EXPO_VAL		0x30221
-#define	REG_FW_GAIN_VAL		0x3021e
-#define	REG_FW_AF_VAL		0x33c3e
-#define	REG_FW_VTS_VAL		0x33050
-
 static DEFINE_SPINLOCK(twsi_work_lock);
 static void twsi_do_work(struct work_struct *data)
 {
@@ -167,6 +164,15 @@ inline void b52_writew(const u32 addr, const u16 value)
 	if ((addr >= HW_REG_START) && (addr <= HW_REG_END)) {
 		writeb((value >> 8) & 0xFF, b52_base + addr + 0);
 		writeb((value >> 0) & 0xFF, b52_base + addr + 1);
+	}
+}
+inline void b52_writew_little(const u32 addr, const u16 value)
+{
+	if (addr < DATA_BUF_END)
+		writew(value, b52_base + (addr ^ 0x2));
+	if ((addr >= HW_REG_START) && (addr <= HW_REG_END)) {
+		writeb((value >> 8) & 0xFF, b52_base + addr + 1);
+		writeb((value >> 0) & 0xFF, b52_base + addr + 0);
 	}
 }
 
@@ -439,6 +445,11 @@ static int b52_basic_init(struct b52isp_cmd *cmd)
 		return -EINVAL;
 	b52_set_aecagc_reg(hst_sd, pipe_id);
 	b52_set_vcm_reg(hst_sd, pipe_id);
+
+	if (g_sensor->drvdata->interrupt_mode) {
+		b52_writeb(REG_FW_WAIT_READY, SCCBQ_INT_ENABLE);
+		pr_info("Enable interrupt mode:%d", b52_readb(REG_FW_WAIT_READY));
+	}
 	return 0;
 }
 
@@ -589,6 +600,7 @@ void b52_set_sccb_clock_rate(u32 input_rate, u32 sccb_rate)
 
 	b52_writeb(SCCB_MASTER1_REG_BASE + REG_SCCB_SPEED, val);
 	b52_writeb(SCCB_MASTER2_REG_BASE + REG_SCCB_SPEED, val);
+	b52_writeb(SCCB_MASTER2_REG_BASE + REG_SCCBQ_SPEED, SCCBQ_SPEED_200K);
 }
 EXPORT_SYMBOL_GPL(b52_set_sccb_clock_rate);
 
@@ -2232,6 +2244,11 @@ static int b52_cmd_set_fmt(struct b52isp_cmd *cmd)
 	struct v4l2_subdev *gsd = NULL;
 	struct v4l2_subdev *hsd = cmd->hsd;
 	const struct b52_sensor_data *sensordata = cmd->memory_sensor_data;
+
+	struct v4l2_subdev *sd = host_subdev_get_guest(hsd,
+					MEDIA_ENT_T_V4L2_SUBDEV_SENSOR);
+	g_sensor = to_b52_sensor(sd);
+
 	if (!(flags & BIT(CMD_FLAG_MS))) {
 		gsd = host_subdev_get_guest(hsd,
 					MEDIA_ENT_T_V4L2_SUBDEV_SENSOR);
@@ -2253,6 +2270,7 @@ static int b52_cmd_set_fmt(struct b52isp_cmd *cmd)
 			b52_writeb(mac_base[0] + REG_MAC_RDY_ADDR0, 0);
 		}
 
+		b52_writeb(REG_FW_WAIT_READY, SCCBQ_INT_DISABLE);
 		b52_writeb(mac_base[0] + REG_MAC_FRAME_CTRL0, FORCE_OVERFLOW |
 			b52_readb(mac_base[0] + REG_MAC_FRAME_CTRL0));
 	}
@@ -3234,6 +3252,178 @@ static int b52_config_mac(u8 mac_id, u8 port_id, int enable)
 
 	return 0;
 }
+
+static int b52_aec_irq_handler(u8 flag)
+{
+	u16 gain_val, vts_val, vts_tmp = 0, again_tmp = 0, dgain_tmp = 0;
+	u32 expo_val, expo_tmp = 0;
+	int ret = 0;
+
+
+	if (!g_sensor) {
+		pr_err("Error:%s, sensor is NULL.\n", __func__);
+		return -EINVAL;
+	}
+
+	vts_val = b52_readw(REG_FW_VTS_VAL);
+	gain_val = b52_readw(REG_FW_GAIN_VAL);
+	expo_val = b52_readl(REG_FW_EXPO_VAL);
+
+	switch (flag) {
+	case CMD_WB_GAIN:
+		ret = b52_sensor_call(g_sensor, gain_convert, gain_val, &again_tmp, &dgain_tmp);
+		break;
+	case CMD_WB_EXPO:
+		ret = b52_sensor_call(g_sensor, expo_convert, expo_val, &expo_tmp);
+		break;
+	case CMD_WB_VTS:
+		vts_tmp = vts_val;
+		break;
+	case CMD_WB_EXPO_GAIN:
+		ret |= b52_sensor_call(g_sensor, gain_convert, gain_val, &again_tmp, &dgain_tmp);
+		ret |= b52_sensor_call(g_sensor, expo_convert, expo_val, &expo_tmp);
+		break;
+	case CMD_WB_VTS_GAIN:
+		ret = b52_sensor_call(g_sensor, gain_convert, gain_val, &again_tmp, &dgain_tmp);
+		vts_tmp = vts_val;
+		break;
+	case CMD_WB_EXPO_VTS:
+		ret = b52_sensor_call(g_sensor, expo_convert, expo_val, &expo_tmp);
+		vts_tmp = vts_val;
+		break;
+	case CMD_WB_EXPO_GAIN_VTS:
+		ret |= b52_sensor_call(g_sensor, gain_convert, gain_val, &again_tmp, &dgain_tmp);
+		ret |= b52_sensor_call(g_sensor, expo_convert, expo_val, &expo_tmp);
+		vts_tmp = vts_val;
+		break;
+	}
+
+	if (ret < 0) {
+		pr_err("%s,  AEC convert error.\n", __func__);
+		return ret;
+	}
+
+	b52isp_write_aec_sensor(again_tmp, dgain_tmp, expo_tmp, vts_tmp);
+	return 0;
+}
+
+static int b52isp_writewlittle_aec_reg(u16 reg_val, u16 reg_addr)
+{
+	u8 flag;
+
+	/*** set ready bit ***/
+	flag = b52_readb(REG_SCCBQ_FLG);
+	if ((flag & SCCBQ_READY) == 0) {
+		pr_err("%s: SCCBQ not ready, flag:0x%x", __func__, flag);
+		return -EBUSY;
+	}
+
+	b52_writew_little(REG_HW_DATA, reg_val);
+	b52_writew_little(REG_HW_ADDR, reg_addr);
+	return 0;
+}
+
+static int b52isp_sccbq_write_aec(u16 aec_data, u16 reg, u8 addr)
+{
+	int ret;
+	ret = b52isp_writewlittle_aec_reg(aec_data , reg);
+	if (ret < 0)
+		return ret;
+	b52_writeb(REG_HW_DEV_ID, addr * 2);
+	b52_writeb(REG_SCCBQ_CMD, SCCBQ_WORK_MODE);
+	ndelay(20);
+	return 0;
+}
+
+static int b52isp_write_aec_sensor(u16 again_tmp, u16 dgain_tmp, u32 expo_tmp, u16 vts_tmp)
+{
+	const struct b52_sensor_i2c_attr *attr;
+	struct b52_sensor_regs regs;
+	u8 dgain_channel = 1;
+	int i, num, ret;
+	u8 sccbq_flag;
+	static u16 again_latest, dgain_latest;
+	static u16 vts_latest, expo_latest;
+
+	if (g_sensor->drvdata->dgain_channel)
+		dgain_channel = g_sensor->drvdata->dgain_channel;
+
+	attr = &g_sensor->drvdata->i2c_attr[g_sensor->cur_i2c_idx];
+
+	/*** set sccbQ switch ***/
+	sccbq_flag = b52_readb(REG_TOP_INTR_CTRL_H);
+	sccbq_flag |= SCCBQ_SWITCH;
+	b52_writeb(REG_TOP_INTR_CTRL_H, sccbq_flag);
+
+	if ((again_tmp) && (again_tmp != again_latest)) {
+		again_latest = again_tmp;
+		ret = b52_sensor_call(g_sensor, g_aecagc_reg, B52_SENSOR_AGAIN, &regs);
+		if (ret < 0)
+			return ret;
+		switch (regs.num) {
+		case 2:
+			b52isp_sccbq_write_aec(again_tmp, regs.tab->reg, attr->addr);
+			break;
+		default:
+			pr_err("%s: no reg", __func__);
+			break;
+		}
+	}
+
+	if ((dgain_tmp)  && (dgain_tmp != dgain_latest)) {
+		dgain_latest = dgain_tmp;
+		ret = b52_sensor_call(g_sensor, g_aecagc_reg, B52_SENSOR_DGAIN, &regs);
+		if (ret < 0)
+			return ret;
+		for (i = 0; i < dgain_channel; i++) {
+			num = regs.num * i;
+			switch (regs.num) {
+			case 2:
+				b52isp_sccbq_write_aec(dgain_tmp, regs.tab->reg + num, attr->addr);
+				break;
+			default:
+				pr_err("%s: no reg", __func__);
+				break;
+			}
+		}
+	}
+
+	if ((vts_tmp)  && (vts_tmp != vts_latest)) {
+		vts_latest = vts_tmp;
+		ret = b52_sensor_call(g_sensor, g_aecagc_reg, B52_SENSOR_VTS, &regs);
+		if (ret < 0)
+			return ret;
+		switch (regs.num) {
+		case 2:
+			b52isp_sccbq_write_aec(vts_tmp, regs.tab->reg, attr->addr);
+			break;
+		default:
+			pr_err("%s: no reg", __func__);
+			break;
+		}
+	}
+
+	if ((expo_tmp)  && (expo_tmp != expo_latest)) {
+		expo_latest = expo_tmp;
+		ret = b52_sensor_call(g_sensor, g_aecagc_reg, B52_SENSOR_EXPO, &regs);
+		if (ret < 0)
+			return ret;
+		switch (regs.num) {
+		case 2:
+			b52isp_sccbq_write_aec(expo_tmp & 0xffff, regs.tab->reg, attr->addr);
+			break;
+		case 3:
+			b52isp_sccbq_write_aec(expo_tmp & 0xffff, regs.tab->reg, attr->addr);
+			b52isp_sccbq_write_aec(expo_tmp >> 16 , regs.tab->reg, attr->addr);
+			break;
+		default:
+			pr_err("%s: no reg", __func__);
+			break;
+		}
+	}
+	return 0;
+}
+
 int b52_ctrl_mac_irq(u8 mac_id, u8 port_id, int enable)
 {
 	int *refcnt;
@@ -3278,10 +3468,17 @@ void b52_ack_xlate_irq(__u32 *event, int max_mac_num, struct work_struct *work)
 	static int drop_cnt[MAX_MAC_NUM];
 	__u32 reg = b52_readl(REG_ISP_INT_STAT);
 	__u32 cmd_reg = b52_readb(REG_FW_CPU_CMD_ID);
+	/*
+	 * cmd_reg: mcu process command down
+	 * return message(include host command ID)
+	 * host send command to mcu, mcu process and then return message
+	 */
 #ifdef CONFIG_ISP_USE_TWSI3
 	__u32 twsi_reg = b52_readb(REG_FW_AGC_AF_FLG);
 #endif
+	__u8 aec_reg = b52_readb(CMD_ID);
 	int i;
+
 	if (reg & INT_CMD_DONE) {
 		if (b52_readb(CMD_ID) == CMD_DOWNLOAD_FW)
 			complete(&b52isp_cmd_done);
@@ -3294,6 +3491,21 @@ void b52_ack_xlate_irq(__u32 *event, int max_mac_num, struct work_struct *work)
 		if (CMD_WB_EXPO_GAIN <= twsi_reg && twsi_reg <= CMD_WB_FOCUS)
 			schedule_work(&twsi_work);
 #endif
+		/*
+		 * enabling ISP interrupt mode
+		 * to implement AE/AG sensor setting
+		 */
+		if (CMD_WB_GAIN <= aec_reg && aec_reg <= CMD_WB_EXPO_GAIN_VTS) {
+			if ((b52_readb(REG_MCU_HOLD_FLG) == 0) &&
+				(b52_readb(REG_I2C_BUSY_FLG) == 0)) {
+				b52_writeb(REG_HOST_HOLD_FLG, 1);
+				b52_writeb(REG_I2C_BUSY_FLG, 1);
+				b52_aec_irq_handler(aec_reg);
+				b52_writeb(REG_HOST_HOLD_FLG, 0);
+				b52_writeb(REG_I2C_BUSY_FLG, 0);
+			}
+		}
+
 	}
 
 	for (i = 0; i < max_mac_num; i++) {
@@ -3310,7 +3522,7 @@ void b52_ack_xlate_irq(__u32 *event, int max_mac_num, struct work_struct *work)
 		 * it need to read HW src register when start.
 		 * read FW src register when done.
 		 * avoid src register refresh when start and done occur.
-		 * */
+		 */
 		irq_src_s = b52_readb(mac_base[i] + REG_MAC_INT_SRC);
 		irq_src_d = b52_readb(REG_FW_MAC1_INT_SRC + i);
 		rdy = b52_readb(mac_base[i] + REG_MAC_RDY_ADDR0);
