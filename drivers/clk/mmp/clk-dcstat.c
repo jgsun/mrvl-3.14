@@ -406,9 +406,9 @@ int show_dc_stat_info(struct clk *clk, struct seq_file *seq, void *data)
 			dc_stat_info->ops_dcstat[i].ppindex,
 			dc_stat_info->ops_dcstat[i].pprate,
 			(long)dc_stat_info->ops_dcstat[i].clk_busy_time);
-			seq_printf(seq, "%3u.%2u%%|%3u.%2u%%|",
+			seq_printf(seq, "%3u.%02u%%|%3u.%02u%%|",
 				dc_int, dc_frac, gr_int, gr_frac);
-			seq_printf(seq, "%6u.%2u%%|%6u.%2u%%|%6u.%2u%%|%6u.%2u%%|%6u.%2u%%|\n",
+			seq_printf(seq, "%6u.%02u%%|%6u.%02u%%|%6u.%02u%%|%6u.%02u%%|%6u.%02u%%|\n",
 				ddr_glob_ratio/1000, (ddr_glob_ratio%1000)/10,
 				ddr_idle_ratio/1000, (ddr_idle_ratio%1000)/10,
 				ddr_busy_ratio/1000, (ddr_busy_ratio%1000)/10,
@@ -427,7 +427,7 @@ int show_dc_stat_info(struct clk *clk, struct seq_file *seq, void *data)
 				(long)dc_stat_info->ops_dcstat[i].clk_idle_time,
 				(long)dc_stat_info->ops_dcstat[i].pwr_off_time);
 
-			seq_printf(seq, "|%3u.%2u%%|%3u.%2u%%|%3u.%2u%%|%3u.%2u%%|\n",
+			seq_printf(seq, "|%3u.%02u%%|%3u.%02u%%|%3u.%02u%%|%3u.%02u%%|\n",
 				dc_int, dc_frac, clk_idle_int, clk_idle_frac,
 				pwr_off_int, pwr_off_frac, gr_int, gr_frac);
 		}
@@ -1219,7 +1219,7 @@ static int cpu_dc_show(struct seq_file *seq, void *data)
 	total_all_idle = (u32) div64_u64(idle_dcstat_info.total_all_idle,
 			(u64) NSEC_PER_MSEC);
 	idle_h = calculate_dc(total_all_idle, total_time, &idle_l);
-	seq_printf(seq, "| %-10s | %2u.%2u%%| %10d | %10lld |\n", "All idle",
+	seq_printf(seq, "| %-10s | %2u.%02u%%| %10d | %10lld |\n", "All idle",
 		     idle_h, idle_l, total_all_idle,
 		     idle_dcstat_info.total_all_idle_count);
 
@@ -1227,14 +1227,14 @@ static int cpu_dc_show(struct seq_file *seq, void *data)
 	total_all_c2 = (u32) div64_u64(idle_dcstat_info.total_all_c2,
 			(u64) NSEC_PER_MSEC);
 	idle_h = calculate_dc(total_all_c2, total_time, &idle_l);
-	seq_printf(seq, "| %-10s | %2u.%2u%%| %10d | %10lld |\n", "All c2",
+	seq_printf(seq, "| %-10s | %2u.%02u%%| %10d | %10lld |\n", "All c2",
 		     idle_h, idle_l, total_all_c2,
 		     idle_dcstat_info.total_all_c2_count);
 	idle_l = 0;
 	total_all_m2 = (u32) div64_u64(idle_dcstat_info.total_all_m2,
 			(u64) NSEC_PER_MSEC);
 	idle_h = calculate_dc(total_all_m2, total_time, &idle_l);
-	seq_printf(seq, "| %-10s | %2u.%2u%%| %10d | %10lld |\n", "All m2",
+	seq_printf(seq, "| %-10s | %2u.%02u%%| %10d | %10lld |\n", "All m2",
 		     idle_h, idle_l, total_all_m2,
 		     idle_dcstat_info.total_all_m2_count);
 
@@ -1243,14 +1243,14 @@ static int cpu_dc_show(struct seq_file *seq, void *data)
 		m2_cluster0_total_all = (u32) div64_u64(idle_dcstat_info.M2_cluster0_idle_total,
 				(u64) NSEC_PER_MSEC);
 		idle_h = calculate_dc(m2_cluster0_total_all, total_time, &idle_l);
-		seq_printf(seq, "| %-10s | %2u.%2u%%| %10d | %10lld |\n", "M2_clst0",
+		seq_printf(seq, "| %-10s | %2u.%02u%%| %10d | %10lld |\n", "M2_clst0",
 				idle_h, idle_l, m2_cluster0_total_all,
 				idle_dcstat_info.M2_cluster0_count);
 		idle_l = 0;
 		m2_cluster1_total_all = (u32) div64_u64(idle_dcstat_info.M2_cluster1_idle_total,
 				(u64) NSEC_PER_MSEC);
 		idle_h = calculate_dc(m2_cluster1_total_all, total_time, &idle_l);
-		seq_printf(seq, "| %-10s | %2u.%2u%%| %10d | %10lld |\n", "M2_clst1",
+		seq_printf(seq, "| %-10s | %2u.%02u%%| %10d | %10lld |\n", "M2_clst1",
 			     idle_h, idle_l, m2_cluster1_total_all,
 			     idle_dcstat_info.M2_cluster1_count);
 	} else {
@@ -1293,7 +1293,7 @@ static int cpu_dc_show(struct seq_file *seq, void *data)
 				seq_printf(seq, "| %-4d ", cpu);
 			else
 				seq_puts(seq, "|      ");
-			seq_printf(seq, "| %-3u | %10lu | %8llu | %9llu | %4u.%2u%% | %3lld%%, %-7llu | %3lld%%, %-9lld | %3lld%%, %-9llu |\n",
+			seq_printf(seq, "| %-3u | %10lu | %8llu | %9llu | %4u.%02u%% | %3lld%%, %-7llu | %3lld%%, %-9lld | %3lld%%, %-9llu |\n",
 				percpu_stat->ops_dcstat[i].ppindex,
 				percpu_stat->ops_dcstat[i].pprate,
 				div64_u64(percpu_stat->runtime_op_total[i],
