@@ -536,24 +536,12 @@ struct isp_block_ops b52isp_idi_hw_ops = {
 	.set_clock  = b52isp_idi_set_clock,
 };
 
-int b52isp_idi_change_clock(struct isp_block *block,
-				int w, int h, int fps)
+void b52isp_idi_change_clock(struct isp_block *block, unsigned long rate)
 {
-	int sz = w * h * fps;
-	int rate, rate_axi;
+	unsigned long rate_axi;
 	struct clk *axi_clk = block->clock[0];
 	struct clk *pipe_clk = block->clock[2];
 
-	if (sz > 300000000)
-		rate = 499000000;
-	else if (sz > 250000000)
-		rate = 416000000;
-	else if (sz > 180000000)
-		rate = 312000000;
-	else if (sz > 100000000)
-		rate = 208000000;
-	else
-		rate = 156000000;
 	clk_set_rate(pipe_clk, rate);
 	b52_set_sccb_clock_rate(clk_get_rate(pipe_clk), 400000);
 
@@ -569,9 +557,7 @@ int b52isp_idi_change_clock(struct isp_block *block,
 	clk_set_rate(axi_clk, rate_axi);
 
 	d_inf(3, "isp axi clk %lu", clk_get_rate(axi_clk));
-	d_inf(3, "isp pipe clk %lu", clk_get_rate(pipe_clk));
-
-	return 0;
+	d_inf(2, "isp pipe clk %lu", clk_get_rate(pipe_clk));
 }
 EXPORT_SYMBOL(b52isp_idi_change_clock);
 

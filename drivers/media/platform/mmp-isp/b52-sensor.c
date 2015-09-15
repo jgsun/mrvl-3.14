@@ -881,6 +881,32 @@ static int b52_sensor_g_aecagc_reg(struct v4l2_subdev *sd,
 	return 0;
 }
 
+static int b52_sensor_g_info(struct v4l2_subdev *sd,
+		struct b52_sensor_info *info)
+{
+	int i;
+	struct b52_sensor *sensor = to_b52_sensor(sd);
+
+	if (!sensor || !info) {
+		pr_err("%s, error param\n", __func__);
+		return -EINVAL;
+	}
+
+	i = sensor->cur_res_idx;
+
+	if (sensor->drvdata->res[i].min_isp_clk_freq) {
+		info->type = B52_SENSOR_INFO_MIN_ISP_CLK;
+		info->min_isp_clk_freq = sensor->drvdata->res[i].min_isp_clk_freq;
+	} else {
+		info->type = B52_SENSOR_INFO_PIXEL_PER_SEC;
+		/* default 30fps */
+		info->pps = sensor->drvdata->res[i].width * 30 *
+			sensor->drvdata->res[i].height;
+	}
+
+	return  0;
+}
+
 static int b52_sensor_g_csi(struct v4l2_subdev *sd,
 		struct mipi_csi2 *csi)
 {
@@ -935,6 +961,7 @@ static struct b52_sensor_ops b52_sensor_def_ops = {
 	.g_sensor_attr = b52_sensor_g_sensor_attr,
 	.g_band_step   = b52_sensor_g_band_step,
 	.g_csi         = b52_sensor_g_csi,
+	.g_info        = b52_sensor_g_info,
 	.s_flip        = b52_sensor_s_flip,
 	.gain_to_iso   = b52_sensor_gain_to_iso,
 	.iso_to_gain   = b52_sensor_iso_to_gain,

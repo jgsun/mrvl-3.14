@@ -1153,12 +1153,12 @@ static inline int plat_change_isp_clk(struct isp_subdev *isd,
 		struct b52_sensor *sensor)
 {
 	int ret;
+	u64 tmp;
+	unsigned long rate;
 	struct isp_block *blk;
-	struct v4l2_subdev_format fmt = {
-		.pad = 0,
-		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
-	};
-	ret = v4l2_subdev_call(&sensor->sd, pad, get_fmt, NULL, &fmt);
+	struct b52_sensor_info info;
+
+	ret = b52_sensor_call(sensor, g_info, &info);
 	if (ret < 0)
 		return ret;
 
@@ -1168,15 +1168,44 @@ static inline int plat_change_isp_clk(struct isp_subdev *isd,
 		return -EINVAL;
 	}
 
-	/* default use 30fps */
+	switch (info.type) {
+	case B52_SENSOR_INFO_LINE_TIME:
+		/* ISP needs 3% HB */
+		tmp = info.width * 103 * 10000;
+		rate = div_u64(tmp, info.line_time) * 1000;
+		break;
+	case B52_SENSOR_INFO_PIXEL_PER_SEC:
+		if (info.pps > 390000000)
+			rate = 499000000;
+		else if (info.pps > 260000000)
+			rate = 416000000;
+		else if (info.pps > 180000000)
+			rate = 312000000;
+		else if (info.pps > 100000000)
+			rate = 208000000;
+		else
+			rate = 156000000;
+		break;
+	case B52_SENSOR_INFO_MIN_ISP_CLK:
+		rate = info.min_isp_clk_freq;
+		break;
+	default:
+		d_inf(1, "wrong info->type");
+		return -EINVAL;
+	}
 
-	/*Here is the special case for S5K3L2 sensor.
-	* We will use 416Mhz as pipeline clock in video and capture mode.
-	*/
-	if (strncmp(sensor->drvdata->name, "samsung.s5k3l2", 14) == 0)
-		b52isp_idi_change_clock(blk, fmt.format.width, 2322, 30);
+	if (rate > 416000000)
+		rate = 499000000;
+	else if (rate > 312000000)
+		rate = 416000000;
+	else if (rate > 208000000)
+		rate = 312000000;
+	else if (rate > 156000000)
+		rate = 208000000;
 	else
-		b52isp_idi_change_clock(blk, fmt.format.width, fmt.format.height, 30);
+		rate = 156000000;
+
+	b52isp_idi_change_clock(blk, rate);
 	return 0;
 }
 
@@ -1282,8 +1311,12 @@ static int plat_setup_sensor(struct isp_build *isb,
 	int ret;
 	struct b52_sensor *b52_sensor_host;
 	struct isp_host_subdev *hsd;
+#ifdef CONFIG_SUBDEV_VCM
 	struct vcm_data vdata;
+#endif
+#ifdef CONFIG_SUBDEV_FLASH
 	struct flash_data fdata;
+#endif
 	char hostname[20];
 	struct v4l2_subdev *sensor_sd;
 

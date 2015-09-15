@@ -1432,7 +1432,7 @@ int b52isp_set_focus_distance(u32 distance, int id)
 		try_times++;
 	} while ((!b52_readb(base + REG_FW_FOCUS_MAN_STATUS)) && (try_times < TRY_TIMES_MAX));
 
-	pr_info("%s: manual focus success, postion:0x%x\n",
+	pr_debug("%s: manual focus success, postion:0x%x\n",
 			__func__, b52_readw(base + REG_FW_AF_CURR_POS));
 
 	return 0;

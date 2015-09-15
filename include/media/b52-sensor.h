@@ -109,6 +109,7 @@ struct b52_sensor_resolution {
 	enum b52_sensor_mode sensor_mode;
 	enum b52_sensor_res_prop prop;
 	struct b52_sensor_regs regs;
+	u32 min_isp_clk_freq;
 };
 
 struct sensor_prop_range {
@@ -184,6 +185,33 @@ struct b52_cmd_i2c_data {
 	struct regval_tab *tab;
 	u32 num; /* the number of sensor regs*/
 	u8 pos;
+};
+
+/*
+ * B52_SENSOR_INFO_LINE_TIME:
+ *		calulate isp pipeline clock based on line time = hts/pixel_rate
+ * B52_SENSOR_INFO_PIXEL_PER_SEC:
+ *		calulate isp pipeline clock based on the number of pixels in 1s
+ * B52_SENSOR_INFO_MIN_ISP_CLK: not recommand to use it
+ *		set isp pipeline clock based on this frequence
+ */
+enum b52_sensor_info_type {
+	B52_SENSOR_INFO_LINE_TIME = 0,
+	B52_SENSOR_INFO_PIXEL_PER_SEC,
+	B52_SENSOR_INFO_MIN_ISP_CLK,
+	B52_SENSOR_INFO_MAX,
+};
+
+struct b52_sensor_info {
+	enum b52_sensor_info_type type;
+	union {
+		struct {
+			u32 width;
+			u32 line_time;  /* unit ns */
+		};
+		u32 pps;                /* the number of pixel per second */
+		u32 min_isp_clk_freq;   /* unit Hz */
+	};
 };
 
 struct b52_sensor_data {
@@ -285,6 +313,7 @@ struct b52_sensor_ops {
 	int (*g_sensor_attr)(struct v4l2_subdev *,
 			struct b52_sensor_i2c_attr *);
 	int (*g_csi)(struct v4l2_subdev *, struct mipi_csi2 *);
+	int (*g_info)(struct v4l2_subdev *, struct b52_sensor_info *);
 
 	int (*s_focus)(struct v4l2_subdev *, u16 val);
 	int (*g_focus)(struct v4l2_subdev *, u16 *val);

@@ -139,6 +139,6 @@ int plat_vnode_get_topology(struct plat_vnode *pvnode,
 				struct plat_topology *topo);
 int plat_topo_get_output(struct plat_topology *ppl);
 __u32 plat_get_src_tag(struct plat_topology *ppl);
-int b52isp_idi_change_clock(struct isp_block *block, int w, int h, int fps);
+void b52isp_idi_change_clock(struct isp_block *block, unsigned long rate);
 int plat_tune_isp(int on);
 #endif	/* PLAT_CAM_H */
