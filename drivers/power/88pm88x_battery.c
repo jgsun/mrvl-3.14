@@ -1505,12 +1505,17 @@ static void pm88x_battery_monitor_work(struct work_struct *work)
 		prev_cap = info->bat_params.soc;
 		prev_status = info->bat_params.status;
 		prev_health = info->bat_params.health;
-		dev_info(info->dev,
-			 "status=%s, cap=%d, temp=%d, volt=%d, ibat=%d, ocv_is_reliable=%d\n",
-			 bat_status_to_string(info->bat_params.status),
-			 info->bat_params.soc, info->bat_params.temp / 10,
-			 info->bat_params.volt, info->bat_params.ibat, info->ocv_is_reliable);
 	}
+
+	dev_info(info->dev, "<<<<-------------------------\n");
+	dev_info(info->dev, "battery status   == %s\n",
+		 bat_status_to_string(info->bat_params.status));
+	dev_info(info->dev, "battery capacity == %d%%\n", info->bat_params.soc);
+	dev_info(info->dev, "battery temp     == %d C\n", info->bat_params.temp / 10);
+	dev_info(info->dev, "load voltage     == %d mV\n", info->bat_params.volt);
+	dev_info(info->dev, "current now      == %d mA\n", info->bat_params.ibat);
+	dev_info(info->dev, "ocv-is-reliable  == %d\n", info->ocv_is_reliable);
+	dev_info(info->dev, "------------------------->>>>\n");
 
 	/* save the recent value in non-volatile memory */
 	extern_data.soc = ccnt_data.soc;
