@@ -1693,7 +1693,7 @@ int b52isp_rw_awb_gain(struct b52isp_awb_gain *awb_gain, int id)
 
 		b52_writew(base + REG_AWB_GAIN_B, awb_gain->b & 0x3FF);
 		b52_writew(base + REG_AWB_GAIN_GB, awb_gain->gb & 0x3FF);
-		b52_writew(base + REG_AWB_GAIN_GB, awb_gain->gr & 0x3FF);
+		b52_writew(base + REG_AWB_GAIN_GR, awb_gain->gr & 0x3FF);
 		b52_writew(base + REG_AWB_GAIN_R, awb_gain->r & 0x3FF);
 		b52_writew(DATA_BGAIN, awb_gain->b & 0x3FF);
 		b52_writew(DATA_GGAIN, ((awb_gain->gb +
