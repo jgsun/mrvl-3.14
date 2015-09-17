@@ -40,6 +40,7 @@ struct mmp_pd_display {
 enum {
 	MMP_PD_DISPLAY_PXA1U88,
 	MMP_PD_DISPLAY_PXA1928,
+	MMP_PD_DISPLAY_PXA1936,
 };
 
 #define PMUA_DISP_RSTCTRL 0x180
@@ -65,6 +66,14 @@ enum {
 
 #define APMU_DEBUG 0x088
 #define DSI_PHY_DVM_MASK (1 << 31)
+
+#define PXA1936_PMUA_DISP_RSTCTRL	0x4c
+#define PXA1936_LCD_ACLK_SW_RST	(1 << 0)
+#define PXA1936_LCD_PERIP_RST	(1 << 1)
+#define PXA1936_LCD_HCLK_RST	(1 << 2)
+#define PXA1936_LCD_AXICLK_EN	(1 << 3)
+#define PXA1936_LCD_HCLK_EN	(1 << 4)
+#define PXA1936_LCD_ACLK_RST	(1 << 16)
 
 static DEFINE_SPINLOCK(mmp_pd_display_lock);
 
@@ -211,6 +220,120 @@ static int mmp_pd_pxa1928_power_off(struct generic_pm_domain *domain)
 	return 0;
 }
 
+static int mmp_pd_pxa1936_power_on(struct generic_pm_domain *domain)
+{
+	struct mmp_pd_display *pd = container_of(domain,
+			struct mmp_pd_display, genpd);
+	u32 val;
+
+	spin_lock(&mmp_pd_display_lock);
+
+	/* 1.a enable AHB clock */
+	val = readl_relaxed(pd->reg_base + PXA1936_PMUA_DISP_RSTCTRL) | PXA1936_LCD_HCLK_EN;
+	writel_relaxed(val, pd->reg_base + PXA1936_PMUA_DISP_RSTCTRL);
+
+	/* 1.b enable AXI clock */
+	val = readl_relaxed(pd->reg_base + PXA1936_PMUA_DISP_RSTCTRL) | PXA1936_LCD_AXICLK_EN;
+	writel_relaxed(val, pd->reg_base + PXA1936_PMUA_DISP_RSTCTRL);
+
+	spin_unlock(&mmp_pd_display_lock);
+
+	/* 1.c enable function clock, move to lcd driver */
+	/* 1.d enable DSI MIPI clock, move to lcd driver */
+
+	/* 1.e enable escape clock*/
+	if (pd->esc_clk)
+		clk_prepare_enable(pd->esc_clk);
+
+	spin_lock(&mmp_pd_display_lock);
+
+	/* 2.a release AHB reset */
+	val = readl_relaxed(pd->reg_base + PXA1936_PMUA_DISP_RSTCTRL) | PXA1936_LCD_HCLK_RST;
+	writel_relaxed(val, pd->reg_base + PXA1936_PMUA_DISP_RSTCTRL);
+
+	/* 2.b.1 release AXI reset */
+	val = readl_relaxed(pd->reg_base + PXA1936_PMUA_DISP_RSTCTRL) | PXA1936_LCD_ACLK_RST;
+	writel_relaxed(val, pd->reg_base + PXA1936_PMUA_DISP_RSTCTRL);
+
+	/* for decompress case, need delay sevral cycles */
+	udelay(1);
+
+	/* 2.b.2 release AXI reset */
+	val = readl_relaxed(pd->reg_base + PXA1936_PMUA_DISP_RSTCTRL) | PXA1936_LCD_ACLK_SW_RST;
+	writel_relaxed(val, pd->reg_base + PXA1936_PMUA_DISP_RSTCTRL);
+
+	/* 2.c release function reset */
+	val = readl_relaxed(pd->reg_base + PXA1936_PMUA_DISP_RSTCTRL) | PXA1936_LCD_PERIP_RST;
+	writel_relaxed(val, pd->reg_base + PXA1936_PMUA_DISP_RSTCTRL);
+
+	/* 2.d release escape clock reset, do by 1.e */
+
+	val = readl_relaxed(pd->reg_base + APMU_DEBUG) | DSI_PHY_DVM_MASK;
+	writel_relaxed(val, pd->reg_base + APMU_DEBUG);
+
+	spin_unlock(&mmp_pd_display_lock);
+
+	/* ugly, here, hclk_clk will be used by DFC, so here need to enable it */
+	if (pd->hclk_clk)
+		clk_prepare_enable(pd->hclk_clk);
+
+	return 0;
+}
+
+static int mmp_pd_pxa1936_power_off(struct generic_pm_domain *domain)
+{
+	struct mmp_pd_display *pd = container_of(domain,
+			struct mmp_pd_display, genpd);
+	u32 val;
+
+	spin_lock(&mmp_pd_display_lock);
+
+	/* 1.a assert AHB reset, this reset will reset all registers, now LCD driver need retain resiters
+	  * value, so skip reset HCLK
+	*/
+
+	/* 1.b assert AXI reset */
+	val = readl_relaxed(pd->reg_base + PXA1936_PMUA_DISP_RSTCTRL);
+	val &= ~PXA1936_LCD_ACLK_SW_RST;
+	writel_relaxed(val, pd->reg_base + PXA1936_PMUA_DISP_RSTCTRL);
+
+	/* 1.c assert function reset */
+	val = readl_relaxed(pd->reg_base + PXA1936_PMUA_DISP_RSTCTRL);
+	val &= ~PXA1936_LCD_PERIP_RST;
+	writel_relaxed(val, pd->reg_base + PXA1936_PMUA_DISP_RSTCTRL);
+
+	/* 1.d assert escape clock reset, do by 2.e */
+
+	/* 2.a disable AHB clock */
+	val = readl_relaxed(pd->reg_base + PXA1936_PMUA_DISP_RSTCTRL);
+	val &= ~PXA1936_LCD_HCLK_EN;
+	writel_relaxed(val, pd->reg_base + PXA1936_PMUA_DISP_RSTCTRL);
+
+	/* 2.b disable AXI clock */
+	val = readl_relaxed(pd->reg_base + PXA1936_PMUA_DISP_RSTCTRL);
+	val &= ~PXA1936_LCD_AXICLK_EN;
+	writel_relaxed(val, pd->reg_base + PXA1936_PMUA_DISP_RSTCTRL);
+
+	val = readl_relaxed(pd->reg_base + APMU_DEBUG);
+	val &= ~(DSI_PHY_DVM_MASK);
+	writel_relaxed(val, pd->reg_base + APMU_DEBUG);
+
+	spin_unlock(&mmp_pd_display_lock);
+
+	/* 2.c disable function clock, move to lcd driver */
+	/* 2.d disable DSI MIPI clock, move to lcd driver */
+	/* 2.e disable escape clock*/
+	if (pd->esc_clk)
+		clk_disable_unprepare(pd->esc_clk);
+
+	/* ugly, juset keep this clk to use for DFC */
+	if (pd->hclk_clk)
+		clk_disable_unprepare(pd->hclk_clk);
+
+	return 0;
+}
+
+
 static struct mmp_pd_display_data display_pxa1u88_data = {
 	.id			= MMP_PD_DISPLAY_PXA1U88,
 	.name			= "power-domain-display",
@@ -225,6 +348,12 @@ static struct mmp_pd_display_data display_pxa1928_data = {
 	.power_off = mmp_pd_pxa1928_power_off,
 };
 
+static struct mmp_pd_display_data display_pxa1936_data = {
+	.id			= MMP_PD_DISPLAY_PXA1936,
+	.name			= "power-domain-display",
+	.power_on = mmp_pd_pxa1936_power_on,
+	.power_off = mmp_pd_pxa1936_power_off,
+};
 
 static const struct of_device_id of_mmp_pd_match[] = {
 	{
@@ -234,6 +363,10 @@ static const struct of_device_id of_mmp_pd_match[] = {
 	{
 		.compatible = "marvell,power-domain-display-pxa1928",
 		.data = (void *)&display_pxa1928_data,
+	},
+	{
+		.compatible = "marvell,power-domain-display-pxa1936",
+		.data = (void *)&display_pxa1936_data,
 	},
 	{ },
 };
