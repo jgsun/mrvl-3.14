@@ -209,7 +209,7 @@ static int read_otp_wb(struct b52_sensor *sensor, int addr,
 static int OV8865_update_wb(struct b52_sensor *sensor,
 			struct b52_sensor_otp *otp, u8 *flag)
 {
-	int otp_base;
+	int otp_base, temp;
 	int r_gain, g_gain, b_gain, base_gain;
 	int rg_typical_ratio, bg_typical_ratio;
 
@@ -266,6 +266,11 @@ static int OV8865_update_wb(struct b52_sensor *sensor,
 		r_gain = 0x400 * r_gain / base_gain;
 		g_gain = 0x400 * g_gain / base_gain;
 		b_gain = 0x400 * b_gain / base_gain;
+
+		temp = OV8865_read_i2c(sensor, 0x5000);
+		temp = 0x10 | temp;/*enable MWB gain before apply gain*/
+		OV8865_write_i2c(sensor, 0x5000, temp);
+
 		/*update sensor WB gain*/
 		if (r_gain > 0x400) {
 			OV8865_write_i2c(sensor, 0x5018, r_gain >> 6);
@@ -334,7 +339,7 @@ static int OV8865_update_lenc(struct b52_sensor *sensor,
 	/*apply lenc otp data*/
 	if (*flag & 0x10) {
 		temp = OV8865_read_i2c(sensor, 0x5000);
-		temp = 0x80 | temp;
+		temp = 0x80 | temp;/*enable lenc before apply the lenc data*/
 		OV8865_write_i2c(sensor, 0x5000, temp);
 		for (i = 0; i < 62; i++)
 			OV8865_write_i2c(sensor, 0x5800 + i, lenc[i]);
@@ -480,7 +485,7 @@ err:
 static int OV8865_update_otp(struct v4l2_subdev *sd,
 				struct b52_sensor_otp *otp)
 {
-	int ret = 0;
+	int temp, ret = 0;
 	/* bit7: info, bit6:wb, bit5:vcm, bit4:lenc*/
 	u8 flag = 0;
 	struct b52_sensor *sensor = to_b52_sensor(sd);
@@ -497,11 +502,19 @@ static int OV8865_update_otp(struct v4l2_subdev *sd,
 			ret = OV8865_update_wb(sensor, otp, &flag);
 			if (ret < 0)
 				goto fail;
+		} else {
+			temp = OV8865_read_i2c(sensor, 0x5000);
+			temp = ~0x10 & temp;/*disable MWB gain*/
+			OV8865_write_i2c(sensor, 0x5000, temp);
 		}
 		if (otp->otp_ctrl & V4L2_CID_SENSOR_OTP_CONTROL_LENC) {
 			ret = OV8865_update_lenc(sensor, otp, &flag);
 			if (ret < 0)
 				goto fail;
+		} else {
+			temp = OV8865_read_i2c(sensor, 0x5000);
+			temp = ~0x80 & temp;/*disable lenc*/
+			OV8865_write_i2c(sensor, 0x5000, temp);
 		}
 		/*access otp data end*/
 		OV8865_otp_access_end(sensor);
