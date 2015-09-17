@@ -1128,15 +1128,17 @@ static void overlay_do_onoff(struct mmp_overlay *overlay, int status)
 	overlay->status = on;
 
 	if (status == MMP_ON_REDUCED) {
-		path_enabledisable(path, 1);
 		if (dsi && dsi->set_status)
 			dsi->set_status(dsi, status);
 		if (path->panel && path->panel->set_status)
 			path->panel->set_status(path->panel, status);
 		if (vdma && vdma->ops && vdma->ops->set_on)
 			vdma->ops->set_on(vdma, status);
+		path_enabledisable(path, 1);
 		path->status = on;
 	} else if (on) {
+		dmafetch_onoff(overlay, on);
+
 		if (path->ops.check_status(path) != path->status) {
 			if (!(DISP_GEN4_LITE(path_to_ctrl(path)->version) ||
 				DISP_GEN4_PLUS(path_to_ctrl(path)->version)))
@@ -1144,7 +1146,6 @@ static void overlay_do_onoff(struct mmp_overlay *overlay, int status)
 			hw_trigger = 1;
 		}
 
-		dmafetch_onoff(overlay, on);
 		if (hw_trigger) {
 			/* if path DMA enabled the first time, we need set hw
 			 * trigger immediately */
@@ -1156,10 +1157,10 @@ static void overlay_do_onoff(struct mmp_overlay *overlay, int status)
 				path_onoff(path, on);
 		}
 	} else {
-		dmafetch_onoff(overlay, on);
-
 		if (path->ops.check_status(path) != path->status)
 			path_onoff(path, on);
+
+		dmafetch_onoff(overlay, on);
 	}
 
 	mutex_unlock(&ctrl->access_ok);
