@@ -158,9 +158,15 @@ struct idle_dcstat_info {
 	u64 M2_cluster0_idle_start;
 	u64 M2_cluster0_idle_total;
 	u64 M2_cluster0_count;
+	u64 m2_c0_op_total[MAX_LPM_INDEX_DC];
+	int m2_c0_op_index;
+	u64 m2_c0_count[MAX_LPM_INDEX_DC];
 	u64 M2_cluster1_idle_start;
 	u64 M2_cluster1_idle_total;
 	u64 M2_cluster1_count;
+	u64 m2_c1_op_total[MAX_LPM_INDEX_DC];
+	int m2_c1_op_index;
+	u64 m2_c1_count[MAX_LPM_INDEX_DC];
 	u64 D1P_idle_start;
 	u64 D1P_idle_total;
 	u64 D1p_count;
