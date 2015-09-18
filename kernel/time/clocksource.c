@@ -1039,7 +1039,7 @@ static struct bus_type clocksource_subsys = {
 	.dev_name = "clocksource",
 };
 
-static struct device device_clocksource = {
+struct device device_clocksource = {
 	.id	= 0,
 	.bus	= &clocksource_subsys,
 };

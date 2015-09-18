@@ -34,6 +34,7 @@
 #include <linux/mmp_timer.h>
 #include <linux/clockchips.h>
 #include <linux/sched_clock.h>
+#include <linux/stat.h>
 
 #define TMR_CCR		(0x0000)
 #define TMR_TN_MM(n, m)	(0x0004 + ((n) << 3) + (((n) + (m)) << 2))
@@ -851,3 +852,32 @@ out:
 
 CLOCKSOURCE_OF_DECLARE(mmp_timer, "marvell,mmp-timer", mmp_of_timer_init);
 #endif
+
+/*
+* return clock source's counter value.
+* it is used to sync time between telephony driver and cp
+* please don't change it without sync with cp and telephony team.
+*/
+
+extern struct device device_clocksource;
+static ssize_t show_mmp_clocksource_counter(struct device *dev, struct device_attribute *attr,
+											char *buf)
+{
+	cycle_t counter = 0;
+
+	counter = clksrc_read(&clksrc->cs);
+	return sprintf(buf, "%ld\n", (unsigned long)counter);
+}
+
+static DEVICE_ATTR(mmp_clocksource_counter, S_IRUGO, show_mmp_clocksource_counter, NULL);
+
+static int __init mmp_clocksource_counter_init(void)
+{
+	if (clksrc)
+		return device_create_file(&device_clocksource, &dev_attr_mmp_clocksource_counter);
+	else
+		return 0;
+}
+
+late_initcall(mmp_clocksource_counter_init);
+
