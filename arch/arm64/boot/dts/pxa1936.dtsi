@@ -613,6 +613,17 @@
 					marvell,timer-counter-broadcast;
 					marvell,timer-counter-frequency = <32768>;
 				};
+
+				/* this counter is used for time sync between CP and telephony
+				 * , please don't change it without sync with CP and telephone
+				 * team.
+				 */
+				counter1 {
+					compatible = "marvell,timer-counter-clksrc";
+					marvell,timer-counter-id = <1>;
+					marvell,timer-counter-frequency = <32768>;
+					marvell,timer-counter-rating = <200>;
+				};
 			};
 
 			uart0: uart@d4017000 {
