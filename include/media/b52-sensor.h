@@ -20,7 +20,7 @@
 /* forward references */
 struct b52_sensor;
 
-#define to_b52_sensor(sd) container_of((sd), struct b52_sensor, sd);
+#define to_b52_sensor(v4l2_sd) container_of((v4l2_sd), struct b52_sensor, sd);
 
 #define b52_sensor_call(s, f, args...) \
 	(!(s) ? -ENODEV : (((s)->ops.f) ? \

@@ -2245,13 +2245,10 @@ static int b52_cmd_set_fmt(struct b52isp_cmd *cmd)
 	struct v4l2_subdev *hsd = cmd->hsd;
 	const struct b52_sensor_data *sensordata = cmd->memory_sensor_data;
 
-	struct v4l2_subdev *sd = host_subdev_get_guest(hsd,
-					MEDIA_ENT_T_V4L2_SUBDEV_SENSOR);
-	g_sensor = to_b52_sensor(sd);
-
 	if (!(flags & BIT(CMD_FLAG_MS))) {
 		gsd = host_subdev_get_guest(hsd,
 					MEDIA_ENT_T_V4L2_SUBDEV_SENSOR);
+		g_sensor = to_b52_sensor(gsd);
 	}
 	for (i = 0; i < cmd->nr_mac; i++) {
 		b52_writeb(mac_base[i] + REG_MAC_RDY_ADDR0, 0);
