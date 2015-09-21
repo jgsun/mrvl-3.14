@@ -26,9 +26,8 @@
 #define CCINET_IOCTL_AQUIRE SIOCDEVPRIVATE
 #define CCINET_IOCTL_RELEASE (SIOCDEVPRIVATE+1)
 #define CCINET_IOCTL_SET_V6_CID (SIOCDEVPRIVATE+2)
-#define CCINET_IOCTL_SET_EMBMS_CID (SIOCDEVPRIVATE+3)
-#define CCINET_IOCTL_IF_ENABLE (SIOCDEVPRIVATE+4)
-#define CCINET_IOCTL_IF_DISABLE (SIOCDEVPRIVATE+5)
+#define CCINET_IOCTL_IF_ENABLE (SIOCDEVPRIVATE+3)
+#define CCINET_IOCTL_IF_DISABLE (SIOCDEVPRIVATE+4)
 
 struct ccinet_priv {
 	struct psd_user psd_user;
@@ -291,11 +290,6 @@ static int ccinet_ioctl(struct net_device *netdev, struct ifreq *rq, int cmd)
 		}
 		priv->v6_cid = v6_cid;
 		err = psd_register(&priv->psd_user, priv->v6_cid);
-		break;
-	}
-	case CCINET_IOCTL_SET_EMBMS_CID:
-	{
-		set_embms_cid(rq->ifr_ifru.ifru_ivalue);
 		break;
 	}
 	case CCINET_IOCTL_IF_ENABLE:

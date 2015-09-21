@@ -37,6 +37,7 @@
 #include "data_path_common.h"
 #include "shm_share.h"
 #include "msocket.h"
+#include "embms_netdev.h"
 
 #define NETWORK_EMBMS_CID    0xFF
 
@@ -57,8 +58,6 @@ struct psd_device {
 
 #define to_psd_driver(drv) container_of(drv, struct psd_driver, driver)
 #define to_psd_device(dev) container_of(dev, struct psd_device, dev)
-
-static int embms_cid = 7;
 
 static struct psd_device psd_dev = {
 	.name = "psd",
@@ -120,12 +119,6 @@ int psd_unregister(const struct psd_user *user, int cid)
 	return ret;
 }
 EXPORT_SYMBOL(psd_unregister);
-
-void set_embms_cid(int cid)
-{
-	embms_cid = cid;
-}
-EXPORT_SYMBOL(set_embms_cid);
 
 static inline bool is_ack_packet(struct sk_buff *skb)
 {
@@ -209,10 +202,10 @@ int psd_data_rx(unsigned char cid, struct sk_buff *skb)
 {
 	struct psd_user *user;
 
-	if (cid == NETWORK_EMBMS_CID)
-		cid = embms_cid;
-
-	if (likely(cid >= 0 && cid < MAX_CID_NUM)) {
+	if (cid == NETWORK_EMBMS_CID) {
+		embms_netdev_rx(skb);
+		goto done;
+	} else if (likely(cid >= 0 && cid < MAX_CID_NUM)) {
 		rcu_read_lock();
 		user = rcu_dereference(psd_contexts[cid].user);
 		if (likely(user && user->on_receive))
@@ -239,6 +232,8 @@ size_t psd_get_headroom(int cid)
 	struct psd_user *user;
 	size_t headroom = 0;
 
+	if (unlikely(cid < 0 || cid >= MAX_CID_NUM))
+		return 0;
 	rcu_read_lock();
 	user = rcu_dereference(psd_contexts[cid].user);
 	if (likely(user))

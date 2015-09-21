@@ -34,7 +34,6 @@ struct psd_user {
 
 int psd_register(const struct psd_user *user, int cid);
 int psd_unregister(const struct psd_user *user, int cid);
-void set_embms_cid(int cid);
 
 unsigned short psd_select_queue(struct sk_buff *skb);
 int psd_data_tx(int cid, int simid, struct sk_buff *skb);
