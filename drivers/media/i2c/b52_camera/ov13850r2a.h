@@ -279,8 +279,8 @@ static struct regval_tab OV13850R2A_res_13M[] = {
 static struct regval_tab OV13850R2A_res_12M_crop[] = {
 	{0x3808, 0x0f},
 	{0x3809, 0xe0},
-	{0x380a, 0x0c},
-	{0x380b, 0x40},
+	{0x380a, 0x08},
+	{0x380b, 0xee},
 };
 static struct regval_tab OV13850R2A_id[] = {
 	{0x300A, 0xd8, 0xff},
@@ -382,7 +382,7 @@ static struct b52_sensor_resolution OV13850R2A_13M_res[] = {
 	},
 	[1] = {
 		 .width = 4064,
-		 .height = 3136,
+		 .height = 2286,
 		 .hts = 0x11a0,
 		 .min_vts = 0x0d00,
 		 .prop = SENSOR_RES_CROPPED,
