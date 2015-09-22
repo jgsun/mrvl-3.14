@@ -61,6 +61,7 @@ static void b52isp_tasklet(unsigned long data);
 static void *meta_cpu;
 static dma_addr_t meta_dma;
 #define META_DATA_SIZE  0x81
+#define CMD_NAME 0xff
 
 static int trace = 2;
 module_param(trace, int, 0644);
@@ -2241,25 +2242,43 @@ static inline int b52_fill_buf(struct isp_videobuf *buf,
 }
 
 static inline int b52isp_update_metadata(struct isp_subdev *isd,
-	struct isp_vnode *vnode, struct isp_videobuf *buffer)
+	struct isp_vnode *vnode, struct isp_videobuf *buffer, u8 cmd_name)
 {
 	int i;
 	u32 type;
 	u16 size;
 	u16 *src;
 	u16 *dst;
+	struct b52isp_lpipe *lpipe = NULL;
 	/*
 	 * FIXME: hard code to assume META plane comes right after
 	 * image plane, we should check the plane signature to identify
 	 * the plane usage.
 	 */
 	int meta_pid = vnode->format.fmt.pix_mp.num_planes;
-	struct media_pad *pad_pipe =
-		media_entity_remote_pad(isd->pads + B52PAD_AXI_IN);
-	struct isp_subdev *lpipe_isd = v4l2_get_subdev_hostdata(
-		media_entity_to_v4l2_subdev(pad_pipe->entity));
-	struct b52isp_lpipe *lpipe = container_of(lpipe_isd,
-		struct b52isp_lpipe, isd);
+
+	if (cmd_name !=  CMD_IMG_CAPTURE) {
+		struct media_pad *pad_pipe =
+			media_entity_remote_pad(isd->pads + B52PAD_AXI_IN);
+		struct isp_subdev *lpipe_isd = v4l2_get_subdev_hostdata(
+			media_entity_to_v4l2_subdev(pad_pipe->entity));
+		lpipe = container_of(lpipe_isd,
+			struct b52isp_lpipe, isd);
+	} else {
+		struct isp_subdev *lpipe_isd = isd;
+		lpipe = container_of(lpipe_isd,
+			struct b52isp_lpipe, isd);
+		if (lpipe->meta_cpu == NULL) {
+			lpipe->meta_size = b52_get_metadata_len(B52ISP_ISD_PIPE1);
+			lpipe->meta_cpu = meta_cpu;
+			lpipe->meta_dma = meta_dma;
+			if ((lpipe->meta_cpu == NULL) ||
+				(lpipe->meta_size >= META_DATA_SIZE)) {
+				WARN_ON(1);
+				return -ENOMEM;
+			}
+		}
+	}
 
 	if ((buffer->vb.v4l2_buf.type ==
 		 V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) ||
@@ -2267,13 +2286,16 @@ static inline int b52isp_update_metadata(struct isp_subdev *isd,
 		return -EINVAL;
 
 	if (buffer->va[meta_pid] == NULL ||
-		lpipe->meta_cpu == NULL ||
-		lpipe->pinfo_buf == NULL)
+		lpipe->meta_cpu == NULL)
 		return -EINVAL;
 
 	type = buffer->vb.v4l2_planes[meta_pid].reserved[0];
-	if (type == V4L2_PLANE_SIGNATURE_PIPELINE_INFO)
-		b52_read_pipeline_info(0, lpipe->pinfo_buf);
+	if (type == V4L2_PLANE_SIGNATURE_PIPELINE_INFO) {
+		if (lpipe->pinfo_buf != NULL)
+			b52_read_pipeline_info(0, lpipe->pinfo_buf);
+		else
+			return -EINVAL;
+	}
 
 	dst = buffer->va[meta_pid];
 	if (type == V4L2_PLANE_SIGNATURE_PIPELINE_INFO) {
@@ -2439,7 +2461,7 @@ check_eof_irq:
 			goto recheck;
 		}
 
-		b52isp_update_metadata(isd, vnode, buffer);
+		b52isp_update_metadata(isd, vnode, buffer, CMD_NAME);
 		isp_vnode_export_buffer(buffer);
 
 		d_inf(4, "%s receive done", isd->subdev.name);
@@ -2665,10 +2687,13 @@ disable:
 	return 0;
 }
 
-static int b52isp_export_cmd_buffer(struct b52isp_cmd *cmd)
+static int b52isp_export_cmd_buffer(struct b52isp_lpipe *lpipe)
 {
 	struct isp_videobuf *ivb;
+	struct b52isp_cmd *cmd = lpipe->cur_cmd;
+	struct isp_subdev *isd = &lpipe->isd;
 	int i;
+
 	if (cmd->src_type == CMD_SRC_AXI) {
 		ivb = isp_vnode_get_busy_buffer(cmd->mem.vnode);
 		while (ivb) {
@@ -2681,7 +2706,10 @@ static int b52isp_export_cmd_buffer(struct b52isp_cmd *cmd)
 		if (cmd->output[i].vnode == NULL)
 			continue;
 		ivb = isp_vnode_get_busy_buffer(cmd->output[i].vnode);
+
 		while (ivb) {
+			b52isp_update_metadata(isd, cmd->output[i].vnode, ivb,
+				lpipe->cur_cmd->cmd_name);
 			isp_vnode_export_buffer(ivb);
 			ivb = isp_vnode_get_busy_buffer(cmd->output[i].vnode);
 		}
@@ -2950,7 +2978,7 @@ static int b52isp_laxi_stream_handler(struct b52isp_laxi *laxi,
 			ret = b52isp_try_apply_cmd(lpipe);
 			lpipe->cur_cmd->flags &= ~BIT(CMD_FLAG_LINEAR_YUV);
 			if (!ret)
-				b52isp_export_cmd_buffer(lpipe->cur_cmd);
+				b52isp_export_cmd_buffer(lpipe);
 			goto unlock;
 		case CMD_HDR_STILL:
 		case CMD_RAW_PROCESS:
@@ -3024,7 +3052,7 @@ static int b52isp_laxi_stream_handler(struct b52isp_laxi *laxi,
 			ret = b52isp_try_apply_cmd(lpipe);
 			if (ret < 0)
 				goto unlock;
-			b52isp_export_cmd_buffer(lpipe->cur_cmd);
+			b52isp_export_cmd_buffer(lpipe);
 			lpipe->cur_cmd->mem.vnode = NULL;
 			memset(lpipe->cur_cmd->output, 0,
 				sizeof(lpipe->cur_cmd->output));

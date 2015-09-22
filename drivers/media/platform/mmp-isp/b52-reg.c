@@ -2375,6 +2375,8 @@ static int b52_cmd_capture_img(struct b52isp_cmd *cmd)
 	b52_writeb(CMD_REG7, val);
 	b52_writeb(CMD_REG8, 0x20);
 
+	b52_writel(ISP_META_ADDR, cmd->meta_dma);
+
 	b52_cfg_input(&cmd->src_fmt, cmd->src_type);
 	b52_cfg_idi(&cmd->src_fmt, &cmd->pre_crop);
 	b52_cfg_output(cmd->output, cmd->output_map);
