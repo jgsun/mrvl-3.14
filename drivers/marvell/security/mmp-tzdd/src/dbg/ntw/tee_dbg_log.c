@@ -69,7 +69,7 @@ void tee_dbg_log_init(ulong_t buffer, ulong_t ctl)
 
 	INIT_DBG_PROC_CTRL_MAGIC(_g_tee_dbg_log_ctl_header->magic);
 
-	printk(KERN_ERR "proc log buf: 0x%lx, size: 0x%lx, ctl: 0x%lx\n",
+	printk(KERN_ERR "proc log buf: 0x%lx, size: 0x%x, ctl: 0x%lx\n",
 		buffer, _g_tee_dbg_log_buf_sz, ctl);
 	return;
 }
