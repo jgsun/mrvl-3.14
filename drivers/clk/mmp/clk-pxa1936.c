@@ -2096,36 +2096,38 @@ static void __init pxa1936_clk_init(struct device_node *np)
 	clst1_core_params.max_cpurate = max_freq_fused;
 
 	profile = get_chipprofile();
-	if (get_helan3_svc_version() == SVC_1_11) {
-		if ((profile >= 13) && (ddr_mode == DDR_800M_2X) && (max_freq_fused < CORE_1p8G))
-			panic("<1.8GHz SKU chip Don't support DDR 800 2x mode when profile >= 13 , will panic.\n");
-
-		if ((profile >= 13) && (max_freq_fused <= CORE_1p5G)) {
+	if (get_helan3_svc_version() == SVC_1_11 ||
+		get_helan3_svc_version() == SVC_TSMC_B0) {
+		if ((profile >= 13) && (ddr_mode == DDR_800M_2X))
+			panic("svc version %d chip Don't support DDR 800 2x mode when profile >= 13 , will panic.\n",
+			get_helan3_svc_version());
+		if (profile >= 13) {
 			clst0_core_params.max_cpurate = CORE_1p0G;
-			pr_info("<=1.5GHz SKU chip clst0 support max freq is 1057M when profile >= 13\n");
+			pr_info("svc version %d chip clst0 support max freq is 1057M when profile >= 13\n",
+			get_helan3_svc_version());
+		}
+		if ((profile >= 12) && (max_freq_fused == CORE_1p8G)) {
+			clst1_core_params.max_cpurate = CORE_1p6G;
+			pr_info("1.8GHz svc version %d chip clst1 support max freq is 1595M when profile >= 12\n",
+			get_helan3_svc_version());
 		}
 	} else if (get_helan3_svc_version() == SEC_SVC_1_01) {
-		if ((profile >= 4) && (ddr_mode == DDR_800M_2X) && (max_freq_fused < CORE_1p8G))
-			panic("<1.8GHz SKU chip Don't support DDR 800 2x mode when profile >= 4 , will panic.\n");
+		if ((profile >= 4) && (ddr_mode == DDR_800M_2X))
+			panic("SEC_SVC_1_01 chip Don't support DDR 800 2x mode when profile >= 4 , will panic.\n");
 
-		if ((profile == 15) && (max_freq_fused <= CORE_1p5G)) {
+		if (profile == 15) {
 			clst0_core_params.max_cpurate = CORE_0p8G;
-			pr_info("<=1.5GHz SKU chip clst0 support max freq is 832M when profile == 15\n");
-		} else if ((profile >= 11) && (profile <= 14) && (max_freq_fused <= CORE_1p5G)) {
+			pr_info("SEC_SVC_1_01 chip clst0 support max freq is 832M when profile == 15\n");
+		} else if (profile >= 11) {
 			clst0_core_params.max_cpurate = CORE_1p0G;
-			pr_info("<=1.5GHz SKU chip clst0 support max freq is 1057M when profile == (11 ~ 14)\n");
+			pr_info("SEC_SVC_1_01 chip clst0 support max freq is 1057M when profile == (11 ~ 15)\n");
 		}
-	} else if ((get_helan3_svc_version() == SVC_1_11) && (max_freq_fused == CORE_1p8G)) {
-		if ((profile >= 13) && (ddr_mode == DDR_800M_2X))
-			panic("1.8GHz SKU chip Don't support DDR 800 2x mode when profile >= 13 , will panic.\n");
-
-		if (profile >= 12)
-			panic("1.8GHz SKU chip clst1 max freq doesn't support 1803M when profile >= 12\n");
-	} else if (is_helan3_stepping_TSMC_B0() && (max_freq_fused == CORE_1p8G)) {
-		pr_info("1.8GHz TSMC B0 chip clst0 support max freq is 1248M\n");
-		pr_info("1.8GHz TSMC B0 chip clst1 support max freq is 1803M\n");
-	} else if (is_helan3_stepping_TSMC_B0())
-		pr_info("1.5GHz TSMC B0 chip clst0 support max freq is 1248M\n");
+	} else if ((get_helan3_svc_version() == SVC_TSMC_B0_NEW) &&
+		(max_freq_fused == CORE_1p8G)) {
+		pr_info("1.8GHz SVC_TSMC_B0_NEW chip clst0 support max freq is 1248M\n");
+		pr_info("1.8GHz SVC_TSMC_B0_NEW chip clst1 support max freq is 1803M\n");
+	} else if (get_helan3_svc_version() == SVC_TSMC_B0_NEW)
+		pr_info("1.5GHz SVC_TSMC_B0_NEW chip clst0 support max freq is 1248M\n");
 
 #endif
 	/* let uboot cmdline param have the final judge */
