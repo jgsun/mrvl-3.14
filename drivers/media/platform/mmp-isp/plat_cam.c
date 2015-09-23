@@ -399,7 +399,7 @@ int plat_vnode_get_topology(struct plat_vnode *pvnode, struct plat_topology *top
 			goto unlock;
 		}
 	} else {
-		/* input vdev*/
+		/* input vdev */
 		topo->src_type = PLAT_SRC_T_VDEV;
 		topo->src.vnode = vnode;
 
@@ -505,7 +505,7 @@ unlock:
 #ifdef CONFIG_HOST_SUBDEV
 /* recursive look for the link from end to start */
 /* end is never NULL, start can be NULL */
-/* FIXME: use stack to optimize later*/
+/* FIXME: use stack to optimize later */
 static int plat_find_link(struct media_entity *start,
 		struct media_entity *end, struct media_link **link,
 		int max_pads, int flag_set, int flag_clr)
@@ -716,13 +716,8 @@ static int __maybe_unused plat_hsd_connect_video(struct plat_hsd *phsd,
 static int __maybe_unused plat_hsd_disconnect_video(struct plat_hsd *phsd,
 					struct isp_vnode *vnode)
 {
-	int ret;
-
-	ret = blocking_notifier_chain_unregister(&vnode->notifier.head,
+	return blocking_notifier_chain_unregister(&vnode->notifier.head,
 			&vnode->nb);
-	if (ret < 0)
-		return ret;
-	return 0;
 }
 
 static int host_subdev_cnt;
@@ -825,7 +820,7 @@ static int plat_add_vdev(struct isp_build *build, struct isp_subdev *ispsd)
 
 	switch (ispsd->sd_type) {
 	case ISD_TYPE_DMA_OUT:
-		/* find output pad in i*/
+		/* find output pad in i */
 		for (i = 0; i < ispsd->subdev.entity.num_pads; i++) {
 			if (ispsd->subdev.entity.pads[i].flags
 				& MEDIA_PAD_FL_SOURCE)
@@ -895,7 +890,7 @@ attach_output:
 		break;
 
 	case ISD_TYPE_DMA_IN:
-		/* find input pad in i*/
+		/* find input pad in i */
 		for (i = 0; i < ispsd->subdev.entity.num_pads; i++) {
 			if (ispsd->subdev.entity.pads[i].flags
 				& MEDIA_PAD_FL_SINK)
@@ -1001,7 +996,7 @@ static int pcam_setup_links(struct isp_build *build,
 			CCIC_DMA_PAD_IN);
 
 #if 0
-	/*ULC1 will estabilish the path like:
+	/* ULC1 will estabilish the path like:
 	* back sensor -> CSI0 -> DMA0
 	* front sensor -> CSI1 -> DMA1
 	* so the below two links are not needed,
@@ -1455,11 +1450,7 @@ static int plat_cam_probe(struct platform_device *pdev)
 		return ret;
 
 	/* Setup the link between entities, this is totally platform specific */
-	ret = pcam_setup_links(cam->isb, sensor_host_sd);
-	if (ret < 0)
-		return ret;
-
-	return 0;
+	return pcam_setup_links(cam->isb, sensor_host_sd);
 }
 
 static const struct of_device_id plat_cam_dt_match[] = {

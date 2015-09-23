@@ -237,7 +237,7 @@ enum {
 };
 
 static const char *clock_name[ISP_CLK_END];
-/* FIXME this W/R for DE limitation, since AXI clk need enable before release reset*/
+/* FIXME this W/R for DE limitation, since AXI clk need enable before release reset */
 
 static struct isp_res_req b52idi_req[] = {
 	{ISP_RESRC_MEM, 0,      0},
@@ -455,7 +455,7 @@ static inline int b52isp_try_apply_cmd(struct b52isp_lpipe *pipe)
 
 	if (cmd->cmd_name == CMD_SET_FORMAT ||
 		cmd->cmd_name == CMD_CHG_FORMAT) {
-		/* FIXME: if all enable port close, will also clean port sel to ISP*/
+		/* FIXME: if all enable port close, will also clean port sel to ISP */
 		if (cmd->enable_map == 0x0)
 			output_sel = 0x0;
 		if (output_sel == pipe->output_sel) {
@@ -546,8 +546,10 @@ void b52isp_idi_change_clock(struct isp_block *block, unsigned long rate)
 	clk_set_rate(pipe_clk, rate);
 	b52_set_sccb_clock_rate(clk_get_rate(pipe_clk), 400000);
 
-	/* ISP need axi clk >= pipe_clk
-	 * for pipe clk 499M, DE recommend use axi clk 416M */
+	/*
+	 * ISP need axi clk >= pipe_clk
+	 * for pipe clk 499M, DE recommend use axi clk 416M
+	 */
 	rate = clk_get_rate(pipe_clk);
 	if (rate > 312000000)
 		rate_axi = 416000000;
@@ -578,32 +580,28 @@ static int b52isp_idi_enum_mbus_code(struct v4l2_subdev *sd,
 				  struct v4l2_subdev_fh *fh,
 				  struct v4l2_subdev_mbus_code_enum *code)
 {
-	int ret = 0;
-	return ret;
+	return 0;
 }
 
 static int b52isp_idi_enum_frame_size(struct v4l2_subdev *sd,
 				   struct v4l2_subdev_fh *fh,
 				   struct v4l2_subdev_frame_size_enum *fse)
 {
-	int ret = 0;
-	return ret;
+	return 0;
 }
 
 static int b52isp_idi_get_format(struct v4l2_subdev *sd,
 				struct v4l2_subdev_fh *fh,
 				struct v4l2_subdev_format *fmt)
 {
-	int ret = 0;
-	return ret;
+	return 0;
 }
 
 static int b52isp_idi_set_format(struct v4l2_subdev *sd,
 				struct v4l2_subdev_fh *fh,
 				struct v4l2_subdev_format *fmt)
 {
-	int ret = 0;
-	return ret;
+	return 0;
 }
 
 static int b52isp_idi_get_selection(struct v4l2_subdev *sd,
@@ -1056,7 +1054,7 @@ static int b52isp_config_af_win(struct isp_subdev *isd,
 	struct isp_block *blk = isp_sd2blk(isd);
 
 	if (!r || !ctrls || !blk) {
-		pr_err("%s: paramter is NULL\n", __func__);
+		pr_err("%s: parameter is NULL\n", __func__);
 		return -EINVAL;
 	}
 
@@ -1421,7 +1419,7 @@ static long b52isp_path_ioctl(struct v4l2_subdev *sd,
 }
 
 #ifdef CONFIG_COMPAT
-/*FIXME: need to refine return val*/
+/* FIXME: need to refine return val */
 static int b52_usercopy(struct v4l2_subdev *sd,
 		unsigned int cmd, void *arg)
 {
@@ -1596,16 +1594,14 @@ static int b52isp_path_enum_mbus_code(struct v4l2_subdev *sd,
 				  struct v4l2_subdev_fh *fh,
 				  struct v4l2_subdev_mbus_code_enum *code)
 {
-	int ret = 0;
-	return ret;
+	return 0;
 }
 
 static int b52isp_path_enum_frame_size(struct v4l2_subdev *sd,
 				   struct v4l2_subdev_fh *fh,
 				   struct v4l2_subdev_frame_size_enum *fse)
 {
-	int ret = 0;
-	return ret;
+	return 0;
 }
 
 static int b52isp_path_get_format(struct v4l2_subdev *sd,
@@ -2008,9 +2004,9 @@ static int b52isp_path_create(struct b52isp *b52isp)
 		case B52ISP_ISD_PIPE2:
 		case B52ISP_ISD_DUMP2:
 		/*
-		* Just attach physcal pipeline to logical pipeline to help
-		* init phys_pipe. After the registeration, they'll be detached
-		*/
+		 * Just attach physcal pipeline to logical pipeline to help
+		 * init phys_pipe. After the registeration, they'll be detached
+		 */
 			if (b52isp->blk[B52ISP_BLK_PIPE1 + i - 1]) {
 				ret = b52isp_attach_blk_isd(ispsd,
 					b52isp->blk[B52ISP_BLK_PIPE1 + i - 1]);
@@ -2029,10 +2025,10 @@ static int b52isp_path_create(struct b52isp *b52isp)
 				b52isp_detach_blk_isd(ispsd,
 					b52isp->blk[B52ISP_BLK_PIPE1 + i - 1]);
 		/*
-		* From this point, physical pipeline and logical pipeline is
-		* indepedent to each other. Before using any logical pipeline,
-		* it MUST find a physical pipeline and attach to it
-		*/
+		 * From this point, physical pipeline and logical pipeline is
+		 * indepedent to each other. Before using any logical pipeline,
+		 * it MUST find a physical pipeline and attach to it
+		 */
 			break;
 		default:
 			ret = plat_ispsd_register(ispsd);
@@ -2098,16 +2094,14 @@ static int b52isp_axi_enum_mbus_code(struct v4l2_subdev *sd,
 				  struct v4l2_subdev_fh *fh,
 				  struct v4l2_subdev_mbus_code_enum *code)
 {
-	int ret = 0;
-	return ret;
+	return 0;
 }
 
 static int b52isp_axi_enum_frame_size(struct v4l2_subdev *sd,
 				   struct v4l2_subdev_fh *fh,
 				   struct v4l2_subdev_frame_size_enum *fse)
 {
-	int ret = 0;
-	return ret;
+	return 0;
 }
 
 static int b52isp_axi_get_format(struct v4l2_subdev *sd,
@@ -2342,7 +2336,6 @@ static int b52isp_mac_handler(struct isp_subdev *isd, unsigned long event)
 	int num_planes = vnode->format.fmt.pix_mp.num_planes;
 	struct isp_block *blk = isp_sd2blk(&laxi->isd);
 	struct b52isp_paxi *paxi = container_of(blk, struct b52isp_paxi, blk);
-	int ret = 0;
 
 	BUG_ON(vnode == NULL);
 
@@ -2483,7 +2476,7 @@ recheck:
 		}
 	}
 
-	return ret;
+	return 0;
 }
 
 static int b52isp_mac_irq_event(struct notifier_block *nb,
@@ -3123,7 +3116,7 @@ stream_off:
 			mutex_lock(&lpipe->state_lock);
 			if (!lpipe->cur_cmd->enable_map)
 				lpipe->cur_cmd->cmd_name = CMD_SET_FORMAT;
-			/* set the stream off flag for isp cmd*/
+			/* set the stream off flag for isp cmd */
 			lpipe->cur_cmd->flags |= BIT(CMD_FLAG_STREAM_OFF);
 			ret = b52isp_try_apply_cmd(lpipe);
 			if (lpipe->cur_cmd->cmd_name == CMD_SET_FORMAT)
@@ -3360,14 +3353,8 @@ static int b52isp_axi_connect_video(struct isp_subdev *isd,
 static int b52isp_axi_disconnect_video(struct isp_subdev *isd,
 					struct isp_vnode *vnode)
 {
-	int ret;
-
-	ret = blocking_notifier_chain_unregister(&vnode->notifier.head,
+	return blocking_notifier_chain_unregister(&vnode->notifier.head,
 			&b52isp_video_nb);
-	if (ret < 0)
-		return ret;
-
-	return 0;
 }
 
 static int b52isp_axi_link_setup(struct media_entity *entity,
@@ -3571,7 +3558,7 @@ static int b52isp_axi_create(struct b52isp *b52isp)
 			return ret;
 		build = ispsd->build;
 	}
-	/* after register to platform camera manager, can use SoCISP functions*/
+	/* after register to platform camera manager, can use SoCISP functions */
 	for (i = 0; i < b52isp->hw_desc->nr_axi; i++) {
 		struct isp_block *blk = b52isp->blk[B52ISP_BLK_AXI1 + i];
 		struct b52isp_paxi *axi;
@@ -4039,7 +4026,7 @@ static int b52isp_probe(struct platform_device *pdev)
 				pdev_mask, 0,
 				/* irq handler */
 				&b52isp_irq_handler,
-				/* irq context*/
+				/* irq context */
 				b52isp);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "failed register irq resource %s",
@@ -4053,7 +4040,7 @@ static int b52isp_probe(struct platform_device *pdev)
 		pr_err("%s: clock count error %d\n", __func__, count);
 		return -EINVAL;
 	}
-/* the clocks order in ISP_CLK_END need align in DTS */
+	/* the clocks order in ISP_CLK_END need align in DTS */
 	for (i = 0; i < count; i++) {
 		ret = of_property_read_string_index(np, "clock-names",
 					    i, &clock_name[i]);

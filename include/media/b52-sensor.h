@@ -83,7 +83,7 @@ struct b52_sensor_mbus_fmt {
 	struct b52_sensor_regs regs;
 };
 
-/*cropped for video*/
+/* cropped for video */
 enum b52_sensor_res_prop {
 	SENSOR_RES_BINING1,
 	SENSOR_RES_BINING2,
@@ -91,7 +91,7 @@ enum b52_sensor_res_prop {
 	SENSOR_RES_MAX,
 };
 
-/*sensor mode*/
+/* sensor mode */
 enum b52_sensor_mode {
 	SENSOR_NORMAL_MODE = 0,
 	SENSOR_PREVIEW_MODE,
@@ -99,8 +99,10 @@ enum b52_sensor_mode {
 	SENSOR_CAPTURE_MODE,
 };
 
-/*HB >= 7% one line length, unit pixel */
-/*not include exposure, gain and VTS cfg*/
+/*
+ * HB >= 7% one line length, unit pixel
+ * not include exposure, gain and VTS cfg
+ */
 struct b52_sensor_resolution {
 	u32 width;
 	u32 height;
@@ -123,14 +125,14 @@ struct b52_sensor_vcm {
 	struct b52_sensor_i2c_attr *attr;
 	u16 pos_reg_msb;
 	u16 pos_reg_lsb;
-	/*suppose this property belongs to some module */
+	/* suppose this property belongs to some module */
 	struct b52_sensor_regs id;
 	struct b52_sensor_regs init;
 };
 
 struct b52_sensor_module {
 	u32 id;
-	char *name;/* as module id send to userspace, limit the size to 7 characters*/
+	char *name;/* as module id send to userspace, limit the size to 7 characters */
 	u32 apeture_size;
 	struct b52_sensor_vcm *vcm;
 };
@@ -159,7 +161,7 @@ struct b52_sensor_otp {
 };
 
 struct b52_sensor_spec_ops {
-	 /*pixel clk rate unit HZ*/
+	 /* pixel clk rate unit HZ */
 	int (*get_pixel_rate)(struct v4l2_subdev *sd, u32 *rate, u32 mclk);
 	int (*get_dphy_desc)(struct v4l2_subdev *sd,
 			struct csi_dphy_desc *dphy_desc, u32 mclk);
@@ -177,13 +179,13 @@ enum sensor_i2c_len {
 struct b52_sensor_i2c_attr {
 	enum sensor_i2c_len reg_len;
 	enum sensor_i2c_len val_len;
-	u8 addr; /* 7 bit i2c address*/
+	u8 addr; /* 7 bit i2c address */
 };
 
 struct b52_cmd_i2c_data {
 	const struct b52_sensor_i2c_attr *attr;
 	struct regval_tab *tab;
-	u32 num; /* the number of sensor regs*/
+	u32 num; /* the number of sensor regs */
 	u8 pos;
 };
 
@@ -234,22 +236,26 @@ struct b52_sensor_data {
 	struct b52_sensor_regs streamoff;
 	struct b52_sensor_regs esd;
 	/*
-	 *gain unit 0x10: 1 gain = 0x10;
-	 *the precision is for B52 ISP: Q4
-	 *NOTE: MIN range >= 0x10
+	 * gain unit 0x10: 1 gain = 0x10;
+	 * the precision is for B52 ISP: Q4
+	 * NOTE: MIN range >= 0x10
 	 */
 #define B52_GAIN_UNIT (0x10)
 	enum b52_sensor_gain_mode gain_mode;
 	struct sensor_prop_range gain_range[B52_SENSOR_GAIN_MAX];
-	/*if numerator = 100, denominator = 0x10
-	 * iso = gain * 100 / 0x10 */
+	/*
+	 * if numerator = 100, denominator = 0x10
+	 * iso = gain * 100 / 0x10
+	 */
 	struct v4l2_fract gain2iso_ratio;
 
-	/*vts unit intergration line*/
+	/* vts unit intergration line */
 	struct sensor_prop_range vts_range;
-	/*expo unit intergration line*/
-	/*the precision is for B52 ISP: Q4*/
-	/*NOTE: MAX range < def VTS*/
+	/*
+	 * expo unit intergration line
+	 * the precision is for B52 ISP: Q4
+	 * NOTE: MAX range < def VTS
+	 */
 	struct sensor_prop_range expo_range;
 	struct sensor_prop_range frationalexp_range;
 	struct sensor_prop_range focus_range;
@@ -270,7 +276,7 @@ struct b52_sensor_data {
 	int calc_dphy;
 	u8 nr_lane;
 	u32 mipi_clk_bps;
-	/*optional*/
+	/* optional */
 	u32 skip_top_lines;
 	u32 skip_frames;
 	struct b52_sensor_regs hflip;
@@ -281,12 +287,12 @@ struct b52_sensor_data {
 };
 
 struct b52_sensor_ops {
- /*pixel clk rate unit HZ, mclk unit HZ*/
+ /* pixel clk rate unit HZ, mclk unit HZ */
 	int (*get_pixel_rate)(struct v4l2_subdev *, u32 *rate, u32 mclk);
 	int (*get_dphy_desc)(struct v4l2_subdev *,
 			struct csi_dphy_desc *, u32 mclk);
 	int (*update_otp)(struct v4l2_subdev *, struct b52_sensor_otp *);
-/*below func does not need to implement for each sensor*/
+/* below func does not need to implement for each sensor */
 	int (*init)(struct v4l2_subdev *);
 	int (*get_power)(struct v4l2_subdev *);
 	int (*put_power)(struct v4l2_subdev *);
@@ -317,7 +323,7 @@ struct b52_sensor_ops {
 	int (*g_focus)(struct v4l2_subdev *, u16 *val);
 	int (*s_expo)(struct v4l2_subdev *, u32 expo, u16 vts);
 	int (*s_gain)(struct v4l2_subdev *, u32 gain);
-	/*just use for detect sensor, without firmware */
+	/* just use for detect sensor, without firmware */
 	int (*i2c_read_without_fw)(struct v4l2_subdev *, u16 addr, u16 *val);
 	int (*i2c_write_without_fw)(struct v4l2_subdev *, u16 addr, u16 val);
 	int (*gain_convert)(struct v4l2_subdev *, u16 isp_gain, u16 *sensor_ag, u16 *sensor_dg);
@@ -362,7 +368,7 @@ struct b52_sensor {
 
 	int cur_mod_id;
 
-	struct mutex lock; /* Protects streaming, format, interval*/
+	struct mutex lock; /* Protects streaming, format, interval */
 	struct v4l2_mbus_framefmt mf;
 	struct b52_sensor_regs mf_regs;
 	u8 cur_i2c_idx;
@@ -405,7 +411,7 @@ extern struct b52_sensor_data b52_ov8865;
 extern const struct b52_sensor_data *memory_sensor_match(char *sensor_name);
 extern void b52_init_workqueue(void *data);
 
-/* this two api for SSG J1 only*/
+/* this two api for SSG J1 only */
 int b52isp_set_focus_distance(u32 distance, int id);
 int check_load_firmware(void);
 #endif

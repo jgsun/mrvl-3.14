@@ -272,7 +272,7 @@ void isp_block_unregister(struct isp_block *block)
 	if (block->ops && block->ops->clean)
 		(*block->ops->clean)(block);
 
-	/* withdraw from block pool*/
+	/* withdraw from block pool */
 	block->resrc_pool = NULL;
 }
 EXPORT_SYMBOL(isp_block_unregister);
@@ -340,7 +340,7 @@ power_on_done:
 
 	d_inf(3, "de-activate block '%s' and retreive resource", block->name);
 	/* for power off sequence, just ignore error and close everything
-	 * if possible*/
+	 * if possible */
 	if (block->ops && block->ops->close)
 		(*block->ops->close)(block);
 err_open:
@@ -351,7 +351,7 @@ err_open:
 err_clock:
 	if (block->ops && block->ops->set_power)
 		(*block->ops->set_power)(block, 0);
-	/* release all the resources requested*/
+	/* release all the resources requested */
 	isp_resrc_release(block);
 power_off_done:
 	/* At this point, we call it a successful(?) power off */

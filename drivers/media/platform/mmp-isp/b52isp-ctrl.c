@@ -1111,7 +1111,7 @@ static int b52isp_ctrl_set_iso(struct b52isp_ctrls *ctrls, int id)
 	if (!sensor)
 		return -EINVAL;
 
-	/* FIXME:expo and gain auto register are same, how to handle*/
+	/* FIXME:expo and gain auto register are same, how to handle */
 	switch (auto_iso) {
 	case V4L2_ISO_SENSITIVITY_AUTO:
 		ret = b52_sensor_call(sensor, g_param_range,
@@ -1185,10 +1185,9 @@ static int b52isp_ctrl_set_gain(struct b52isp_ctrls *ctrls, int id)
 	int auto_gain = ctrls->auto_gain->val;
 	u32 base = FW_P1_REG_BASE + id * FW_P1_P2_OFFSET;
 	struct b52_sensor *sensor = b52isp_ctrl_to_sensor(ctrls->auto_iso);
-	/*FIXME: convert the unit*/
+
 	gain >>= GAIN_CONVERT;
 
-	/* FIXME:expo and gain auto register are same, how to handle*/
 	switch (auto_gain) {
 	case 1:
 		ret = b52_sensor_call(sensor, g_param_range,
@@ -1237,7 +1236,7 @@ static int b52isp_ctrl_get_gain(struct b52isp_ctrls *ctrls, int id)
 
 static int b52isp_ctrl_get_band_step(struct b52isp_ctrls *ctrls, int id)
 {
-	/* unit is line Q4*/
+	/* unit is line Q4 */
 	switch (ctrls->pwr_line_freq->val) {
 	case V4L2_CID_POWER_LINE_FREQUENCY_50HZ:
 		ctrls->band_step->val = b52_readw(REG_BAND_DET_50HZ) << 4;
@@ -1345,7 +1344,6 @@ static int b52isp_ctrl_set_image_effect(int value, int id)
 	int i;
 	int j;
 	int n;
-	int ret;
 	u32 base = REG_SDE_BUF_BASE;
 	u32 base1 = ISP1_REG_BASE + id * ISP1_ISP2_OFFSER;
 	struct b52isp_ctrl_colorfx_reg *reg;
@@ -1375,10 +1373,7 @@ found:
 		}
 	}
 
-	ret = b52_cmd_effect(SDE_REG_NUMS);
-	if (ret < 0)
-		return ret;
-	return 0;
+	return  b52_cmd_effect(SDE_REG_NUMS);
 }
 
 static int b52isp_af_run(struct v4l2_rect *r,
@@ -1412,7 +1407,7 @@ static int b52isp_af_run(struct v4l2_rect *r,
 }
 
 #define TRY_TIMES_MAX 100
-/* only used in manual mode*/
+/* only used in manual mode */
 int b52isp_set_focus_distance(u32 distance, int id)
 {
 	u32 base = FW_P1_REG_AF_BASE + id * FW_P1_P2_AF_OFFSET;
@@ -1671,7 +1666,7 @@ static int b52isp_ctrl_set_afr(struct b52isp_ctrls *ctrls, int id)
 
 	default:
 		return -EINVAL;
-	};
+	}
 
 	if (ctrls->afr_sr_min_fps->is_new)
 		ret = b52isp_ctrl_afr_sr_min_fps(ctrls->afr_sr_min_fps->val, id);
@@ -1919,7 +1914,7 @@ int b52isp_init_ctrls(struct b52isp_ctrls *ctrls)
 	/* Auto focus */
 	ctrls->auto_focus = v4l2_ctrl_new_std(handler, ops,
 			V4L2_CID_FOCUS_AUTO, 0, 1, 1, 1);
-	/*FIXME: how to get the distance min/max value*/
+	/* FIXME: how to get the distance min/max value */
 	ctrls->f_distance = v4l2_ctrl_new_std(handler, ops,
 			V4L2_CID_FOCUS_ABSOLUTE, 0, 0xFFFF, 1, 0);
 	ctrls->f_distance->flags |= V4L2_CTRL_FLAG_VOLATILE;

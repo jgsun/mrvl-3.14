@@ -419,7 +419,7 @@ static int hsd_cascade_video_g_frame_interval(struct v4l2_subdev *sd,
 		gsd = dptr->ptr;
 		if (!subdev_has_fn(gsd, video, g_frame_interval))
 			continue;
-		/* only one component in the pipeline can control the interval*/
+		/* only one component in the pipeline can control the interval */
 		return v4l2_subdev_call(gsd, video, g_frame_interval, itv);
 	}
 	return -ENODEV;
@@ -437,7 +437,7 @@ static int hsd_cascade_video_s_frame_interval(struct v4l2_subdev *sd,
 		gsd = dptr->ptr;
 		if (!subdev_has_fn(gsd, video, s_frame_interval))
 			continue;
-		/* only one component in the pipeline can control the interval*/
+		/* only one component in the pipeline can control the interval */
 		return v4l2_subdev_call(gsd, video, s_frame_interval, itv);
 	}
 	return -ENODEV;
@@ -926,7 +926,7 @@ static int hsd_bundle_video_s_frame_interval(struct v4l2_subdev *sd,
 		gsd = entry->item;
 		if (!subdev_has_fn(gsd, video, s_frame_interval))
 			continue;
-		/* only one component in the pipeline can control the interval*/
+		/* only one component in the pipeline can control the interval */
 		ret = v4l2_subdev_call(gsd, video, s_frame_interval, itv);
 		if (ret < 0) {
 			d_inf(1, "%s: failed to set frame rate on %s: %d",

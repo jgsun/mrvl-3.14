@@ -7,7 +7,7 @@
 
 #define SUBDEV_DRV_NAME	"flash-pdrv"
 
-/*FIXME: refine the min/max*/
+/* FIXME: refine the min/max */
 #define FLASH_TIMEOUT_MIN		100000	/* us */
 #define FLASH_TIMEOUT_MAX		100000
 #define FLASH_TIMEOUT_STEP		50000
@@ -212,7 +212,7 @@ static int flash_s_ctrl(struct v4l2_ctrl *ctrl)
 			ctrl->handler, struct flash_subdev,
 			flash_ctrl.ctrl_hdl);
 
-	/*FIXME: implement flash config and set function*/
+	/* FIXME: implement flash config and set function */
 	switch (ctrl->id) {
 
 	case V4L2_CID_FLASH_LED_MODE:
@@ -261,7 +261,7 @@ static int flash_s_ctrl(struct v4l2_ctrl *ctrl)
 		break;
 
 	case V4L2_CID_FLASH_TORCH_INTENSITY:
-		/*FIXME*/
+		/* FIXME */
 		flash->torch_current = (ctrl->val - TORCH_INTENSITY_MIN)
 			/ TORCH_INTENSITY_STEP;
 

@@ -118,7 +118,7 @@ EXPORT_SYMBOL_GPL(b52_init_workqueue);
 #endif
 static void rdy_do_work(struct work_struct *data)
 {
-	/*FIXME only MAC1 is support*/
+	/* FIXME only MAC1 is support */
 	if (atomic_read(&streaming_state) == 0)
 		return;
 
@@ -241,8 +241,10 @@ static inline void b52_writel(
 static void b52_read_vcm_info(int pipe_id, u16 *val)
 {
 
-	/* get af from blueprint data.
-	 * pipeline1 and pipeline2 have different register*/
+	/*
+	 * get af from blueprint data.
+	 * pipeline1 and pipeline2 have different register
+	 */
 	if (pipe_id == 0)
 		*val = b52_readw(FW_P1_REG_AF_BASE + REG_FW_AF_OFFSET);
 	else
@@ -299,7 +301,7 @@ static int b52_write_pipeline_info(int path, struct isp_videobuf *ivb)
 	/*
 	 * pipeinfo is only usded by process raw,
 	 * so hardcode the num planes is 2.
-	 * */
+	 */
 	if (ivb->vb.num_planes != 2) {
 		pr_err("%s: no pipeline info\n", __func__);
 		return -EINVAL;
@@ -686,7 +688,8 @@ static int b52_convert_input_fmt(u32 fmt, u16 *val, u8 *bpp)
 {
 	u16 __val;
 	u8 __bpp;
-	/* fmt [2:0]:
+	/*
+	 * fmt [2:0]:
 	 * 0 for RAW8,
 	 * 1 for RAW10, the length is 16bit if from DDR
 	 * 2 for RAW12,
@@ -763,7 +766,8 @@ static int b52_convert_input_fmt(u32 fmt, u16 *val, u8 *bpp)
 
 static int b52_convert_output_fmt(u32 fmt, u16 *val, u8 *bpp)
 {
-	/* fmt [2:0]:
+	/*
+	 * fmt [2:0]:
 	 * 0 for RAW8,
 	 * 1 for RAW10, but ISP output 16 bit
 	 * 2 for RAW12,
@@ -783,7 +787,7 @@ static int b52_convert_output_fmt(u32 fmt, u16 *val, u8 *bpp)
 		*bpp = 8;
 		break;
 #if 0
-	/*Since ISP output 16 bit, use the sbggr16*/
+	/* Since ISP output 16 bit, use the sbggr16 */
 	case V4L2_PIX_FMT_SBGGR10:
 	case V4L2_PIX_FMT_SGBRG10:
 	case V4L2_PIX_FMT_SGRBG10:
@@ -866,7 +870,7 @@ static int b52_calc_input_cfg(struct b52_input_cfg *cfg,
 	cfg->width = fmt->width;
 	cfg->height = fmt->height;
 
-	/* FIXME: src*/
+	/* FIXME: src */
 	switch (src) {
 	case CMD_SRC_SNSR:
 		cfg->type |= SRC_PRIMARY_MIPI;
@@ -1292,7 +1296,7 @@ static int b52_calc_sensor_cfg(struct v4l2_subdev *sd,
 
 	b52_sensor_call(sensor, g_band_step,
 			&cfg->band_50hz, &cfg->band_60hz);
-	/* FIXME: replace with really value*/
+	/* FIXME: replace with really value */
 	cfg->expo_ratio = 0x0100;
 
 	pr_debug("%s:expo[%x,(%x,%x)], gain[%x,%x], vts %x, band(%x,%x)\n",
@@ -1346,7 +1350,7 @@ static int b52_cfg_isp_ms(const struct b52_sensor_data *data, int path)
 	cfg.max_gain = cfg.max_gain*data->gain_range[B52_SENSOR_DG].max/B52_GAIN_UNIT;
 	cfg.vts = data->vts_range.min;
 	cfg.hts = data->res[0].hts;
-	/* FIXME: replace with really value*/
+	/* FIXME: replace with really value */
 	cfg.expo_ratio = 0x0100;
 	cfg.band_50hz = 0;
 	cfg.band_60hz = 0;
@@ -1457,7 +1461,7 @@ struct b52_hdr_cfg {
 
 static int b52_calc_hdr_cfg(struct b52_hdr_cfg *cfg)
 {
-	/*FIXME*/
+	/* FIXME */
 	cfg->ctrl   = 0x0005;
 	cfg->l_expo = 0x01f0;
 	cfg->s_expo = 0x0020;
@@ -1753,7 +1757,7 @@ int b52_isp_read_i2c(const struct b52_sensor_i2c_attr *attr,
 
 	memset(&sccb, 0, sizeof(sccb));
 
-	sccb.speed    = 0x12;/*default value*/
+	sccb.speed    = 0x12;/* default value */
 	sccb.slave_id = (attr->addr << 1);
 	sccb.addr_h   = (reg >> 8) & 0xff;
 	sccb.addr_l   = (reg >> 0) & 0xff;
@@ -1799,7 +1803,7 @@ static int __b52_isp_write_i2c(struct b52_sccb *sccb, u8 pos)
 		pr_err("%s pos error\n", __func__);
 		return -EINVAL;
 	}
-	/*just check one ISP register value to make better performance*/
+	/* just check one ISP register value to make better performance */
 	do {
 		cnt++;
 		b52_writeb(base + REG_SCCB_SPEED, sccb->speed);
@@ -1827,7 +1831,6 @@ static int __b52_isp_write_i2c(struct b52_sccb *sccb, u8 pos)
 int b52_isp_write_i2c(const struct b52_sensor_i2c_attr *attr,
 		u16 reg, u16 val, u8 pos)
 {
-	int ret;
 	struct b52_sccb sccb;
 
 	if (!attr) {
@@ -1837,7 +1840,7 @@ int b52_isp_write_i2c(const struct b52_sensor_i2c_attr *attr,
 
 	memset(&sccb, 0, sizeof(sccb));
 
-	sccb.speed    = 0x12;/*default value*/
+	sccb.speed    = 0x12;/* default value */
 	sccb.slave_id = (attr->addr << 1);
 	sccb.addr_h   = (reg >> 8) & 0xff;
 	sccb.addr_l   = (reg >> 0) & 0xff;
@@ -1855,10 +1858,7 @@ int b52_isp_write_i2c(const struct b52_sensor_i2c_attr *attr,
 	else if (attr->reg_len == I2C_16BIT)
 		sccb.len_ctrl |= (0x1 << 0);
 
-	ret = __b52_isp_write_i2c(&sccb, pos);
-	if (ret)
-		return ret;
-	return 0;
+	return __b52_isp_write_i2c(&sccb, pos);
 };
 EXPORT_SYMBOL_GPL(b52_isp_write_i2c);
 
@@ -2874,7 +2874,7 @@ static int b52_set_aecagc_reg(struct v4l2_subdev *hsd, int p_num)
 	if (ret < 0)
 		return ret;
 	b52_writeb(base + REG_FW_SSOR_DEV_ID, attr.addr<<1);
-	/*16-bit addr; 8-bit data */
+	/* 16-bit addr; 8-bit data */
 	val = sensor->pos;
 	if (attr.reg_len == I2C_16BIT)
 		val |= FOCUS_ADDR_16BIT;
@@ -3004,7 +3004,7 @@ static int b52_set_vcm_reg(struct v4l2_subdev *hsd, int p_num)
 	}
 	base = FW_P1_REG_AF_BASE + p_num * FW_P1_P2_AF_OFFSET;
 	ret = b52_vcm_call(vcm, g_vcm_info, &vcm_info);
-	if (ret == 1) /*if ret==1, which means, the sensor has no vcm*/
+	if (ret == 1) /* if ret==1, which means, the sensor has no vcm */
 		return 0;
 	if (ret < 0)
 		return ret;
@@ -3084,10 +3084,6 @@ int b52_update_mac_addr(dma_addr_t *addr, dma_addr_t meta_addr,
 		reg = mac_base[mac] + REG_MAC_RDY_ADDR0;
 		break;
 	case MAC_PORT_R:
-	/* FIXME using workqueue to controll the input fps */
-	/*	val = R_RDY_0;
-		reg = mac_base[mac] + REG_MAC_RDY_ADDR1;
-	*/
 		schedule_delayed_work(&rdy_work,
 				msecs_to_jiffies(FRAME_TIME_MS));
 		return 0;
@@ -3223,7 +3219,7 @@ static int b52_config_mac(u8 mac_id, u8 port_id, int enable)
 
 	/* Enable MAC Module Interrupt */
 	b52_writeb(mac_base[mac_id] + REG_MAC_INT_EN_CTRL0, 0xFF);
-	/* Set IRQ option 6*/
+	/* Set IRQ option 6 */
 	val = b52_readb(REG_TOP_INTR_CTRL_L);
 	val &= ~(7 << (mac_id * 3));
 	val |= (6 << (mac_id * 3));
@@ -3235,7 +3231,7 @@ static int b52_config_mac(u8 mac_id, u8 port_id, int enable)
 		b52_writeb(REG_TOP_INTR_CTRL_H, val);
 	}
 
-	/*read to clear mac irq status*/
+	/* read to clear mac irq status */
 	val = b52_readb(mac_base[mac_id] + REG_MAC_FRAME_CTRL1);
 	val &= ~(1 << 1);
 	b52_writeb(mac_base[mac_id] + REG_MAC_FRAME_CTRL1, val);
@@ -3244,7 +3240,7 @@ static int b52_config_mac(u8 mac_id, u8 port_id, int enable)
 	val = b52_readb(mac_base[mac_id] + REG_MAC_W_PP_CTRL);
 	b52_writeb(mac_base[mac_id] + REG_MAC_W_PP_CTRL, val & ~(3));
 
-	/* enable channel_ctr_en*/
+	/* enable channel_ctr_en */
 	val = b52_readb(mac_base[mac_id] + REG_MAC_R_OUTSTD_CTRL);
 	val |= CHANNEL_CTR_EN;
 	b52_writeb(mac_base[mac_id] + REG_MAC_R_OUTSTD_CTRL, val);
@@ -3666,7 +3662,7 @@ addr_valid:
 		pr_info("\n%s", out_buf);
 		break;
 	case 's':
-		/*back sensor*/
+		/* back sensor */
 		if (pos == 0) {
 			b52_writeb(0x63601, addr);
 			b52_writew(0x63602, tmp);
@@ -3677,7 +3673,7 @@ addr_valid:
 			usleep_range(1000, 1100);
 			pr_info("sensor addr:[0x%04X]--> value: %X\n",
 						tmp, b52_readb(0x63608));
-		} else {	/*front sensor*/
+		} else {	/* front sensor */
 			b52_writeb(0x63701, addr);
 			b52_writew(0x63702, tmp);
 			b52_writeb(0x63706, 0x1);

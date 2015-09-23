@@ -65,7 +65,6 @@ static int __b52_sensor_cmd_write(const struct b52_sensor_i2c_attr
 	data.num  = regs->num;
 	data.pos  = pos;
 
-	/*FIXME:how to get completion*/
 	return b52_cmd_write_i2c(&data);
 }
 static int b52_sensor_cmd_write(struct v4l2_subdev *sd, u16 addr,
@@ -234,7 +233,7 @@ struct b52_sensor *b52_get_sensor(struct media_entity *entity)
 }
 EXPORT_SYMBOL(b52_get_sensor);
 
-/*only used for detect sensor, not download the FW*/
+/* only used for detect sensor, not download the FW */
 static int __b52_sensor_isp_read(const struct b52_sensor_i2c_attr *attr,
 		u16 reg, u16 *val, u8 pos)
 {
@@ -461,7 +460,7 @@ sensor_detected:
 
 	return 0;
 }
-/*read module id after detect the sensor. */
+/* read module id after detect the sensor. */
 static int b52_sensor_detect_module(struct v4l2_subdev *sd)
 {
 	int ret, num;
@@ -472,8 +471,10 @@ static int b52_sensor_detect_module(struct v4l2_subdev *sd)
 	if (sensor->drvdata->ops->update_otp &&
 		sensor->drvdata->module) {
 		if (sensor->drvdata->num_module > 1) {
-			/*Fixme: the default otp type maybe have set before,
-			 * need write back it after read module info */
+			/*
+			 * FIXME: the default otp type maybe have set before,
+			 * need write back it after read module info
+			 */
 			org_otp_type = sensor->otp.otp_type;
 			sensor->otp.otp_type = READ_MODULE_INFO;
 			ret = b52_sensor_call(sensor, update_otp, &sensor->otp);
@@ -632,7 +633,7 @@ static int b52_sensor_to_expo_line(struct v4l2_subdev *sd,
 static int b52_sensor_to_expo_time(struct v4l2_subdev *sd,
 		u32 *time, u32 lines)
 {
-	/*time unit: 100 us according to v4l2*/
+	/* time unit: 100 us according to v4l2 */
 	u32 line_time;
 	u8 i;
 	struct b52_sensor *sensor = to_b52_sensor(sd);
@@ -645,7 +646,7 @@ static int b52_sensor_to_expo_time(struct v4l2_subdev *sd,
 
 	line_time = sensor->drvdata->res[i].hts * 100000 /
 		(sensor->pixel_rate / 10000);
-	/*line_time unit: 1ns*/
+	/* line_time unit: 1ns */
 	*time = lines * line_time / 100000;
 
 	pr_debug("%s: %d 100us, %d line\n", __func__, *time, lines);
@@ -1184,16 +1185,17 @@ static int b52_sensor_s_power(struct v4l2_subdev *sd, int on)
 
 		if (power->rst) {
 			gpiod_set_value_cansleep(power->rst, 1);
-			/* according to SR544 power sequence
-			driver have to delay > 10ms
-			*/
+			/*
+			 * according to SR544 power sequence
+			 * driver have to delay > 10ms
+			 */
 			if (sensor->drvdata->reset_delay)
 				reset_delay = sensor->drvdata->reset_delay;
 			usleep_range(reset_delay, reset_delay + 10);
 			gpiod_set_value_cansleep(power->rst, 0);
 		}
 
-		/*delay between power on and read/write sensor register*/
+		/* delay between power on and read/write sensor register */
 		if (sensor->drvdata->pwdone_delay)
 			pwdone_delay = sensor->drvdata->pwdone_delay;
 		usleep_range(pwdone_delay, pwdone_delay + 50);
@@ -1526,7 +1528,7 @@ static int b52_sensor_get_fmt(struct v4l2_subdev *sd,
 
 	switch (format->which) {
 	case V4L2_SUBDEV_FORMAT_TRY:
-		/*FIXME*/
+		/* FIXME */
 		format->format = *v4l2_subdev_get_try_format(fh, 0);
 		break;
 	case V4L2_SUBDEV_FORMAT_ACTIVE:
@@ -1645,21 +1647,14 @@ static int b52_sensor_g_skip_frames(struct v4l2_subdev *sd, u32 *frames)
 static int b52_sensor_sd_open(struct v4l2_subdev *sd,
 		struct v4l2_subdev_fh *fh)
 {
-	int ret;
-	/*FIXME: not need put power on here*/
-	ret = v4l2_subdev_call(sd, core, s_power, 1);
-
-	return ret;
+	/* FIXME: not need put power on here */
+	return v4l2_subdev_call(sd, core, s_power, 1);
 }
 
 static int b52_sensor_sd_close(struct v4l2_subdev *sd,
 		struct v4l2_subdev_fh *fh)
 {
-	int ret;
-	/*FIXME: not need put power off here*/
-	ret = v4l2_subdev_call(sd, core, s_power, 0);
-
-	return ret;
+	return v4l2_subdev_call(sd, core, s_power, 0);
 }
 
 static int b52_sensor_link_setup(struct media_entity *entity,
@@ -1814,7 +1809,7 @@ static long b52_sensor_ioctl(struct v4l2_subdev *sd,
 	return ret;
 }
 #ifdef CONFIG_COMPAT
-/*FIXME: need to refine return val*/
+/* FIXME: need to refine return val */
 static int b52_usercopy(struct v4l2_subdev *sd,
 		unsigned int cmd, void *arg)
 {
@@ -2000,7 +1995,7 @@ static int b52_detect_sensor(struct b52_sensor *sensor)
 
 	ret = b52_sensor_call(sensor, detect_sensor);
 
-	/*try to get the module id after detected the sensor. */
+	/* try to get the module id after detected the sensor. */
 	if (!ret)
 		b52_sensor_call(sensor, detect_module);
 
@@ -2057,7 +2052,7 @@ static int b52_sensor_s_ctrl(struct v4l2_ctrl *ctrl)
 	struct b52_sensor *sensor = container_of(
 			ctrl->handler, struct b52_sensor, ctrls.ctrl_hdl);
 
-	/*FIXME: implement flash config and set function*/
+	/* FIXME: implement flash config and set function */
 	switch (ctrl->id) {
 	case V4L2_CID_VFLIP:
 		b52_sensor_call(sensor, s_flip, 0, ctrl->val);
@@ -2155,7 +2150,7 @@ static int b52_sensor_init_ctrls(struct b52_sensor *sensor)
 		ctrl->flags |= V4L2_CTRL_FLAG_VOLATILE |
 			V4L2_CTRL_FLAG_READ_ONLY;
 
-/*FIXME: use vts not vb*/
+/* FIXME: use vts not vb */
 	ctrl = v4l2_ctrl_new_std(&ctrls->ctrl_hdl,
 			&b52_sensor_ctrl_ops,
 			V4L2_CID_VBLANK, data->vts_range.min,
@@ -2261,7 +2256,7 @@ static int b52_sensor_probe(struct i2c_client *client,
 	if (of_get_property(np, "sc2-i2c-dyn-ctrl", NULL))
 		sensor->i2c_dyn_ctrl = 1;
 
-	/* default the board prop is DKB*/
+	/* default the board prop is DKB */
 	if (of_get_property(np, "pxa1908_cmtb_board", NULL))
 		sensor->board_prop_id = 1;
 
@@ -2332,7 +2327,7 @@ static int b52_sensor_probe(struct i2c_client *client,
 	if (ret)
 		return ret;
 detect_done:
-	/*add the module name into subdev name if it be detected*/
+	/* add the module name into subdev name if it be detected */
 	if (sensor->drvdata->module && sensor->drvdata->num_module > 0) {
 		if (sensor->cur_mod_id >= 0 && sensor->cur_mod_id <= 255
 			&& sensor->drvdata->module[sensor->cur_mod_id].name) {

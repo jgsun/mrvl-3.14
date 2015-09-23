@@ -39,7 +39,7 @@ struct b52isp_ctrls {
 	/* Adjust - hue */
 	struct v4l2_ctrl *hue;
 
-	/* power line frequence and band filter*/
+	/* power line frequence and band filter */
 	struct v4l2_ctrl *pwr_line_freq;
 	struct v4l2_ctrl *band_filter;
 
@@ -85,7 +85,7 @@ struct b52isp_ctrls {
 	struct v4l2_ctrl *aaa_lock;
 	/* Exposure metering mode */
 	struct v4l2_ctrl *exp_metering;
-	/* preview zoom*/
+	/* preview zoom */
 	struct v4l2_ctrl *zoom;
 	/* ISP image effect */
 	struct v4l2_ctrl *colorfx;
@@ -99,8 +99,9 @@ struct b52isp_ctrls {
 	struct v4l2_ctrl *band_step;
 	/* ISP set fps */
 	struct v4l2_ctrl *set_fps;
-	/* user config data*/
+	/* user config data */
 	s32 *ev_bias_offset;
+
 	struct v4l2_rect af_win;
 	struct b52isp_win metering_roi;
 	struct b52isp_expo_metering metering_mode[NR_METERING_MODE];

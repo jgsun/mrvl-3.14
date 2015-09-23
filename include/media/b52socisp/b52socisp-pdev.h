@@ -43,7 +43,7 @@ struct isp_block_ops {
 	int	(*init)(struct isp_block *block);
 	/* Called before H/W destroy */
 	void	(*clean)(struct isp_block *block);
-	/* Called upon H/W enable/disable, used to set clock rate, etc*/
+	/* Called upon H/W enable/disable, used to set clock rate, etc */
 	int	(*set_power)(struct isp_block *block, int level);
 	int	(*set_clock)(struct isp_block *block, int rate);
 	/* Called just after H/W enable */
@@ -71,10 +71,10 @@ struct block_id {
 	&& ((id).mod_id == ((id).mod_id & (mask).mod_id)))
 
 struct isp_res_req {
-	enum isp_resrc_type	type;	/* Xlate from pdev::res::type*/
+	enum isp_resrc_type	type;	/* Xlate from pdev::res::type */
 	int			id;
 	/* Pointer to tell manager how to dispatch this resource to block */
-	/* For ISP_RESRC_MEM, it's the block's offset from device base address*/
+	/* For ISP_RESRC_MEM, it's the block's offset from device base address */
 	void *priv;
 };
 

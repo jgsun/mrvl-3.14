@@ -27,7 +27,7 @@ struct vcm_type {
 	struct b52_sensor_i2c_attr *attr;
 	u16 pos_reg_msb;
 	u16 pos_reg_lsb;
-	/*suppose this property belongs to some module */
+	/* suppose this property belongs to some module */
 	struct b52_sensor_regs id;
 	struct b52_sensor_regs init;
 	struct vcm_ops  *ops;

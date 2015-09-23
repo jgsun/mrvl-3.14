@@ -150,10 +150,10 @@ extern void b52isp_set_ddr_threshold(struct work_struct *work, int up);
 /* isp MCU memory layout */
 /* 1. PROGREM BUFFER(136KB):0x0    ~ 0x021FFF */
 /* 2. DATA BUFFER (20KB): 0x030000 ~ 0x034FFF */
-	/*CMD BUF A: 0x034000 ~ 0x341FF*/
-	/*CMD BUF B: 0x034200 ~ 0x342FF*/
-	/*CMD BUF C: 0x034300 ~ 0x343FF*/
-	/*CMD BUF D: 0x034400 ~ 0x347FF*/
+	/* CMD BUF A: 0x034000 ~ 0x341FF */
+	/* CMD BUF B: 0x034200 ~ 0x342FF */
+	/* CMD BUF C: 0x034300 ~ 0x343FF */
+	/* CMD BUF D: 0x034400 ~ 0x347FF */
 /* 3. CACHE BUFFER (4KB): 0x03FC00 ~ 0x03FFFF */
 /* 4. LINE BUFFER (64KB): 0x040000 ~ 0x04FFFF */
 /* 5. HW REGISTER(128KB): 0x050000 ~ 0x06FFFF */
@@ -182,12 +182,12 @@ extern void b52isp_set_ddr_threshold(struct work_struct *work, int up);
 
 #define MAX_PIPE_NUM        (0x2)
 
-/*DATA set registers */
+/* DATA set registers */
 #define DATA_BGAIN            (DATA_BUF_START + 0x232)
 #define DATA_GGAIN            (DATA_BUF_START + 0x234)
 #define DATA_RGAIN            (DATA_BUF_START + 0x236)
 
-/*VTS apply to sensor*/
+/* VTS apply to sensor */
 #define VTS_SYNC_TO_SENSOR            (0x3303d)
 #define ENABLE_SYNC		(0x01)
 #define DISABLE_SYNC		(0x00)
@@ -233,7 +233,8 @@ extern void b52isp_set_ddr_threshold(struct work_struct *work, int up);
 #define CMD_ANTI_SHAKE          (0x12)
 #define CMD_AF_MODE             (0x13)
 #define CMD_ZOOM_IN_MODE        (0x14)
-/*firmware interrupt IDs from MCU*/
+
+/* firmware interrupt IDs from MCU */
 #define CMD_WB_GAIN             (0xf1)
 #define CMD_WB_EXPO             (0xf2)
 #define CMD_WB_EXPO_GAIN        (0xf3)
@@ -712,7 +713,7 @@ extern void b52isp_set_ddr_threshold(struct work_struct *work, int up);
 #define SCCB_ST_BUSY			(0x1)
 #define SCCB_ST_IDLE			(0x0)
 
-/* interrupt register*/
+/* interrupt register */
 #define REG_INT_BASE                (0x63900)
 #define REG_CMD_SET_REG0	(REG_INT_BASE + 0)
 #define REG_CMD_SET_REG1	(REG_INT_BASE + 1)
@@ -890,7 +891,7 @@ extern void b52isp_set_ddr_threshold(struct work_struct *work, int up);
 #define REG_FW_AF_OFFSET	(0x14)
 
 #define REG_FW_AF_CURR_POS          (0x03e)
-/*works with video AF*/
+/* works with video AF */
 #define REG_FW_AF_FORCE_START       (0x06a)
 	#define AF_FORCE_START  (0x1)
 	#define AF_FORCE_STOP   (0x0)
