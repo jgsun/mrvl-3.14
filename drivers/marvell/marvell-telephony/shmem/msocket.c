@@ -235,8 +235,10 @@ int msend(int sock, const void *buf, int len, int flags)
 
 	if (!portq_is_synced(portq) || portq_xmit(portq, skb, block) < 0) {
 		kfree_skb(skb);
+#if 0
 		pr_err("MSOCK: %s: port %d xmit error.\n",
 		       __func__, portq->port);
+#endif
 		return -1;
 	}
 
