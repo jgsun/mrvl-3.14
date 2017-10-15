@@ -1,3 +1,4 @@
+ccflags-$(CONFIG_OF_DEBUG) := -DDEBUG
 obj-y = base.o device.o platform.o
 obj-$(CONFIG_OF_FLATTREE) += fdt.o
 obj-$(CONFIG_OF_PROMTREE) += pdt.o

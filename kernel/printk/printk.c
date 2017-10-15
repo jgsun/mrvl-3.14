@@ -64,6 +64,9 @@ extern void printascii(char *);
 /* We show everything that is MORE important than this.. */
 #define MINIMUM_CONSOLE_LOGLEVEL 1 /* Minimum loglevel we let people use */
 #define DEFAULT_CONSOLE_LOGLEVEL 7 /* anything MORE serious than KERN_DEBUG */
+#ifdef CONFIG_OF_DEBUG
+#define DEFAULT_CONSOLE_LOGLEVEL 8 /* everything */
+#endif
 
 int console_printk[4] = {
 	DEFAULT_CONSOLE_LOGLEVEL,	/* console_loglevel */

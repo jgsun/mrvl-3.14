@@ -75,4 +75,11 @@ config OF_MTD
 	depends on MTD
 	def_bool y
 
+config OF_DEBUG
+	bool "device tree debugging"
+	depends on OF != n
+	help
+	This is an option for use by developers; most people should
+	say N here. This enables device tree and driver debugging.
+
 endmenu # OF
