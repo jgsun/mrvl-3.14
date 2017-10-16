@@ -1,0 +1,2883 @@
+/dts-v1/;
+
+/memreserve/	0x0000000008100000 0x0000000000040000;
+/memreserve/	0x0000000008150000 0x0000000000008000;
+/memreserve/	0x0000000009000000 0x0000000001000000;
+/memreserve/	0x0000000017000000 0x0000000001800000;
+/memreserve/	0x000000000a000000 0x0000000000080000;
+/ {
+	#address-cells = <0x1>;
+	#size-cells = <0x1>;
+	interrupt-parent = <0x1>;
+	model = "Marvell PXA1956 DKB V10 Development Board";
+	compatible = "marvell,pxa1956-dkb", "marvell,pxa1956";
+
+	chosen {
+		bootargs = "console=ttyS0,115200 root=/dev/nfs nfsroot=192.168.1.100:/nfsroot/ ip=192.168.1.101:192.168.1.100::255.255.255.0::eth0:on";
+	};
+
+	aliases {
+		serial0 = "/soc/apb@d4000000/uart@d4036000";
+		serial1 = "/soc/apb@d4000000/uart@d4017000";
+		serial2 = "/soc/apb@d4000000/uart@d4018000";
+		i2c0 = "/soc/apb@d4000000/i2c@d4011000";
+		i2c1 = "/soc/apb@d4000000/i2c@d4010800";
+		i2c2 = "/soc/apb@d4000000/i2c@d4018800";
+		i2c3 = "/soc/apb@d4000000/i2c@d4013800";
+		mv_sc2_ccic0 = "/soc/axi@d4200000/ccic@d420a000";
+		mv_sc2_ccic1 = "/soc/axi@d4200000/ccic@d420a800";
+		mv_sc2_mmu0 = "/soc/axi@d4200000/sc2mmu@d420F000";
+		mv_sc2_camera0 = "/mcam@0";
+		mv_sc2_camera1 = "/mcam@1";
+	};
+
+	memory {
+		device_type = "memory";
+		reg = <0x0 0x10000000>;
+	};
+
+	cpus {
+		#address-cells = <0x2>;
+		#size-cells = <0x0>;
+
+		cpu@0 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x0 0x0>;
+			enable-method = "psci";
+		};
+
+		cpu@1 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x0 0x1>;
+			enable-method = "psci";
+		};
+
+		cpu@2 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x0 0x2>;
+			enable-method = "psci";
+		};
+
+		cpu@3 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x0 0x3>;
+			enable-method = "psci";
+		};
+
+		cpu@4 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x0 0x100>;
+			enable-method = "psci";
+		};
+
+		cpu@5 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x0 0x101>;
+			enable-method = "psci";
+		};
+
+		cpu@6 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x0 0x102>;
+			enable-method = "psci";
+		};
+
+		cpu@7 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x0 0x103>;
+			enable-method = "psci";
+		};
+	};
+
+	mcpm {
+		compatible = "arm,mcpm";
+		method = "smc";
+		cpu_off = <0x85000001>;
+		cpu_on = <0x85000002>;
+		status = "disabled";
+	};
+
+	psci {
+		compatible = "arm,psci";
+		method = "smc";
+		cpu_suspend = <0x84000001>;
+		cpu_off = <0x84000002>;
+		cpu_on = <0x84000003>;
+	};
+
+	interrupt-controller@d1df9000 {
+		compatible = "arm,cortex-a7-gic";
+		interrupt-controller;
+		#interrupt-cells = <0x3>;
+		reg = <0xd1df9000 0x1000 0xd1dfa000 0x2000>;
+		power-domain = "always-on";
+		linux,phandle = <0x1>;
+		phandle = <0x1>;
+	};
+
+	generic-timer {
+		compatible = "arm,armv8-timer";
+		interrupts = <0x1 0xd 0x308 0x1 0xe 0x308>;
+		clock-frequency = <0x18cba80>;
+	};
+
+	soc {
+		#address-cells = <0x1>;
+		#size-cells = <0x1>;
+		compatible = "simple-bus";
+		interrupt-parent = <0x1>;
+		ranges;
+
+		reset {
+			compatible = "marvell,pxa-reset";
+			reg = <0xd4080000 0xc8 0xd4050000 0x1024 0xd4010014 0x4>;
+		};
+
+		devfreq-ddr {
+			compatible = "marvell,devfreq-ddr";
+			reg = <0xc0100000 0x880>;
+			interrupts = <0x0 0x2b 0x4>;
+			clocks = <0x2 0x32>;
+			marvell,qos;
+			status = "okay";
+		};
+
+		smmu {
+			compatible = "arm,mmu-400";
+			reg = <0xc0010000 0x10000>;
+			#global-interrupts = <0x1>;
+			interrupts = <0x0 0x4e 0x4 0x0 0x4e 0x4>;
+			mmu-masters = <0x3 0x0>;
+			status = "okay";
+			clocks = <0x2 0x6d 0x2 0x6e>;
+			clock-names = "VPUCLK", "VPUACLK";
+			marvell,power-domain = <0x4>;
+		};
+
+		axi@d4200000 {
+			compatible = "mrvl,axi-bus", "simple-bus";
+			#address-cells = <0x1>;
+			#size-cells = <0x1>;
+			reg = <0xd4200000 0x200000>;
+			ranges;
+
+			pd_sc2@d4282800 {
+				compatible = "marvell,power-domain-common-isp-v3";
+				reg = <0xd4282800 0x1000>;
+				clocks = <0x2 0x85>;
+				clock-names = "SC2AHBCLK";
+				lpm-qos = <0xc>;
+				linux,phandle = <0x26>;
+				phandle = <0x26>;
+			};
+
+			usbphy@d4207000 {
+				compatible = "marvell,usb2-phy-28lp";
+				reg = <0xd4207000 0x200>;
+				marvell,udc-name = "mv-udc";
+				marvell,ehci-name = "pxa-u2oehci";
+				marvell,otg-name = "mv-otg";
+				marvell,phy-name = "mv-usb-phy";
+				marvell,pll-lock-bypass;
+				clocks = <0x2 0x64>;
+				status = "okay";
+			};
+
+			udc@d4208000 {
+				compatible = "marvell,mv-udc";
+				reg = <0xd4208000 0x200>;
+				interrupts = <0x0 0x2c 0x4>;
+				marvell,udc-name = "mv-udc";
+				marvell,udc-mode = <0x1>;
+				marvell,extern-attr = <0x3>;
+				marvell,otg-force-a-bus-req;
+				lpm-qos = <0x7>;
+				clocks = <0x2 0x64>;
+				status = "okay";
+			};
+
+			ehci@d4208100 {
+				compatible = "marvell,pxa-u2oehci";
+				reg = <0xd4208100 0x200>;
+				marvell,ehci-name = "pxa-u2oehci";
+				marvell,udc-mode = <0x1>;
+				marvell,extern-attr = <0x3>;
+				marvell,otg-force-a-bus-req;
+				interrupts = <0x0 0x2c 0x4>;
+				clocks = <0x2 0x64>;
+				status = "okay";
+			};
+
+			otg@d4208100 {
+				compatible = "marvell,mv-otg";
+				reg = <0xd4208100 0x200>;
+				interrupts = <0x0 0x2c 0x4>;
+				marvell,udc-name = "mv-udc";
+				marvell,ehci-name = "pxa-u2oehci";
+				marvell,otg-name = "mv-otg";
+				marvell,udc-mode = <0x1>;
+				marvell,extern-attr = <0x3>;
+				marvell,otg-force-a-bus-req;
+				lpm-qos = <0x7>;
+				clocks = <0x2 0x64>;
+				status = "okay";
+				vbus_otg-supply = <0x5>;
+			};
+
+			gpu@C0400000 {
+				compatible = "marvell,gpu";
+				reg = <0xc0400000 0x1000>;
+				interrupts = <0x0 0x8 0x4>;
+				marvell,3d-clk-freq-combine = <0x26160 0x130b0 0x4c2c0 0x32c80 0x65900 0x4083a 0x98580 0x4c2c0 0xac1e8 0x65900 0xcb200 0x65900>;
+				marvell,sh-clk-freq-combine = <0x26160 0x130b0 0x4c2c0 0x32c80 0x65900 0x4083a 0x98580 0x4c2c0 0xac1e8 0x65900 0xcb200 0x65900>;
+				status = "okay";
+				marvell,power-domain = <0x6>;
+				marvell,gpu-mem-base = <0x9000000>;
+				marvell,gpu-mem-size = <0x1000000>;
+				clocks = <0x2 0x69 0x2 0x6a 0x2 0x6c>;
+				clock-names = "GC3DFCLK", "GCSHCLK", "GC3DACLK";
+			};
+
+			gpu2d@d420c000 {
+				compatible = "marvell,gpu2d";
+				reg = <0xd420c000 0x1000>;
+				interrupts = <0x0 0x48 0x4>;
+				marvell,2d-clk-freq-combine = <0x26160 0x26160 0x32c80 0x32c80 0x4c2c0 0x4c2c0 0x65900 0x65900>;
+				status = "okay";
+				marvell,power-domain = <0x7>;
+				clocks = <0x2 0x6b 0x2 0x6c>;
+				clock-names = "GC2DFCLK", "GC2DACLK";
+			};
+
+			codaL_vpu@d420d000 {
+				compatible = "mrvl,mmp-codaL";
+				reg = <0xd420d000 0x1000 0x0 0x0>;
+				interrupts = <0x0 0x19 0x4>;
+				status = "okay";
+				marvell,sram-internal = <0x1>;
+				marvell,nv21_support = <0x1>;
+				marvell,codaL-type = <0x0>;
+				marvell,power-domain = <0x8>;
+				clocks = <0x2 0x6d 0x2 0x6e>;
+				clock-names = "VPUCLK", "VPUACLK";
+			};
+
+			codaL_JPG@d420d000 {
+				compatible = "mrvl,mmp-codaL";
+				reg = <0xd420d000 0x1000 0x0 0x0>;
+				interrupts = <0x0 0x2e 0x4>;
+				status = "okay";
+				marvell,sram-internal = <0x1>;
+				marvell,nv21_support = <0x1>;
+				marvell,codaL-type = <0x1>;
+				marvell,power-domain = <0x8>;
+				clocks = <0x2 0x6d 0x2 0x6e>;
+				clock-names = "VPUCLK", "VPUACLK";
+			};
+
+			wakeupgen@d4282000 {
+				compatible = "mrvl,mmp-intc-wakeupgen";
+				reg = <0xd4282000 0x1000 0xd4282800 0x12c>;
+				mrvl,intc-nr-irqs = <0x70>;
+				mrvl,intc-gbl-mask = <0x228 0x3 0x238 0x3 0x248 0x3 0x258 0x3 0x278 0x3 0x288 0x3 0x298 0x3 0x2a8 0x3>;
+				mrvl,intc-for-cp = <0x0 0x1f 0x20>;
+				mrvl,intc-wake-clr = <0x9 0x8 0x27 0x43>;
+				status = "disabled";
+			};
+
+			sdh@d4281000 {
+				compatible = "marvell,pxav3-mmc-v2";
+				reg = <0xd4281000 0x120>;
+				interrupts = <0x0 0x27 0x4>;
+				clocks = <0x2 0x68 0x2 0x65 0x2 0xa2 0x2 0x34 0x2 0x35 0x2 0x32>;
+				clock-names = "sdh-base-clk", "sdh-axi-clk", "sdh-fclk-tuned", "clst0", "clst1", "ddr";
+				lpm-qos = <0x7>;
+				status = "okay";
+				pinctrl-names = "default", "fast";
+				pinctrl-0 = <0x9 0xa>;
+				pinctrl-1 = <0xb 0xc>;
+				bus-width = <0x8>;
+				non-removable;
+				marvell,sdh-pm-runtime-en;
+				marvell,sdh-quirks = <0x8040>;
+				marvell,sdh-quirks2 = <0x50040>;
+				marvell,sdh-host-caps = <0x800>;
+				marvell,sdh-host-caps2 = <0x100000>;
+				marvell,sdh-flags = <0xc5>;
+				marvell,sdh-dtr-data = <0x0 0x18cba80 0x3197500 0x0 0x0 0x0 0x0 0x0 0x2 0x3197500 0x632ea00 0x0 0x0 0x0 0x0 0x0 0x7 0x3197500 0x632ea00 0x0 0x0 0x0 0x0 0x0 0x8 0x94c5f00 0x94c5f00 0x0 0x0 0x3 0x0 0x0 0x9 0xffffffff 0x632ea00 0x0 0x0 0x0 0x0 0x0>;
+				marvell,sdh-tuning-win-limit = <0x64>;
+				marvell,sdh-dvfs-levels = <0x1 0x7>;
+				marvell,sdh-tuning-mode = <0x1>;
+			};
+
+			sdh@d4280000 {
+				compatible = "marvell,pxav3-mmc-v2";
+				reg = <0xd4280000 0x120>;
+				interrupts = <0x0 0x27 0x4>;
+				clocks = <0x2 0x66 0x2 0x65 0x2 0xa0 0x2 0x34 0x2 0x35 0x2 0x32>;
+				clock-names = "sdh-base-clk", "sdh-axi-clk", "sdh-fclk-tuned", "clst0", "clst1", "ddr";
+				lpm-qos = <0x7>;
+				status = "okay";
+				pinctrl-names = "default", "fast";
+				pinctrl-0 = <0xd 0xe 0xf>;
+				pinctrl-1 = <0xd 0x10 0x11>;
+				cd-gpios = <0x12 0x5c 0x0>;
+				cd-inverted;
+				bus-width = <0x4>;
+				wp-inverted;
+				marvell,sdh-pm-runtime-en;
+				marvell,sdh-host-caps-disable = <0x40000>;
+				marvell,sdh-quirks = <0x18000>;
+				marvell,sdh-quirks2 = <0x54000>;
+				marvell,sdh-flags = <0xc1>;
+				marvell,sdh-dtr-data = <0x0 0x18cba80 0x3197500 0x0 0x0 0x0 0x0 0x0 0x3 0x3197500 0x632ea00 0x0 0x0 0x0 0x0 0x0 0x7 0x3197500 0x632ea00 0x0 0x0 0x0 0x0 0x0 0x6 0xc65d400 0xc65d400 0x0 0x0 0x3 0x0 0x0 0x9 0xffffffff 0x632ea00 0x0 0x0 0x0 0x0 0x0>;
+				marvell,sdh-tuning-win-limit = <0x78>;
+				marvell,sdh-dvfs-levels = <0x1 0x7>;
+				marvell,sdh-tuning-mode = <0x1>;
+				vqmmc-supply = <0x13>;
+				vmmc-supply = <0x14>;
+			};
+
+			sdh@d4280800 {
+				compatible = "marvell,pxav3-mmc-v2";
+				reg = <0xd4280800 0x120>;
+				interrupts = <0x0 0x27 0x4>;
+				clocks = <0x2 0x67 0x2 0x65 0x2 0xa1 0x2 0x34 0x2 0x35 0x2 0x32>;
+				clock-names = "sdh-base-clk", "sdh-axi-clk", "sdh-fclk-tuned", "clst0", "clst1", "ddr";
+				lpm-qos = <0x7>;
+				status = "okay";
+				pinctrl-names = "default", "fast", "sleep";
+				pinctrl-0 = <0x15 0x16 0x17 0x18>;
+				pinctrl-1 = <0x19 0x1a 0x17 0x18>;
+				pinctrl-2 = <0x1b>;
+				bus-width = <0x4>;
+				marvell,sdh-pm-runtime-en;
+				marvell,sdh-host-caps-disable = <0x60000>;
+				marvell,sdh-quirks = <0x8000>;
+				marvell,sdh-quirks2 = <0xd8000>;
+				marvell,sdh-pm-caps = <0x1>;
+				marvell,sdh-host-caps2 = <0x800000>;
+				marvell,sdh-flags = <0xf8>;
+				marvell,sdh-dtr-data = <0x0 0x18cba80 0x3197500 0x0 0x0 0x0 0x0 0x0 0x3 0x2aea540 0x5503649 0x0 0x0 0x0 0x0 0x0 0x7 0x3197500 0x632ea00 0x0 0x0 0x0 0x0 0x0 0x5 0x632ea00 0x632ea00 0x0 0x0 0x0 0x0 0x0 0x6 0xc65d400 0xc65d400 0x0 0x0 0x3 0x0 0x0 0x9 0xffffffff 0x5503649 0x0 0x0 0x0 0x0 0x0>;
+				marvell,sdh-tuning-win-limit = <0x78>;
+				marvell,sdh-dvfs-levels = <0x1 0x7>;
+				marvell,sdh-tuning-mode = <0x1>;
+				linux,phandle = <0x4f>;
+				phandle = <0x4f>;
+			};
+
+			asram@d12a0000 {
+				compatible = "mmio-sram";
+				reg = <0xd12a0000 0x10000>;
+				status = "okay";
+				linux,phandle = <0x1c>;
+				phandle = <0x1c>;
+			};
+
+			adma@d128d800 {
+				compatible = "marvell,adma-1.0";
+				reg = <0xd128d800 0x100>;
+				interrupts = <0x0 0x52 0x4>;
+				#dma-cells = <0x1>;
+				asram = <0x1c>;
+				status = "okay";
+				linux,phandle = <0x2d>;
+				phandle = <0x2d>;
+			};
+
+			adma@d128d900 {
+				compatible = "marvell,adma-1.0";
+				reg = <0xd128d900 0x100>;
+				interrupts = <0x0 0x53 0x4>;
+				#dma-cells = <0x1>;
+				asram = <0x1c>;
+				status = "okay";
+				linux,phandle = <0x2f>;
+				phandle = <0x2f>;
+			};
+
+			dsi@d420b800 {
+				compatible = "marvell,mmp-dsi";
+				reg = <0xd420b800 0x1ec>;
+				interrupts = <0x0 0x35 0x4>;
+				status = "okay";
+				marvell,phy-name = "mmp_dsi1";
+				marvell,plat-path-name = "mmp_pnpath";
+				marvell,dsi-lanes = <0x4>;
+				marvell,burst-mode = <0x2>;
+				marvell,hbp-en;
+				dsi_avdd-supply = <0x1d>;
+			};
+
+			vdma@d4209000 {
+				compatible = "marvell,mmp-vdma";
+				reg = <0xd4209000 0x850 0xd420b000 0x3d0>;
+				status = "okay";
+				marvell,vdma-num = <0x2>;
+				marvell,vdma-axi = <0x0>;
+
+				vdma1 {
+					marvell,vdma-id = <0x0>;
+					marvell,sram-size = <0x7800>;
+					marvell,is_vid = <0x0>;
+				};
+
+				vdma2 {
+					marvell,vdma-id = <0x2>;
+					marvell,sram-size = <0x7800>;
+					marvell,is_vid = <0x1>;
+				};
+			};
+
+			apical@d420b400 {
+				compatible = "marvell,mmp-apical";
+				reg = <0xd420b400 0x400 0xd420b000 0x3d0>;
+				status = "disabled";
+			};
+
+			disp@d420b000 {
+				compatible = "marvell,mmp-disp";
+				reg = <0xd420b000 0x3d0>;
+				lpm-qos = <0xc>;
+				interrupts = <0x0 0x29 0x4>;
+				status = "okay";
+				pinctrl-names = "default";
+				pinctrl-0 = <0x1e>;
+				marvell,disp-name = "disp_name";
+				marvell,path-num = <0x1>;
+				marvell,power-domain = <0x1f>;
+				clocks = <0x2 0x7b 0x2 0x24 0x2 0x71 0x2 0x74 0x2 0x3 0x2 0x6 0x2 0x1a 0x2 0x5 0x2 0x25 0x2 0x27>;
+				clock-names = "LCDCIHCLK", "pll4_vco", "disp1_clk", "dsipll_clk", "pll1_624", "pll1_832", "pll1_499_en", "pll1_499", "pll4", "pll4_div3";
+
+				path1 {
+					marvell,path-name = "mmp_pnpath";
+					marvell,overlay-num = <0x2>;
+					marvell,overlay-table = <0x0 0x1>;
+					marvell,output-type = <0x1>;
+					marvell,path-config = <0x10>;
+					marvell,link-config = <0x1>;
+
+					disp_apmu {
+						plat = <0x4>;
+						apmu-reg = <0xd428284c>;
+						clksrc-bit = <0x9>;
+						parent1-clk-tbl = "disp1_clk", "dsipll_clk";
+						parent2-clk-tbl = "pll1_624", "pll1_832", "pll1_499_en", "pll4", "pll4_div3";
+					};
+				};
+			};
+
+			fbbase {
+				compatible = "marvell,mmp-fb";
+				status = "okay";
+				marvell,fb-name = "mmp-fb";
+				marvell,path-name = "mmp_pnpath";
+				marvell,overlay-id = <0x1>;
+				marvell,default-pixfmt = <0x109>;
+				marvell,buffer-num = <0x3>;
+				marvell,fb-mem = <0x17000000>;
+			};
+
+			fboverlay {
+				compatible = "marvell,mmp-fb-overlay";
+				status = "okay";
+				marvell,fb-name = "mmp-fb-overlay";
+				marvell,path-name = "mmp_pnpath";
+				marvell,overlay-id = <0x0>;
+			};
+
+			devfreq-vpu {
+				compatible = "marvell,devfreq-vpu";
+				marvell,vpu-id = <0x0>;
+				clocks = <0x2 0x6d 0x2 0x6e>;
+				clock-names = "vpu-fclk", "vpu-bclk";
+				marvell,mmp-clk-freq-combine = <0x26160 0x26160 0x32c80 0x32c80 0x4c2c0 0x4c2c0 0x65900 0x65900 0x79d38 0x65900 0x80e80 0x65900>;
+				marvell,qos;
+				vpu-governor = "simple_ondemand";
+				status = "okay";
+				marvell,power-domain = <0x4>;
+			};
+
+			debug@d42a0000 {
+				compatible = "marvell,mmp-debug";
+				reg = <0xd42a0000 0x800>;
+				version = <0x1>;
+				interrupts = <0x0 0x3e 0x4>;
+				detection_modes = <0x3>;
+			};
+
+			ccic@d420a000 {
+				compatible = "marvell,mmp-sc2ccic";
+				reg = <0xd420a000 0x2ff>;
+				reg-names = "ccic-regs";
+				dma-burst = <0x100>;
+				mclk-src = <0x3>;
+				mclk-div = <0xd>;
+				interrupts = <0x0 0x2a 0x4>;
+				ahb_enable = <0x1>;
+				clocks = <0x2 0x82 0x2 0x7f 0x2 0x7e 0x2 0x85>;
+				clock-names = "SC2DPHYCLK", "SC2CSICLK", "SC24XCLK", "SC2AHBCLK";
+				status = "okay";
+				pinctrl-names = "default", "twsi", "sccb";
+				pinctrl-0 = <0x20>;
+				pinctrl-1 = <0x21>;
+				pinctrl-2 = <0x22>;
+			};
+
+			ccic@d420a800 {
+				compatible = "marvell,mmp-sc2ccic";
+				reg = <0xd420a800 0x2ff>;
+				reg-names = "ccic-regs";
+				dma-burst = <0x40>;
+				mclk-src = <0x3>;
+				mclk-div = <0xd>;
+				interrupts = <0x0 0x4d 0x4>;
+				ahb_enable = <0x1>;
+				clocks = <0x2 0x81 0x2 0x7f 0x2 0x7e 0x2 0x85>;
+				clock-names = "SC2DPHYCLK", "SC2CSICLK", "SC24XCLK", "SC2AHBCLK";
+				status = "okay";
+				pinctrl-names = "default", "twsi", "sccb";
+				pinctrl-0 = <0x23>;
+				pinctrl-1 = <0x24>;
+				pinctrl-2 = <0x25>;
+				sync_ccic1_pin;
+			};
+
+			sc2mmu@d420F000 {
+				compatible = "marvell,mmp-sc2mmu";
+				reg = <0xd420f000 0x2ff>;
+				reg-names = "mmu-regs";
+				interrupts = <0x0 0xf 0x4>;
+				version = <0x2>;
+				status = "okay";
+			};
+
+			b52isp@0xC0200000 {
+				compatible = "ovt,single-pipeline ISP";
+				reg = <0xc0200000 0xfffff>;
+				reg-name = "b52isp-regs";
+				interrupts = <0x0 0xb 0x4>;
+				fclk-name = "ISP-CLK";
+				marvell,power-domain = <0x26>;
+				clocks = <0x2 0x80 0x2 0x84 0x2 0x83 0x2 0x85>;
+				clock-names = "SC2AXICLK", "ISPCORECLK", "ISPPIPECLK", "SC2AHBCLK";
+				status = "okay";
+			};
+
+			pd_gc@d4282800 {
+				compatible = "marvell,power-domain-common-gc";
+				reg = <0xd4282800 0x1000>;
+				clocks = <0x2 0x69>;
+				lpm-qos = <0xc>;
+				linux,phandle = <0x6>;
+				phandle = <0x6>;
+			};
+
+			pd_gc2d@d4282800 {
+				compatible = "marvell,power-domain-common-gc2d";
+				reg = <0xd4282800 0x1000>;
+				clocks = <0x2 0x6b>;
+				lpm-qos = <0xc>;
+				linux,phandle = <0x7>;
+				phandle = <0x7>;
+			};
+
+			pd_vpu@d4282800 {
+				compatible = "marvell,power-domain-common-vpu";
+				reg = <0xd4282800 0x1000>;
+				clocks = <0x2 0x6d>;
+				lpm-qos = <0xc>;
+				linux,phandle = <0x4>;
+				phandle = <0x4>;
+			};
+
+			pd_smmu@c0010000 {
+				compatible = "marvell,power-domain-smmu-pxa1u88";
+				reg = <0xc0010000 0x10000>;
+				marvell,power-domain-parent = <0x4>;
+				clocks = <0x2 0x6d 0x2 0x6e>;
+				clock-names = "VPUCLK", "VPUACLK";
+				linux,phandle = <0x8>;
+				phandle = <0x8>;
+			};
+		};
+
+		apb@d4000000 {
+			compatible = "mrvl,apb-bus", "simple-bus";
+			#address-cells = <0x1>;
+			#size-cells = <0x1>;
+			reg = <0xd4000000 0x200000>;
+			ranges;
+
+			pdma@d4000000 {
+				compatible = "marvell,pdma-1.0";
+				reg = <0xd4000000 0x10000>;
+				interrupts = <0x0 0x2f 0x4>;
+				#dma-cells = <0x2>;
+				#dma-channels = <0x10>;
+				#dma-channels-tz = <0x10>;
+				lpm-qos = <0x7>;
+				status = "okay";
+				linux,phandle = <0x27>;
+				phandle = <0x27>;
+			};
+
+			timer@d4014000 {
+				compatible = "marvell,mmp-timer";
+				reg = <0xd4014000 0xc8>;
+				marvell,timer-id = <0x0>;
+				marvell,timer-fastclk-frequency = <0x319750>;
+				marvell,timer-apb-frequency = <0x18cba80>;
+				marvell,timer-has-shadow;
+				status = "disabled";
+
+				counter0 {
+					compatible = "marvell,timer-counter-clkevt";
+					interrupts = <0x0 0xd 0x4>;
+					marvell,timer-counter-id = <0x0>;
+					marvell,timer-counter-cpu = <0x0>;
+					marvell,timer-counter-frequency = <0x8000>;
+				};
+
+				counter1 {
+					compatible = "marvell,timer-counter-clkevt";
+					interrupts = <0x0 0xe 0x4>;
+					marvell,timer-counter-id = <0x1>;
+					marvell,timer-counter-cpu = <0x1>;
+					marvell,timer-counter-frequency = <0x8000>;
+				};
+
+				counter2 {
+					compatible = "marvell,timer-counter-clksrc";
+					marvell,timer-counter-id = <0x2>;
+					marvell,timer-counter-frequency = <0x8000>;
+				};
+			};
+
+			timer@d4016000 {
+				compatible = "marvell,mmp-timer";
+				reg = <0xd4016000 0xc8>;
+				marvell,timer-id = <0x1>;
+				marvell,timer-fastclk-frequency = <0x319750>;
+				marvell,timer-apb-frequency = <0x18cba80>;
+				marvell,timer-has-shadow;
+				status = "disabled";
+
+				counter0 {
+					compatible = "marvell,timer-counter-clkevt";
+					interrupts = <0x0 0x1d 0x4>;
+					marvell,timer-counter-id = <0x0>;
+					marvell,timer-counter-cpu = <0x2>;
+					marvell,timer-counter-frequency = <0x8000>;
+				};
+
+				counter1 {
+					compatible = "marvell,timer-counter-clkevt";
+					interrupts = <0x0 0x1e 0x4>;
+					marvell,timer-counter-id = <0x1>;
+					marvell,timer-counter-cpu = <0x3>;
+					marvell,timer-counter-frequency = <0x8000>;
+				};
+
+				counter2 {
+					compatible = "marvell,timer-counter-delay";
+					marvell,timer-counter-id = <0x2>;
+					marvell,timer-counter-frequency = <0x319750>;
+				};
+			};
+
+			timer@d401f000 {
+				compatible = "marvell,mmp-timer";
+				reg = <0xd401f000 0xc8>;
+				marvell,timer-id = <0x2>;
+				marvell,timer-fastclk-frequency = <0x319750>;
+				marvell,timer-apb-frequency = <0x18cba80>;
+				marvell,timer-has-shadow;
+				status = "okay";
+
+				counter0 {
+					compatible = "marvell,timer-counter-clkevt";
+					interrupts = <0x0 0x15 0x4>;
+					marvell,timer-counter-id = <0x0>;
+					marvell,timer-counter-broadcast;
+					marvell,timer-counter-frequency = <0x8000>;
+				};
+			};
+
+			uart@d4017000 {
+				compatible = "mrvl,mmp-uart";
+				reg = <0xd4017000 0x1000>;
+				interrupts = <0x0 0x1b 0x4>;
+				dmas = <0x27 0x3 0x1 0x27 0x4 0x1>;
+				dma-names = "rx", "tx";
+				lpm-qos = <0x7>;
+				clocks = <0x2 0x47>;
+				pinctrl-names = "default", "sleep";
+				pinctrl-0 = <0x28 0x29>;
+				pinctrl-1 = <0x2a 0x29>;
+				edge-wakeup-gpio = <0x2f>;
+			};
+
+			uart@d4018000 {
+				compatible = "mrvl,mmp-uart";
+				reg = <0xd4018000 0x1000>;
+				interrupts = <0x0 0x18 0x4>;
+				dmas = <0x27 0x17 0x1 0x27 0x18 0x1>;
+				dma-names = "rx", "tx";
+				lpm-qos = <0x7>;
+				clocks = <0x2 0x48>;
+			};
+
+			uart@d4036000 {
+				compatible = "mrvl,mmp-uart";
+				reg = <0xd4036000 0x1000>;
+				interrupts = <0x0 0x3b 0x4>;
+				dmas = <0x27 0x4 0x1 0x27 0x5 0x1>;
+				dma-names = "rx", "tx";
+				lpm-qos = <0x7>;
+				clocks = <0x2 0x49>;
+			};
+
+			pwm@d401ac00 {
+				compatible = "marvell,pxa25x-pwm";
+				reg = <0xd401ac00 0x10>;
+				#pwm-cells = <0x2>;
+				clocks = <0x2 0x46>;
+				status = "okay";
+				linux,phandle = <0x59>;
+				phandle = <0x59>;
+			};
+
+			gpio@d4019000 {
+				compatible = "marvell,mmp-gpio";
+				#address-cells = <0x1>;
+				#size-cells = <0x1>;
+				reg = <0xd4019000 0x800>;
+				gpio-controller;
+				#gpio-cells = <0x2>;
+				interrupts = <0x0 0x31 0x4>;
+				clocks = <0x2 0x40>;
+				interrupt-names = "gpio_mux";
+				interrupt-controller;
+				#interrupt-cells = <0x2>;
+				ranges;
+				linux,phandle = <0x12>;
+				phandle = <0x12>;
+
+				gpio@d4019000 {
+					reg-offset = <0x0>;
+					gpio-range = <0x2b 0x0 0x37 0x20>;
+				};
+
+				gpio@d4019004 {
+					reg-offset = <0x4>;
+					gpio-ranges = <0x2b 0x0 0x57 0x17>;
+				};
+
+				gpio@d4019008 {
+					reg-offset = <0x8>;
+					gpio-ranges = <0x2b 0x3 0x6e 0x1d>;
+				};
+
+				gpio@d4019100 {
+					reg-offset = <0x100>;
+					gpio-ranges = <0x2b 0x0 0x8b 0x3 0x2b 0x1c 0x34 0x1>;
+				};
+			};
+
+			edgewakeup@d4019800 {
+				compatible = "mrvl,mmp-edge-wakeup";
+				reg = <0xd4019800 0x10>;
+				status = "okay";
+			};
+
+			rtc@d4010000 {
+				compatible = "mrvl,mmp-rtc";
+				reg = <0xd4010000 0x100>;
+				interrupts = <0x0 0x5 0x4 0x0 0x6 0x4>;
+				interrupt-names = "rtc 1Hz", "rtc alarm";
+				clocks = <0x2 0x42>;
+			};
+
+			keypad@d4012000 {
+				compatible = "marvell,pxa27x-keypad";
+				reg = <0xd4012000 0x4c>;
+				lpm-qos = <0xc>;
+				interrupts = <0x0 0x9 0x4>;
+				clocks = <0x2 0x41>;
+				marvell,direct-keys;
+				marvell,direct-key-low-active;
+				marvell,keypad-lpm-mod;
+				marvell,direct-key-count = <0x2>;
+				marvell,direct-key-mask = <0xff>;
+				marvell,direct-key-map = <0x73 0x72>;
+				marvell,debounce-interval = <0x1e>;
+				pinctrl-names = "default";
+				pinctrl-0 = <0x2c>;
+				status = "okay";
+			};
+
+			sspa@d128dc00 {
+				compatible = "mrvl,mmp-sspa-dai-dummy";
+				reg = <0xd128dc00 0x100>;
+				dmas = <0x2d 0x1 0x2d 0x0>;
+				dma-names = "rx", "tx";
+				asram = <0x1c>;
+				platform_driver_name = "tdma_platform";
+				status = "okay";
+				pinctrl-names = "default";
+				pinctrl-0 = <0x2e>;
+				playback_period_bytes = <0x1000>;
+				playback_buffer_bytes = <0x3000>;
+				capture_period_bytes = <0x1000>;
+				capture_buffer_bytes = <0x2000>;
+				burst_size = <0x4>;
+				#dailink-cells = <0x1>;
+				linux,phandle = <0x51>;
+				phandle = <0x51>;
+			};
+
+			sspa@d128dd00 {
+				compatible = "mrvl,mmp-sspa-dai-dummy";
+				reg = <0xd128dd00 0x100>;
+				dmas = <0x2f 0x1 0x2f 0x0>;
+				dma-names = "rx", "tx";
+				asram = <0x1c>;
+				platform_driver_name = "tdma_platform";
+				status = "okay";
+				pinctrl-names = "default";
+				pinctrl-0 = <0x30>;
+				playback_period_bytes = <0x4000>;
+				playback_buffer_bytes = <0x8000>;
+				capture_period_bytes = <0x1000>;
+				capture_buffer_bytes = <0x2000>;
+				burst_size = <0x4>;
+				#dailink-cells = <0x1>;
+				linux,phandle = <0x53>;
+				phandle = <0x53>;
+			};
+
+			map@d1200000 {
+				compatible = "marvell,mmp-map-v2";
+				reg = <0xd1230000 0x100 0xd1200000 0xd000>;
+				audio_reg = <0x80>;
+				pll_sel = <0x0>;
+				power_ctrl = <0x3>;
+				clocks = <0x31 0x1>;
+				status = "okay";
+				pinctrl-names = "default";
+				pinctrl-0 = <0x32>;
+				marvell,apll = <0x0>;
+				lpm-qos = <0xe>;
+				sleep_vol = <0xee098>;
+				vccmain-supply = <0x33>;
+				linux,phandle = <0x4a>;
+				phandle = <0x4a>;
+
+				mmp_map_codec {
+					compatible = "marvell,mmp-map-codec-v2";
+					#dailink-cells = <0x1>;
+					linux,phandle = <0x52>;
+					phandle = <0x52>;
+				};
+
+				mmp_map_be {
+					compatible = "marvell,mmp-map-be-v2";
+					#dailink-cells = <0x1>;
+					linux,phandle = <0x55>;
+					phandle = <0x55>;
+				};
+
+				mmp_map_be_tdm {
+					compatible = "marvell,mmp-map-be-tdm";
+					marvell,single-out;
+					#dailink-cells = <0x1>;
+					linux,phandle = <0x57>;
+					phandle = <0x57>;
+				};
+			};
+
+			pinmux@d401e000 {
+				compatible = "pinconf-single";
+				reg = <0xd401e000 0x330>;
+				#address-cells = <0x1>;
+				#size-cells = <0x1>;
+				#gpio-range-cells = <0x3>;
+				ranges;
+				pinctrl-single,register-width = <0x20>;
+				pinctrl-single,function-mask = <0x7>;
+				pinctrl-single,gpio-range = <0x34 0x37 0x37 0x0 0x34 0x6e 0x20 0x0 0x34 0x34 0x1 0x0>;
+				pinctrl-names = "default";
+				pinctrl-0 = <0x35 0x36 0x37 0x38>;
+				linux,phandle = <0x2b>;
+				phandle = <0x2b>;
+
+				gpio-range {
+					#pinctrl-single,gpio-range-cells = <0x3>;
+					linux,phandle = <0x34>;
+					phandle = <0x34>;
+				};
+
+				mfp_pins_group_0 {
+					pinctrl-single,pins = <0x20 0x0 0x1c 0x0 0x18 0x0 0x14 0x0 0x10 0x0 0xc 0x0 0x4 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x8000 0xc000 0x8000 0xc000>;
+					pinctrl-single,bias-pulldown = <0xa000 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x35>;
+					phandle = <0x35>;
+				};
+
+				mfp_pins_group_1 {
+					pinctrl-single,pins = <0x8 0x0 0x44 0x0 0x48 0x0 0x4c 0x0 0x50 0x0 0x54 0x1 0x58 0x1 0x60 0x1 0x68 0x0 0x78 0x0 0x6c 0x1 0x70 0x1 0x74 0x0 0x7c 0x0 0x80 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0xc000 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x8000 0xa000 0x8000 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x36>;
+					phandle = <0x36>;
+				};
+
+				mfp_pins_group_2 {
+					pinctrl-single,pins = <0x10c 0x0 0x110 0x0 0x114 0x0 0x118 0x0 0x1dc 0x0 0x1e4 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0xc000 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x8000 0xa000 0x8000 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x37>;
+					phandle = <0x37>;
+				};
+
+				mfp_pins_group_3 {
+					pinctrl-single,pins = <0x26c 0x0 0x270 0x0 0x274 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0xc000 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x8000 0xa000 0x8000 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x38>;
+					phandle = <0x38>;
+				};
+
+				uart0_pmx_func1 {
+					pinctrl-single,pins = <0x198 0x6>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x28>;
+					phandle = <0x28>;
+				};
+
+				uart0_pmx_func2 {
+					pinctrl-single,pins = <0x19c 0x6>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x29>;
+					phandle = <0x29>;
+				};
+
+				uart0_pmx_func1_sleep {
+					pinctrl-single,pins = <0x198 0x6>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x30 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x0 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x2a>;
+					phandle = <0x2a>;
+				};
+
+				pinmux_88pm830_pins {
+					pinctrl-single,pins = <0xec 0x0 0x128 0x0 0xd0 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+				};
+
+				pinmux_88pm830_pins_sleep {
+					pinctrl-single,pins = <0xec 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x30 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x0 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+				};
+
+				keypad_in_func {
+					pinctrl-single,pins = <0x11c 0x1 0x120 0x1>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0xc000 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x8000 0xa000 0x8000 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x308 0x388>;
+					linux,phandle = <0x2c>;
+					phandle = <0x2c>;
+				};
+
+				sdh0_pmx_func1 {
+					pinctrl-single,pins = <0x84 0x0 0x88 0x0 0x8c 0x0 0x90 0x0 0xb0 0x1 0xac 0x1 0x21c 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0xd>;
+					phandle = <0xd>;
+				};
+
+				sdh0_pmx_func2 {
+					pinctrl-single,pins = <0x94 0x0 0x98 0x0 0x9c 0x0 0xa0 0x0 0xa4 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0xe>;
+					phandle = <0xe>;
+				};
+
+				sdh0_pmx_func3 {
+					pinctrl-single,pins = <0xa8 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x208 0x388>;
+					linux,phandle = <0xf>;
+					phandle = <0xf>;
+				};
+
+				sdh0_pmx_func2_fast {
+					pinctrl-single,pins = <0x94 0x0 0x98 0x0 0x9c 0x0 0xa0 0x0 0xa4 0x0>;
+					pinctrl-single,drive-strength = <0x1800 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x10>;
+					phandle = <0x10>;
+				};
+
+				sdh0_pmx_func3_fast {
+					pinctrl-single,pins = <0xa8 0x0>;
+					pinctrl-single,drive-strength = <0x1800 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x208 0x388>;
+					linux,phandle = <0x11>;
+					phandle = <0x11>;
+				};
+
+				sdh1_pmx_func1_fast {
+					pinctrl-single,pins = <0x170 0x1 0x174 0x1 0x178 0x1 0x17c 0x1 0x180 0x1>;
+					pinctrl-single,drive-strength = <0x1800 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x19>;
+					phandle = <0x19>;
+				};
+
+				sdh1_pmx_func2_fast {
+					pinctrl-single,pins = <0x184 0x1>;
+					pinctrl-single,drive-strength = <0x1800 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x208 0x388>;
+					linux,phandle = <0x1a>;
+					phandle = <0x1a>;
+				};
+
+				sdh1_pmx_func1 {
+					pinctrl-single,pins = <0x170 0x1 0x174 0x1 0x178 0x1 0x17c 0x1 0x180 0x1>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x15>;
+					phandle = <0x15>;
+				};
+
+				sdh1_pmx_func2 {
+					pinctrl-single,pins = <0x184 0x1>;
+					pinctrl-single,drive-strength = <0x0 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x208 0x388>;
+					linux,phandle = <0x16>;
+					phandle = <0x16>;
+				};
+
+				sdh1_pmx_func3 {
+					pinctrl-single,pins = <0x230 0x0 0x1c8 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x8000 0x8000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x8000 0x8000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x17>;
+					phandle = <0x17>;
+				};
+
+				sdh1_pmx_func4 {
+					pinctrl-single,pins = <0xfc 0x0 0xf0 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x8000 0xc000 0x8000 0xc000>;
+					pinctrl-single,bias-pulldown = <0xa000 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x18>;
+					phandle = <0x18>;
+				};
+
+				sdh1_pmx_edge_wakeup {
+					pinctrl-single,pins = <0x178 0x1>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x30 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x0 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x1b>;
+					phandle = <0x1b>;
+				};
+
+				sdh2_pmx_func1 {
+					pinctrl-single,pins = <0x24 0x1 0x28 0x1 0x2c 0x1 0x30 0x1 0x34 0x1 0x38 0x1 0x3c 0x1 0x40 0x1 0x5c 0x1>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x9>;
+					phandle = <0x9>;
+				};
+
+				sdh2_pmx_func2 {
+					pinctrl-single,pins = <0x64 0x1>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x208 0x388>;
+					linux,phandle = <0xa>;
+					phandle = <0xa>;
+				};
+
+				sdh2_pmx_func1_fast {
+					pinctrl-single,pins = <0x24 0x1 0x28 0x1 0x2c 0x1 0x30 0x1 0x34 0x1 0x38 0x1 0x3c 0x1 0x40 0x1 0x5c 0x1>;
+					pinctrl-single,drive-strength = <0x1800 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0xb>;
+					phandle = <0xb>;
+				};
+
+				sdh2_pmx_func2_fast {
+					pinctrl-single,pins = <0x64 0x1>;
+					pinctrl-single,drive-strength = <0x1800 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x208 0x388>;
+					linux,phandle = <0xc>;
+					phandle = <0xc>;
+				};
+
+				sspa0_gpio {
+					pinctrl-single,pins = <0x130 0x0 0x134 0x0 0x138 0x0 0x13c 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x288 0x388>;
+				};
+
+				sspa0_func {
+					pinctrl-single,pins = <0x130 0x7 0x134 0x7 0x138 0x7 0x13c 0x7>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x2e>;
+					phandle = <0x2e>;
+				};
+
+				sspa1_func {
+					pinctrl-single,pins = <0x140 0x7 0x144 0x7 0x148 0x7 0x14c 0x7>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x30>;
+					phandle = <0x30>;
+				};
+
+				dmic_pdm_func {
+					pinctrl-single,pins = <0x160 0x7 0x164 0x7 0x168 0x7 0x16c 0x7>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x32>;
+					phandle = <0x32>;
+				};
+
+				disp_func {
+					pinctrl-single,pins = <0x234 0x0 0x22c 0x0 0x15c 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x8000 0xc000 0x8000 0xc000>;
+					pinctrl-single,bias-pulldown = <0xa000 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x288 0x388>;
+					linux,phandle = <0x1e>;
+					phandle = <0x1e>;
+				};
+
+				twsi0_pmx_func {
+					pinctrl-single,pins = <0x1b0 0x2 0x1b4 0x2>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x288 0x388>;
+				};
+
+				twsi0_pmx_gpio {
+					pinctrl-single,pins = <0x1b0 0x0 0x1b4 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x288 0x388>;
+				};
+
+				twsi1_pmx_func {
+					pinctrl-single,pins = <0x208 0x5 0x20c 0x5>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x288 0x388>;
+					linux,phandle = <0x39>;
+					phandle = <0x39>;
+				};
+
+				twsi1_pmx_gpio {
+					pinctrl-single,pins = <0x208 0x0 0x20c 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x288 0x388>;
+					linux,phandle = <0x3a>;
+					phandle = <0x3a>;
+				};
+
+				twsi3_pmx_func {
+					pinctrl-single,pins = <0x1d0 0x5 0x1d4 0x5>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x288 0x388>;
+					linux,phandle = <0x40>;
+					phandle = <0x40>;
+				};
+
+				twsi3_pmx_gpio {
+					pinctrl-single,pins = <0x1d0 0x0 0x1d4 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x288 0x388>;
+					linux,phandle = <0x41>;
+					phandle = <0x41>;
+				};
+
+				twsi3_pmx_senhb {
+					pinctrl-single,pins = <0x1d0 0x7 0x1d4 0x7>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x49>;
+					phandle = <0x49>;
+				};
+
+				twsi3_pmx_senhb_def {
+					pinctrl-single,pins = <0x1d0 0x7 0x1d4 0x7>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x288 0x388>;
+					linux,phandle = <0x47>;
+					phandle = <0x47>;
+				};
+
+				touch_pins {
+					pinctrl-single,pins = <0x1cc 0x0 0x1d8 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x288 0x388>;
+					linux,phandle = <0x3b>;
+					phandle = <0x3b>;
+				};
+
+				gnss_pmx_def {
+					pinctrl-single,pins = <0x1f0 0x0 0x1f4 0x0 0x1f8 0x0 0x1fc 0x0 0x200 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x8000 0xc000 0x8000 0xc000>;
+					pinctrl-single,bias-pulldown = <0xa000 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x288 0x388>;
+					linux,phandle = <0x43>;
+					phandle = <0x43>;
+				};
+
+				gnss_pmx_power_on {
+					pinctrl-single,pins = <0x1f0 0x6 0x1f4 0x6 0x1f8 0x6 0x1fc 0x6 0x200 0x6>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x44>;
+					phandle = <0x44>;
+				};
+
+				senhb_irq_pins_def {
+					pinctrl-single,pins = <0x108 0x0 0x104 0x0 0x218 0x3>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x48>;
+					phandle = <0x48>;
+				};
+
+				dvc_pmx_func {
+					pinctrl-single,pins = <0x220 0x5 0x224 0x5 0x228 0x5>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x3d>;
+					phandle = <0x3d>;
+				};
+
+				ccic1_pmx_func1 {
+					pinctrl-single,pins = <0x1e0 0x1 0x1b8 0x0 0x1bc 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x8000 0xc000 0x8000 0xc000>;
+					pinctrl-single,bias-pulldown = <0xa000 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x20>;
+					phandle = <0x20>;
+				};
+
+				ccic1_pmx_func3 {
+					pinctrl-single,pins = <0x1e0 0x1 0x1b0 0x7 0x1b4 0x7>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x288 0x388>;
+					linux,phandle = <0x22>;
+					phandle = <0x22>;
+				};
+
+				ccic1_pmx_func2 {
+					pinctrl-single,pins = <0x1e0 0x1 0x1b0 0x2 0x1b4 0x2 0x1b8 0x0 0x1bc 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x8000 0xc000 0x8000 0xc000>;
+					pinctrl-single,bias-pulldown = <0xa000 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x21>;
+					phandle = <0x21>;
+				};
+
+				ccic2_pmx_func1 {
+					pinctrl-single,pins = <0x1c0 0x0 0x1c4 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x8000 0xc000 0x8000 0xc000>;
+					pinctrl-single,bias-pulldown = <0xa000 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x23>;
+					phandle = <0x23>;
+				};
+
+				ccic2_pmx_func2 {
+					pinctrl-single,pins = <0x1c0 0x0 0x1c4 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x288 0x388>;
+					linux,phandle = <0x24>;
+					phandle = <0x24>;
+				};
+
+				cic2_pmx_func3 {
+					pinctrl-single,pins = <0x1c0 0x0 0x1c4 0x0>;
+					pinctrl-single,drive-strength = <0x1000 0x1800>;
+					pinctrl-single,bias-pullup = <0x0 0xc000 0x0 0xc000>;
+					pinctrl-single,bias-pulldown = <0x0 0xa000 0x0 0xa000>;
+					pinctrl-single,input-schmitt = <0x0 0x30>;
+					pinctrl-single,input-schmitt-enable = <0x40 0x0 0x40 0x40>;
+					pinctrl-single,lpm-output = <0x0 0x388>;
+					linux,phandle = <0x25>;
+					phandle = <0x25>;
+				};
+			};
+
+			i2c@d4011000 {
+				compatible = "mrvl,mmp-twsi";
+				#address-cells = <0x1>;
+				#size-cells = <0x0>;
+				reg = <0xd4011000 0x64>;
+				interrupts = <0x0 0x7 0x4>;
+				clocks = <0x2 0x3c>;
+				lpm-qos = <0xc>;
+				mrvl,i2c-fast-mode;
+				marvell,i2c-ilcr = <0x82c469f>;
+				marvell,i2c-iwcr = <0x142a>;
+				marvell,i2c-enable-bus-rst;
+				status = "okay";
+			};
+
+			i2c@d4010800 {
+				compatible = "mrvl,mmp-twsi";
+				#address-cells = <0x1>;
+				#size-cells = <0x0>;
+				reg = <0xd4010800 0x64>;
+				interrupts = <0x0 0x36 0x4>;
+				clocks = <0x2 0x3d>;
+				lpm-qos = <0xc>;
+				mrvl,i2c-fast-mode;
+				marvell,i2c-ilcr = <0x82c469f>;
+				marvell,i2c-iwcr = <0x142a>;
+				marvell,i2c-enable-bus-rst;
+				status = "okay";
+				pinctrl-names = "default", "gpio";
+				pinctrl-0 = <0x39>;
+				pinctrl-1 = <0x3a>;
+				i2c-gpio = <0x12 0x57 0x0 0x12 0x58 0x0>;
+
+				s3202@720p {
+					compatible = "synaptics,s3202-touch";
+					pinctrl-names = "default";
+					pinctrl-0 = <0x3b>;
+					reg = <0x22>;
+					interrupt-parent = <0x12>;
+					interrupts = <0x48 0x1>;
+					synaptics,irq-flags = <0x2002>;
+					synaptics,irq-gpios = <0x12 0x48 0x0>;
+					synaptics,reset-gpios = <0x12 0x4b 0x0>;
+					synaptics,sensor_res_x = <0x2d0>;
+					synaptics,sensor_res_y = <0x500>;
+					synaptics,sensor_max_x = <0x31e>;
+					synaptics,sensor_max_y = <0x570>;
+					synaptics,sensor_margin_x = <0x27>;
+					synaptics,sensor_margin_y = <0x0>;
+					avdd-supply = <0x3c>;
+				};
+
+				s3202@1080p {
+					compatible = "synaptics,s3202-touch";
+					pinctrl-names = "default";
+					pinctrl-0 = <0x3b>;
+					reg = <0x22>;
+					interrupt-parent = <0x12>;
+					interrupts = <0x48 0x1>;
+					synaptics,irq-flags = <0x2002>;
+					synaptics,irq-gpios = <0x12 0x48 0x0>;
+					synaptics,reset-gpios = <0x12 0x4b 0x0>;
+					synaptics,sensor_res_x = <0x438>;
+					synaptics,sensor_res_y = <0x780>;
+					synaptics,sensor_max_x = <0x438>;
+					synaptics,sensor_max_y = <0x816>;
+					synaptics,sensor_margin_x = <0x0>;
+					synaptics,sensor_margin_y = <0x0>;
+					avdd-supply = <0x3c>;
+				};
+
+				s3202@20 {
+					compatible = "synaptics,s3202-touch";
+					pinctrl-names = "default";
+					pinctrl-0 = <0x3b>;
+					reg = <0x20>;
+					interrupt-parent = <0x12>;
+					interrupts = <0x48 0x1>;
+					synaptics,irq-flags = <0x2002>;
+					synaptics,irq-gpios = <0x12 0x48 0x0>;
+					synaptics,reset-gpios = <0x12 0x4b 0x0>;
+					synaptics,sensor_res_x = <0x438>;
+					synaptics,sensor_res_y = <0x780>;
+					synaptics,sensor_max_x = <0x438>;
+					synaptics,sensor_max_y = <0x780>;
+					synaptics,sensor_margin_x = <0x0>;
+					synaptics,sensor_margin_y = <0x0>;
+					synaptics,button_maps = [8b ac 9e];
+					synaptics,num_button = <0x3>;
+					avdd-supply = <0x3c>;
+				};
+			};
+
+			i2c@d4018800 {
+				compatible = "mrvl,mmp-twsi";
+				#address-cells = <0x1>;
+				#size-cells = <0x0>;
+				interrupts = <0x0 0x17 0x4>;
+				clocks = <0x2 0x3e>;
+				lpm-qos = <0xc>;
+				reg = <0xd4018800 0x64 0xd403d300 0x4>;
+				mrvl,i2c-fast-mode;
+				marvell,i2c-ilcr = <0x82c469f>;
+				marvell,i2c-iwcr = <0x142a>;
+				marvell,i2c-enable-bus-rst;
+				marvell,i2c-always-on;
+				status = "okay";
+
+				88pm880@30 {
+					reg = <0x30>;
+					interrupts = <0x0 0x4 0x4>;
+					interrupt-parent = <0x1>;
+					interrupt-controller;
+					#interrupt-cells = <0x1>;
+					marvell,88pm88x-irq-write-clear;
+					compatible = "marvell,88pm880";
+					marvell,pmic-bd-cfg = <0x4 0x24 0x30 0x20 0x4 0x26 0x7f 0x8 0x1 0x39 0x30 0x0 0x1 0x3f 0x30 0x0 0x1 0x45 0x30 0x0 0x1 0x4b 0x30 0x0 0x1 0x57 0x30 0x0 0x1 0x5d 0x30 0x0 0x1 0x6f 0x30 0x0 0x1 0x7b 0x30 0x0 0x1 0x81 0x30 0x0>;
+
+					dvc {
+						pinctrl-names = "default";
+						pinctrl-0 = <0x3d>;
+						compatible = "marvell,88pm88x-dvc";
+					};
+
+					regulator-ldo19 {
+					};
+
+					onkey {
+						compatible = "marvell,88pm88x-onkey";
+						pm88x-onkey-gpio-number = <0x0>;
+						pm88x-onkey-long-onkey-type = <0x2>;
+						pm88x-onkey-disable-long-key-rst = <0x0>;
+						pm88x-onkey-long-key-press-time = <0xa>;
+						pm88x-onkey-hwrst-db-period = <0x1>;
+						pm88x-onkey-hwrst-type = <0x1>;
+					};
+
+					vbus {
+						compatible = "marvell,88pm88x-vbus";
+						marvell,enable-usb-id-detection;
+						marvell,usb-id-gpadc = "88pm88x-gpadc3";
+					};
+
+					rtc {
+						compatible = "marvell,88pm88x-rtc";
+					};
+
+					charger {
+						compatible = "marvell,88pm88x-charger";
+						prechg-current = <0x1c2>;
+						prechg-voltage = <0xbb8>;
+						fastchg-voltage = <0x10fe 0x10fe 0x10fe>;
+						fastchg-cur = <0x3e8 0x3e8 0x3e8>;
+						fastchg-eoc = <0x78>;
+						fastchg-tout = <0x8>;
+						recharge-thr = <0x64>;
+						dcp-limit = <0x960>;
+						status = "okay";
+					};
+
+					battery {
+						compatible = "marvell,88pm88x-battery";
+						sleep-period = <0x3e8>;
+						alart-percent = <0x5>;
+						power-off-th = <0xd16>;
+						safe-power-off-th = <0xbb8>;
+						power-off-cnt-th = <0x14 0x4 0x4>;
+						io-channels = <0x3e 0x7 0x3e 0xd 0x3e 0xe 0x3e 0xf 0x3e 0x10 0x3e 0x11>;
+						io-channel-names = "vbat", "vbat_slp", "gpadc0_res", "gpadc1_res", "gpadc2_res", "gpadc3_res";
+						bat-ntc-support;
+						bat-capacity = <0x960>;
+						low-threshold = <0x6>;
+						high-threshold = <0x3c>;
+						ocv-table = <0xd64 0xdbf 0xe01 0xe30 0xe49 0xe52 0xe57 0xe5b 0xe5d 0xe5f 0xe62 0xe64 0xe6a 0xe74 0xe7e 0xe87 0xe8f 0xe96 0xe9c 0xea0 0xea4 0xea9 0xead 0xeb1 0xeb4 0xeb6 0xeb8 0xeba 0xebb 0xebd 0xebe 0xebf 0xec1 0xec3 0xec5 0xec8 0xeca 0xecd 0xed0 0xed3 0xed6 0xed9 0xedd 0xee0 0xee4 0xee8 0xeec 0xef1 0xef5 0xefa 0xeff 0xf05 0xf0c 0xf13 0xf1c 0xf26 0xf30 0xf3b 0xf46 0xf4f 0xf58 0xf60 0xf68 0xf70 0xf77 0xf7f 0xf86 0xf8e 0xf95 0xf9d 0xfa6 0xfaf 0xfb9 0xfc3 0xfcd 0xfd7 0xfe1 0xfea 0xff3 0xffe 0x1008 0x1012 0x101d 0x1028 0x1033 0x103e 0x1049 0x1054 0x105f 0x106a 0x1076 0x1081 0x108d 0x1099 0x10a5 0x10b1 0x10bd 0x10c9 0x10d7 0x10e4>;
+						t1-degree = <0x0>;
+						t2-degree = <0xa>;
+						t3-degree = <0x1e>;
+						t4-degree = <0x2d>;
+						times-in-minus-ten = <0x2>;
+						offset-in-minus-ten = <0x64>;
+						times-in-zero = <0x1>;
+						offset-in-zero = <0x0>;
+						soc-low-th-cycle = <0xf>;
+						soc-high-th-cycle = <0x55>;
+						ntc-table = <0x800c4 0xffffffe8 0x78d41 0xffffffe9 0x7210d 0xffffffea 0x6bba4 0xffffffeb 0x65c90 0xffffffec 0x60360 0xffffffed 0x5afad 0xffffffee 0x56117 0xffffffef 0x51747 0xfffffff0 0x4d1ea 0xfffffff1 0x490b5 0xfffffff2 0x45361 0xfffffff3 0x419ad 0xfffffff4 0x3e35c 0xfffffff5 0x3b036 0xfffffff6 0x38007 0xfffffff7 0x3529d 0xfffffff8 0x327cd 0xfffffff9 0x2ff6b 0xfffffffa 0x2d951 0xfffffffb 0x2b559 0xfffffffc 0x29363 0xfffffffd 0x2734e 0xfffffffe 0x254fd 0xffffffff 0x23855 0x0 0x21d3a 0x1 0x20397 0x2 0x1eb53 0x3 0x1d45b 0x4 0x1be9a 0x5 0x1a9fe 0x6 0x19676 0x7 0x183f2 0x8 0x17264 0x9 0x161bc 0xa 0x151ee 0xb 0x142ed 0xc 0x134ae 0xd 0x12726 0xe 0x11a4a 0xf 0x10e12 0x10 0x10273 0x11 0xf767 0x12 0xece4 0x13 0xe2e3 0x14 0xd95d 0x15 0xd04c 0x16 0xc7a9 0x17 0xbf6f 0x18 0xb798 0x19 0xb01f 0x1a 0xa8fe 0x1b 0xa232 0x1c 0x9bb6 0x1d 0x9585 0x1e 0x8f9d 0x1f 0x89f9 0x20 0x8496 0x21 0x7f70 0x22 0x7a85 0x23 0x75d1 0x24 0x7153 0x25 0x6d06 0x26 0x68ea 0x27 0x64fb 0x28 0x6137 0x29 0x5d9c 0x2a 0x5a29 0x2b 0x56db 0x2c 0x53b1 0x2d 0x50a8 0x2e 0x4dc0 0x2f 0x4af7 0x30 0x484b 0x31 0x45bb 0x32 0x4345 0x33 0x40ea 0x34 0x3ea6 0x35 0x3c7a 0x36 0x3a64 0x37 0x3863 0x38 0x3677 0x39 0x349e 0x3a 0x32d7 0x3b 0x3122 0x3c 0x2f7e 0x3d 0x2dea 0x3e 0x2c66 0x3f>;
+						gpadc-det-no = <0x1>;
+						gpadc-temp-no = <0x1>;
+						cc-fixup = <0x66>;
+					};
+
+					headset {
+						compatible = "marvell,88pm88x-headset";
+						status = "okay";
+						marvell,headset-flag = <0x0>;
+						marvell,hook-press-th = <0x3c>;
+						marvell,vol-up-press-th = <0xaf>;
+						marvell,vol-down-press-th = <0x1f4>;
+						marvell,mic-det-th = <0x258>;
+						marvell,press-release-th = <0x258>;
+						marvell,micbias-supply = <0x3f>;
+						marvell,micbias-volt = <0x6a4>;
+					};
+
+					led {
+						compatible = "marvell,88pm88x-leds";
+						gpio-en = <0x0>;
+						flash-en-gpio = <0x7c>;
+						flash-txmsk-gpio = <0x13>;
+						flash-timer = <0x1f4>;
+						cls-ov-set = <0x1130>;
+						cls-uv-set = <0x5dc>;
+						cfd-bst-vset = <0x128e>;
+						bst-uvvbat-set = <0xc1c>;
+						max-flash-current = <0x4b0>;
+						max-torch-current = <0xc8>;
+						torch-force-max-current = <0x0>;
+					};
+
+					led-rgb0 {
+						compatible = "marvell,88pm88x-rgb0";
+						led-name = "led0";
+						led-trigger-name = "timer";
+						pm88x-rgb-breath-mode;
+						pm88x-rgb-breath-speed = [01];
+						pm88x-rgb-current = [01];
+						pm88x-rgb-on-percent = [32];
+					};
+
+					led-rgb1 {
+						compatible = "marvell,88pm88x-rgb1";
+						led-name = "led1";
+						led-trigger-name = "timer";
+						pm88x-rgb-breath-mode;
+						pm88x-rgb-breath-speed = [02];
+						pm88x-rgb-current = [01];
+						pm88x-rgb-on-percent = [32];
+					};
+
+					led-rgb2 {
+						compatible = "marvell,88pm88x-rgb2";
+						led-name = "led2";
+						led-trigger-name = "timer";
+						pm88x-rgb-breath-mode;
+						pm88x-rgb-breath-speed = [02];
+						pm88x-rgb-current = [01];
+						pm88x-rgb-on-percent = [32];
+					};
+
+					gpadc {
+						compatible = "marvell,88pm88x-gpadc";
+						#io-channel-cells = <0x1>;
+						io-channel-ranges;
+						linux,phandle = <0x3e>;
+						phandle = <0x3e>;
+					};
+
+					virtual-regulator1 {
+						compatible = "marvell,88pm88x-votg";
+						linux,phandle = <0x5>;
+						phandle = <0x5>;
+					};
+
+					regulator-buck1a {
+						compatible = "marvell,88pm880-buck1a";
+						regulator-min-microvolt = <0x927c0>;
+						regulator-max-microvolt = <0x1b7740>;
+						regulator-always-on;
+						regulator-boot-on;
+					};
+
+					regulator-buck2 {
+						compatible = "marvell,88pm880-buck2";
+						regulator-min-microvolt = <0x927c0>;
+						regulator-max-microvolt = <0x325aa0>;
+						regulator-always-on;
+						regulator-boot-on;
+						linux,phandle = <0x4d>;
+						phandle = <0x4d>;
+					};
+
+					regulator-buck3 {
+						compatible = "marvell,88pm880-buck3";
+						regulator-min-microvolt = <0x927c0>;
+						regulator-max-microvolt = <0x325aa0>;
+						regulator-always-on;
+						regulator-boot-on;
+						linux,phandle = <0x1d>;
+						phandle = <0x1d>;
+					};
+
+					regulator-buck4 {
+						compatible = "marvell,88pm880-buck4";
+						regulator-min-microvolt = <0x927c0>;
+						regulator-max-microvolt = <0x325aa0>;
+						regulator-always-on;
+						regulator-boot-on;
+					};
+
+					regulator-buck5 {
+						compatible = "marvell,88pm880-buck5";
+						regulator-min-microvolt = <0x927c0>;
+						regulator-max-microvolt = <0x325aa0>;
+						regulator-always-on;
+						regulator-boot-on;
+						linux,phandle = <0x50>;
+						phandle = <0x50>;
+					};
+
+					regulator-buck6 {
+						compatible = "marvell,88pm880-buck6";
+						regulator-min-microvolt = <0x927c0>;
+						regulator-max-microvolt = <0x325aa0>;
+					};
+
+					regulator-buck7 {
+						compatible = "marvell,88pm880-buck7";
+						regulator-min-microvolt = <0x927c0>;
+						regulator-max-microvolt = <0x325aa0>;
+						regulator-always-on;
+						regulator-boot-on;
+					};
+
+					regulator-ldo1 {
+						compatible = "marvell,88pm880-ldo1";
+						regulator-min-microvolt = <0x19f0a0>;
+						regulator-max-microvolt = <0x325aa0>;
+						regulator-always-on;
+						regulator-boot-on;
+					};
+
+					regulator-ldo2 {
+						compatible = "marvell,88pm880-ldo2";
+						regulator-min-microvolt = <0x19f0a0>;
+						regulator-max-microvolt = <0x325aa0>;
+						regulator-always-on;
+						regulator-boot-on;
+					};
+
+					regulator-ldo3 {
+						compatible = "marvell,88pm880-ldo3";
+						regulator-min-microvolt = <0x19f0a0>;
+						regulator-max-microvolt = <0x325aa0>;
+						regulator-always-on;
+						regulator-boot-on;
+						linux,phandle = <0x45>;
+						phandle = <0x45>;
+					};
+
+					regulator-ldo4 {
+						compatible = "marvell,88pm880-ldo4";
+						regulator-min-microvolt = <0x124f80>;
+						regulator-max-microvolt = <0x325aa0>;
+						regulator-always-on;
+						regulator-boot-on;
+						linux,phandle = <0x46>;
+						phandle = <0x46>;
+					};
+
+					regulator-ldo5 {
+						compatible = "marvell,88pm880-ldo5";
+						regulator-min-microvolt = <0x124f80>;
+						regulator-max-microvolt = <0x325aa0>;
+						regulator-always-on;
+						regulator-boot-on;
+					};
+
+					regulator-ldo6 {
+						compatible = "marvell,88pm880-ldo6";
+						regulator-min-microvolt = <0x124f80>;
+						regulator-max-microvolt = <0x325aa0>;
+						regulator-always-on;
+						regulator-boot-on;
+						linux,phandle = <0x3c>;
+						phandle = <0x3c>;
+					};
+
+					regulator-ldo7 {
+						compatible = "marvell,88pm880-ldo7";
+						regulator-min-microvolt = <0x124f80>;
+						regulator-max-microvolt = <0x325aa0>;
+						regulator-always-on;
+						regulator-boot-on;
+						linux,phandle = <0x4c>;
+						phandle = <0x4c>;
+					};
+
+					regulator-ldo8 {
+						compatible = "marvell,88pm880-ldo8";
+						regulator-min-microvolt = <0x124f80>;
+						regulator-max-microvolt = <0x325aa0>;
+						regulator-always-on;
+						regulator-boot-on;
+						linux,phandle = <0x4b>;
+						phandle = <0x4b>;
+					};
+
+					regulator-ldo9 {
+						compatible = "marvell,88pm880-ldo9";
+						regulator-min-microvolt = <0x124f80>;
+						regulator-max-microvolt = <0x325aa0>;
+						regulator-always-on;
+						regulator-boot-on;
+					};
+
+					regulator-ldo10 {
+						compatible = "marvell,88pm880-ldo10";
+						regulator-min-microvolt = <0x124f80>;
+						regulator-max-microvolt = <0x325aa0>;
+						regulator-always-on;
+						regulator-boot-on;
+						linux,phandle = <0x13>;
+						phandle = <0x13>;
+					};
+
+					regulator-ldo11 {
+						compatible = "marvell,88pm880-ldo11";
+						regulator-min-microvolt = <0x124f80>;
+						regulator-max-microvolt = <0x325aa0>;
+						linux,phandle = <0x5a>;
+						phandle = <0x5a>;
+					};
+
+					regulator-ldo12 {
+						compatible = "marvell,88pm880-ldo12";
+						regulator-min-microvolt = <0x124f80>;
+						regulator-max-microvolt = <0x325aa0>;
+						regulator-always-on;
+						regulator-boot-on;
+					};
+
+					regulator-ldo13 {
+						compatible = "marvell,88pm880-ldo13";
+						regulator-min-microvolt = <0x124f80>;
+						regulator-max-microvolt = <0x325aa0>;
+						regulator-always-on;
+						regulator-boot-on;
+					};
+
+					regulator-ldo14 {
+						compatible = "marvell,88pm880-ldo14";
+						regulator-min-microvolt = <0x124f80>;
+						regulator-max-microvolt = <0x325aa0>;
+						regulator-always-on;
+						regulator-boot-on;
+						linux,phandle = <0x14>;
+						phandle = <0x14>;
+					};
+
+					regulator-ldo15 {
+						compatible = "marvell,88pm880-ldo15";
+						regulator-min-microvolt = <0x124f80>;
+						regulator-max-microvolt = <0x325aa0>;
+						regulator-always-on;
+						regulator-boot-on;
+					};
+
+					regulator-ldo16 {
+						compatible = "marvell,88pm880-ldo16";
+						regulator-min-microvolt = <0x124f80>;
+						regulator-max-microvolt = <0x325aa0>;
+						regulator-always-on;
+						regulator-boot-on;
+						linux,phandle = <0x42>;
+						phandle = <0x42>;
+					};
+
+					regulator-ldo17 {
+						compatible = "marvell,88pm880-ldo17";
+						regulator-min-microvolt = <0x124f80>;
+						regulator-max-microvolt = <0x325aa0>;
+						regulator-always-on;
+						regulator-boot-on;
+						linux,phandle = <0x4e>;
+						phandle = <0x4e>;
+					};
+
+					regulator-ldo18 {
+						compatible = "marvell,88pm880-ldo18";
+						regulator-min-microvolt = <0x19f0a0>;
+						regulator-max-microvolt = <0x2ab980>;
+						regulator-always-on;
+						regulator-boot-on;
+						linux,phandle = <0x3f>;
+						phandle = <0x3f>;
+					};
+
+					regulator-buck1a-slp {
+						compatible = "marvell,88pm880-buck1a-slp";
+						regulator-min-microvolt = <0x927c0>;
+						regulator-max-microvolt = <0x1b7740>;
+						regulator-always-on;
+						regulator-boot-on;
+						marvell,consumer-supplies = "buck1slp", "nameless";
+						linux,phandle = <0x33>;
+						phandle = <0x33>;
+					};
+				};
+
+				88pm860@38 {
+					compatible = "marvell,88pm860";
+					reg = <0x38>;
+					marvell,pmic-type = <0x1>;
+
+					pm860_codec {
+						compatible = "marvell,88pm860-codec";
+						#dailink-cells = <0x1>;
+						linux,phandle = <0x58>;
+						phandle = <0x58>;
+					};
+				};
+			};
+
+			i2c@d4013800 {
+				compatible = "mrvl,mmp-twsi";
+				#address-cells = <0x1>;
+				#size-cells = <0x0>;
+				reg = <0xd4013800 0x64>;
+				interrupts = <0x0 0x2 0x4>;
+				clocks = <0x2 0x3f>;
+				lpm-qos = <0xc>;
+				mrvl,i2c-fast-mode;
+				marvell,i2c-ilcr = <0x82c469f>;
+				marvell,i2c-iwcr = <0x142a>;
+				marvell,i2c-enable-bus-rst;
+				status = "okay";
+				pinctrl-names = "default", "gpio";
+				pinctrl-0 = <0x40>;
+				pinctrl-1 = <0x41>;
+				i2c-gpio = <0x12 0x49 0x0 0x12 0x4a 0x0>;
+
+				apds9930@39 {
+					compatible = "avago,apds9930";
+					reg = <0x39>;
+					interrupt-parent = <0x12>;
+					interrupts = <0x14 0x1>;
+					irq-gpios = <0x12 0x14 0x0>;
+					avdd-supply = <0x42>;
+				};
+
+				bmi160@68 {
+					compatible = "bosch-sensortec,bmi160";
+					reg = <0x68>;
+					interrupt-parent = <0x12>;
+					interrupts = <0x5b 0x1>;
+					irq-gpios = <0x12 0x5b 0x0>;
+					avdd-supply = <0x42>;
+					bmi160-place = <0x2>;
+				};
+
+				bme280@76 {
+					compatible = "bosch-sensortec,bme280";
+					reg = <0x76>;
+					avdd-supply = <0x42>;
+				};
+
+				icm20628@69 {
+					compatible = "invensense,icm20628";
+					reg = <0x69>;
+					interrupt-parent = <0x12>;
+					interrupts = <0x5b 0x1>;
+					inven,irq-gpios = <0x12 0x5b 0x0>;
+					avdd-supply = <0x42>;
+					axis_map_x = <0x1>;
+					negate_x = <0x0>;
+					axis_map_y = <0x0>;
+					negate_y = <0x1>;
+					axis_map_z = <0x2>;
+					negate_z = <0x1>;
+					inven,secondary_axis_map_x = <0x1>;
+					inven,secondary_negate_x = <0x0>;
+					inven,secondary_axis_map_y = <0x0>;
+					inven,secondary_negate_y = <0x0>;
+					inven,secondary_axis_map_z = <0x2>;
+					inven,secondary_negate_z = <0x1>;
+					inven,secondary_type = "compass";
+					inven,secondary_name = "ak09912";
+					inven,secondary_reg = <0xd>;
+				};
+
+				mxc400x@15 {
+					compatible = "memsic,mxc400x";
+					reg = <0x15>;
+					avdd-supply = <0x42>;
+				};
+
+				mmc3524x@30 {
+					compatible = "memsic,mmc3524x";
+					reg = <0x30>;
+					avdd-supply = <0x42>;
+				};
+			};
+
+			thermal@d4013300 {
+				compatible = "marvell,pxa1936-thermal";
+				reg = <0xd4013300 0x1c>;
+				interrupts = <0x0 0x21 0x4>;
+				clocks = <0x2 0x4c>;
+				clock-names = "ts_clk";
+				status = "okay";
+			};
+
+			coresight@d4100000 {
+				compatible = "marvell,coresight";
+				clocks = <0x2 0x4a 0x2 0x4b>;
+				clock-names = "DBGCLK", "TRACECLK";
+				status = "okay";
+				#address-cells = <0x1>;
+				#size-cells = <0x1>;
+				reg = <0xd4100000 0x100000>;
+				ranges;
+
+				dbg@0xd4110000 {
+					compatible = "marvell,coresight-dbg";
+					reg = <0xd4110000 0x8000 0xd4130000 0x8000>;
+				};
+
+				cti@0xd4118000 {
+					compatible = "marvell,coresight-cti";
+					reg = <0xd4118000 0x4000 0xd4138000 0x4000>;
+				};
+
+				etm@0xd411c000 {
+					compatible = "marvell,coresight-etm";
+					reg = <0xd411c000 0x4000 0xd413c000 0x4000>;
+				};
+
+				letb@0xd410a000 {
+					compatible = "marvell,coresight-letb";
+					reg = <0xd410a000 0x4000 0xd412a000 0x4000>;
+				};
+			};
+
+			watchdog@d4080000 {
+				compatible = "marvell,mmp-wdt";
+				reg = <0xd4080000 0xff 0xd4050000 0x1024>;
+				status = "disabled";
+			};
+
+			swjtag@d4013100 {
+				compatible = "marvell,sw-jtag";
+				reg = <0xd4013100 0x10>;
+				status = "disabled";
+			};
+
+			acipc@d401d000 {
+				compatible = "marvell,mmp-acipc";
+				reg = <0xd401d000 0x100>;
+				interrupts = <0x0 0x10 0x4 0x0 0x11 0x4 0x0 0x12 0x4>;
+				interrupt-names = "IPC_AP_DATAACK", "IPC_AP_SET_CMD", "IPC_AP_SET_MSG";
+				clocks = <0x2 0x4e>;
+				status = "okay";
+			};
+
+			seh@d4080000 {
+				compatible = "marvell,seh";
+				reg = <0xd4080000 0x100 0xd403d300 0x4>;
+				interrupts = <0x0 0x20 0x4>;
+				interrupt-names = "CP_TIMER2_3";
+				clocks = <0x2 0x4f>;
+				watchdog-type = <0x1>;
+				timer-num = <0x2>;
+				match-num = <0x0>;
+				status = "okay";
+			};
+
+			cp-load {
+				compatible = "marvell,cp_load";
+				cp-type = <0x31393536>;
+				lpm-qos = <0x7>;
+				remap-smc-funcid = <0xc2003001>;
+				status = "okay";
+			};
+
+			data-path {
+				compatible = "marvell,data-path";
+				version = <0x2>;
+				status = "okay";
+			};
+
+			keypanic1 {
+				compatible = "marvell,keyreset";
+				keys-down = <0x73 0x72>;
+				keyreset-need-panic;
+				status = "okay";
+				keyreset-press-msec = <0x7d0>;
+			};
+		};
+
+		pd_display@0xd4282800 {
+			compatible = "marvell,power-domain-display-pxa1u88";
+			reg = <0xd4282800 0x1000>;
+			clocks = <0x2 0x7b 0x2 0x6f>;
+			clock-names = "LCDCIHCLK", "esc_clk";
+			linux,phandle = <0x1f>;
+			phandle = <0x1f>;
+		};
+
+		ramoops {
+			compatible = "pstore,ramoops";
+			mem-size = <0x40000>;
+			mem-address = <0x8100000>;
+			record-size = <0x8000>;
+			console-size = <0x30000>;
+			dump-oops = <0x0>;
+			status = "okay";
+		};
+
+		atf {
+			compatible = "marvell, atf";
+			share-address = <0x8150000>;
+			share-size = <0x8000>;
+		};
+	};
+
+	regs_addr {
+		#address-cells = <0x1>;
+		#size-cells = <0x1>;
+		ranges;
+
+		pmu@d4050000 {
+			compatible = "marvell,mmp-pmu-mpmu";
+			reg = <0xd4050000 0x3004>;
+		};
+
+		pmu@d4282800 {
+			compatible = "marvell,mmp-pmu-apmu";
+			reg = <0xd4282800 0x1c0>;
+		};
+
+		pmu@d4015000 {
+			compatible = "marvell,mmp-pmu-apbc";
+			reg = <0xd4015000 0x74>;
+		};
+
+		ciu@d4282c00 {
+			compatible = "marvell,mmp-ciu";
+			reg = <0xd4282c00 0x1ac>;
+		};
+
+		wdtrtc@d4010000 {
+			compatible = "marvell,mmp-wdt-rtc";
+			reg = <0xd4010000 0x100>;
+		};
+
+		wdt@d4080000 {
+			compatible = "marvell,mmp-watchdog";
+			reg = <0xd4080000 0xff>;
+		};
+
+		apbs@d4090000 {
+			compatible = "marvell,mmp-apb-spare";
+			reg = <0xd4090000 0x154>;
+		};
+
+		dciu@d1df0000 {
+			compatible = "marvell,mmp-dciu";
+			reg = <0xd1df0000 0x98>;
+		};
+	};
+
+	clocks {
+		compatible = "marvell,pxa1936-clock";
+		reg = <0xd4050000 0x1000 0xd4282800 0x400 0xd4015000 0x1000 0xd403b000 0x1000 0xd4090000 0x1000 0xd4282c00 0x400 0xd1df0000 0x98 0xd420f000 0x850>;
+		reg-names = "mpmu", "apmu", "apbc", "apbcp", "apbs", "ciu", "dciu", "sc2desc";
+		#clock-cells = <0x1>;
+		linux,phandle = <0x2>;
+		phandle = <0x2>;
+	};
+
+	apsenhb {
+		compatible = "marvell,mmp-m3";
+		ipver = <0x3>;
+		status = "okay";
+		vccmain = <0xee098 0xaae60>;
+		gpslna = <0x12 0x4 0x0>;
+		pinctrl-names = "default", "poweron";
+		pinctrl-0 = <0x43>;
+		pinctrl-1 = <0x44>;
+		pmicver = <0x2>;
+		vm3pwr-supply = <0x45>;
+		antpwr-supply = <0x46>;
+		vccmain-supply = <0x33>;
+	};
+
+	cm3senhb {
+		compatible = "marvell,mmp-m3";
+		ipver = <0x3>;
+		status = "okay";
+		vccmain = <0xee098 0xaae60>;
+		gpslna = <0x12 0x4 0x0>;
+		pinctrl-names = "default", "poweron";
+		pinctrl-0 = <0x43 0x47 0x48>;
+		pinctrl-1 = <0x44 0x49>;
+		pmicver = <0x2>;
+		vm3pwr-supply = <0x45>;
+		antpwr-supply = <0x46>;
+		senpwr-supply = <0x42>;
+		vccmain-supply = <0x33>;
+	};
+
+	clock {
+		compatible = "marvell,audio-map-clock";
+		reg = <0xd4282800 0x400 0xd4090000 0x1000 0xd1200000 0xd000 0xd1230000 0x100>;
+		reg-names = "apmu", "apbs", "map", "dspaux";
+		#clock-cells = <0x1>;
+		map = <0x4a>;
+		linux,phandle = <0x31>;
+		phandle = <0x31>;
+	};
+
+	amipc {
+		compatible = "marvell,mmp-amipc";
+		reg = <0xc9420000 0x4000>;
+		reg-name = "dmachain";
+		interrupts = <0x0 0x5f 0x4>;
+		gnssip_ver = <0x3>;
+		status = "okay";
+	};
+
+	vnc {
+		compatible = "vnc-ts";
+	};
+
+	ion {
+		compatible = "marvell,pxa-ion";
+		#stream-id-cells = <0x1>;
+		status = "okay";
+		marvell,ion-nr = <0x2>;
+		marvell,ion-iommu = <0x1>;
+		marvell,power-domain = <0x8>;
+		linux,phandle = <0x3>;
+		phandle = <0x3>;
+
+		heap1 {
+			marvell,ion-name = "carveout_heap";
+			marvell,ion-type = <0x2>;
+			marvell,ion-id = <0x2>;
+			marvell,ion-base = <0x0>;
+			marvell,ion-size = <0x0>;
+		};
+
+		heap2 {
+			marvell,ion-name = "system_heap";
+			marvell,ion-type = <0x0>;
+			marvell,ion-id = <0x0>;
+		};
+	};
+
+	mcam@0 {
+		compatible = "marvell,mv_sc2_camera";
+		clocks = <0x2 0x80 0x2 0x7d>;
+		clock-names = "SC2AXICLK", "SC2MCLK";
+		lpm-qos = <0x7>;
+		status = "disable";
+		reg = <0x0 0x0>;
+		sc2-i2c-dyn-ctrl;
+		pwdn-gpios = <0x12 0x44 0x0>;
+		reset-gpios = <0x12 0x43 0x0>;
+		dphy_val = <0xff1d00 0x24733 0x4001001>;
+	};
+
+	mcam@1 {
+		compatible = "marvell,mv_sc2_camera";
+		clocks = <0x2 0x80 0x2 0x7d>;
+		clock-names = "SC2AXICLK", "SC2MCLK";
+		lpm-qos = <0x7>;
+		status = "okay";
+		reg = <0x1 0x0>;
+		sc2-i2c-dyn-ctrl;
+		pwdn-gpios = <0x12 0x46 0x0>;
+		reset-gpios = <0x12 0x45 0x0>;
+		af_2v8-supply = <0x4b>;
+		avdd_2v8-supply = <0x4c>;
+		dovdd_1v8-supply = <0x4d>;
+		dvdd_1v2-supply = <0x4e>;
+		dphy_val = <0xff1d00 0x24733 0x4001001>;
+	};
+
+	soc-camera@0 {
+		compatible = "soc-camera-pdrv";
+		status = "okay";
+		reg = <0x0 0x0>;
+	};
+
+	soc-camera@1 {
+		compatible = "soc-camera-pdrv";
+		status = "okay";
+		reg = <0x1 0x0>;
+	};
+
+	plat_cam {
+		compatible = "marvell,platform-cam";
+		status = "okay";
+
+		frontsensor {
+			compatible = "marvell,frontsensor";
+			#address-cells = <0x1>;
+			#size-cells = <0x0>;
+			status = "okay";
+
+			sensor@0 {
+				compatible = "ovt,ov2680";
+				status = "okay";
+				clocks = <0x2 0x7d>;
+				clock-names = "SC2MCLK";
+				reg = <0x36>;
+				sc2-i2c-dyn-ctrl;
+				adapter = <0x1>;
+				sensor-pos = <0x1>;
+				mclk = <0x18cba80>;
+				dphy3 = <0x1900>;
+				dphy5 = <0x4711>;
+				dphy6 = <0x1001>;
+				af_2v8-supply = <0x4b>;
+				avdd_2v8-supply = <0x4c>;
+				dovdd_1v8-supply = <0x4d>;
+				dvdd_1v2-supply = <0x4e>;
+				pwdn-gpios = <0x12 0x46 0x1>;
+				reset-gpios = <0x12 0x45 0x1>;
+			};
+
+			sensor@1 {
+				compatible = "samsung,s5k5e3";
+				status = "okay";
+				reg = <0x10>;
+				clocks = <0x2 0x7d>;
+				clock-names = "SC2MCLK";
+				sc2-i2c-dyn-ctrl;
+				adapter = <0x1>;
+				sensor-pos = <0x1>;
+				mclk = <0x18cba80>;
+				dphy3 = <0x5100>;
+				dphy5 = <0xff>;
+				dphy6 = <0x1001>;
+				af_2v8-supply = <0x4b>;
+				avdd_2v8-supply = <0x4c>;
+				dovdd_1v8-supply = <0x4d>;
+				dvdd_1v2-supply = <0x4e>;
+				pwdn-gpios = <0x12 0x46 0x1>;
+				reset-gpios = <0x12 0x45 0x1>;
+			};
+		};
+
+		backsensor {
+			compatible = "marvell,backsensor";
+			#address-cells = <0x1>;
+			#size-cells = <0x0>;
+			status = "okay";
+
+			sensor@0 {
+				compatible = "ovt,ov5642";
+				sensor-name = "ovt,ov5642";
+				reg = <0x3c>;
+				clocks = <0x2 0x7d>;
+				clock-names = "SC2MCLK";
+				adapter = <0x1>;
+				status = "okay";
+				mclk = <0x16e3600>;
+				sensor-pos = <0x1>;
+				dphy3 = <0x1500>;
+				dphy5 = <0xff>;
+				dphy6 = <0x1001>;
+				pwdn-gpios = <0x12 0x44 0x1>;
+				reset-gpios = <0x12 0x43 0x1>;
+			};
+
+			sensor@1 {
+				compatible = "ovt,ov13850";
+				status = "okay";
+				reg = <0x10>;
+				clocks = <0x2 0x7d>;
+				clock-names = "SC2MCLK";
+				sc2-i2c-dyn-ctrl;
+				adapter = <0x1>;
+				sensor-pos = <0x1>;
+				mclk = <0x16e3600>;
+				dphy3 = <0xff4115>;
+				dphy5 = <0x247ff>;
+				dphy6 = <0x4001001>;
+				af_2v8-supply = <0x4b>;
+				avdd_2v8-supply = <0x4c>;
+				dovdd_1v8-supply = <0x4d>;
+				dvdd_1v2-supply = <0x4e>;
+				pwdn-gpios = <0x12 0x44 0x1>;
+				reset-gpios = <0x12 0x43 0x1>;
+			};
+
+			sensor@2 {
+				compatible = "samsung,sr544";
+				status = "okay";
+				reg = <0x28>;
+				clocks = <0x2 0x7d>;
+				clock-names = "SC2MCLK";
+				sc2-i2c-dyn-ctrl;
+				adapter = <0x1>;
+				sensor-pos = <0x1>;
+				mclk = <0x18cba80>;
+				dphy3 = <0x1500>;
+				dphy5 = <0xff>;
+				dphy6 = <0x1001>;
+				af_2v8-supply = <0x4b>;
+				avdd_2v8-supply = <0x4c>;
+				dovdd_1v8-supply = <0x4d>;
+				dvdd_1v2-supply = <0x4e>;
+				pwdn-gpios = <0x12 0x44 0x1>;
+				reset-gpios = <0x12 0x43 0x1>;
+			};
+
+			sensor@3 {
+				compatible = "sony,imx219";
+				status = "okay";
+				reg = <0x1a>;
+				clocks = <0x2 0x7d>;
+				clock-names = "SC2MCLK";
+				sc2-i2c-dyn-ctrl;
+				adapter = <0x1>;
+				sensor-pos = <0x1>;
+				mclk = <0x18cba80>;
+				dphy3 = <0x1500>;
+				dphy5 = <0xff>;
+				dphy6 = <0x1001>;
+				af_2v8-supply = <0x4b>;
+				avdd_2v8-supply = <0x4c>;
+				dovdd_1v8-supply = <0x4d>;
+				dvdd_1v2-supply = <0x4e>;
+				pwdn-gpios = <0x12 0x44 0x1>;
+				reset-gpios = <0x12 0x43 0x1>;
+			};
+
+			sensor@4 {
+				compatible = "ovt,ov13850r2a";
+				status = "okay";
+				reg = <0x10>;
+				clocks = <0x2 0x7d>;
+				clock-names = "SC2MCLK";
+				sc2-i2c-dyn-ctrl;
+				adapter = <0x1>;
+				sensor-pos = <0x1>;
+				mclk = <0x16e3600>;
+				dphy3 = <0xff4116>;
+				dphy5 = <0x247ff>;
+				dphy6 = <0x4001001>;
+				af_2v8-supply = <0x4b>;
+				avdd_2v8-supply = <0x4c>;
+				dovdd_1v8-supply = <0x4d>;
+				dvdd_1v2-supply = <0x4e>;
+				pwdn-gpios = <0x12 0x44 0x1>;
+				reset-gpios = <0x12 0x43 0x1>;
+			};
+
+			sensor@5 {
+				compatible = "samsung,s5k3l2";
+				status = "okay";
+				reg = <0x2d>;
+				clocks = <0x2 0x7d>;
+				clock-names = "SC2MCLK";
+				sc2-i2c-dyn-ctrl;
+				adapter = <0x1>;
+				sensor-pos = <0x1>;
+				mclk = <0x18cba80>;
+				dphy3 = <0xff4115>;
+				dphy5 = <0x247ff>;
+				dphy6 = <0x4001001>;
+				af_2v8-supply = <0x4b>;
+				avdd_2v8-supply = <0x4c>;
+				dovdd_1v8-supply = <0x4d>;
+				dvdd_1v2-supply = <0x4e>;
+				pwdn-gpios = <0x12 0x44 0x1>;
+				reset-gpios = <0x12 0x43 0x1>;
+			};
+
+			sensor@6 {
+				compatible = "samsung,s5k5e3";
+				status = "okay";
+				reg = <0x10>;
+				clocks = <0x2 0x7d>;
+				clock-names = "SC2MCLK";
+				sc2-i2c-dyn-ctrl;
+				adapter = <0x1>;
+				sensor-pos = <0x1>;
+				mclk = <0x18cba80>;
+				dphy3 = <0x5100>;
+				dphy5 = <0xff>;
+				dphy6 = <0x1001>;
+				af_2v8-supply = <0x4b>;
+				avdd_2v8-supply = <0x4c>;
+				dovdd_1v8-supply = <0x4d>;
+				dvdd_1v2-supply = <0x4e>;
+				pwdn-gpios = <0x12 0x44 0x1>;
+				reset-gpios = <0x12 0x43 0x1>;
+			};
+		};
+	};
+
+	b52isp_sc2_csi0 {
+		compatible = "marvell,ccicv2";
+		cciv2_type = <0x0>;
+		csi_id = <0x0>;
+		status = "okay";
+	};
+
+	b52isp_sc2_csi1 {
+		compatible = "marvell,ccicv2";
+		cciv2_type = <0x0>;
+		csi_id = <0x1>;
+		status = "okay";
+		csi_mux_repacked;
+	};
+
+	b52isp_sc2_dma0 {
+		compatible = "marvell,ccicv2";
+		cciv2_type = <0x1>;
+		dma_id = <0x0>;
+		status = "okay";
+	};
+
+	b52isp_sc2_dma1 {
+		compatible = "marvell,ccicv2";
+		cciv2_type = <0x1>;
+		dma_id = <0x1>;
+		status = "okay";
+	};
+
+	sd8x-rfkill {
+		compatible = "mrvl,sd8x-rfkill";
+		status = "okay";
+		sd-host = <0x4f>;
+		pd-gpio = <0x12 0x61 0x0>;
+		rst-gpio = <0x12 0x47 0x0>;
+		wib_1v8-supply = <0x4d>;
+		wib_3v3-supply = <0x50>;
+		edge-wakeup-gpio = <0x12 0x27 0x0>;
+		marvell,sdh-tuning-dvfs;
+	};
+
+	tzdd {
+		compatible = "pxa-tzdd";
+		status = "okay";
+		lpm-qos = <0x7>;
+	};
+
+	iml@7ffffe0 {
+		compatible = "marvell,mmp-iml";
+		reg = <0x7ffffe0 0x10 0xd403d200 0x10 0xd403b038 0x10>;
+		interrupts = <0x0 0x38 0x4>;
+		interrupt-names = "IPC_MSA_DATA";
+		dmas = <0x27 0xff 0x0>;
+		dma-names = "iml-dma";
+		status = "disabled";
+	};
+
+	mmp_pcm_hostless {
+		bus_number = <0x0>;
+		compatible = "marvell,mmp-pcm-hostless";
+		#dailink-cells = <0x1>;
+		status = "okay";
+		linux,phandle = <0x54>;
+		phandle = <0x54>;
+	};
+
+	snd_soc_dummy {
+		compatible = "snd-soc-dummy";
+		#dailink-cells = <0x1>;
+		status = "okay";
+		linux,phandle = <0x56>;
+		phandle = <0x56>;
+	};
+
+	sound {
+		compatible = "marvell,map-v2-card";
+		status = "okay";
+		map,dapm-route = "ADC input1", "TDM_MIC1_CAP", "ADC input2", "TDM_MIC2_CAP", "ADC input4", "DMIC12_PDM", "ADC input5", "DMIC34_PDM", "ADC input3", "BT_VC_UL", "TDM_OUT1_PLAYBACK", "out1_hs_en", "TDM_OUT2_PLAYBACK", "out1_spkr_en", "PDM_OUT", "pdm_sel", "BT_VC_DL", "i2s3_in";
+
+		fe_i2s1 {
+			compatible = "marvell,map-dailink-1";
+			dai-name = "MAP I2S1 audio";
+			stream-name = "map i2s1";
+			marvell,cpu-dai = <0x51 0x0>;
+			marvell,codec-dai = <0x52 0x1>;
+		};
+
+		fe_i2s2 {
+			compatible = "marvell,map-dailink-1";
+			dai-name = "MAP I2S4 audio";
+			stream-name = "map i2s4";
+			marvell,cpu-dai = <0x53 0x1>;
+			marvell,codec-dai = <0x52 0x4>;
+		};
+
+		fe_i2s3 {
+			compatible = "marvell,map-dailink-2";
+			dai-name = "MAP I2S2 audio";
+			stream-name = "map i2s2";
+			marvell,cpu-dai = <0x54 0x0>;
+			marvell,codec-dai = <0x52 0x2>;
+			marvell,dai-no-host-mode;
+		};
+
+		fe_i2s4 {
+			compatible = "marvell,map-dailink-7";
+			dai-name = "MAP I2S3 audio";
+			stream-name = "map i2s3";
+			marvell,cpu-dai = <0x54 0x1>;
+			marvell,codec-dai = <0x52 0x3>;
+			marvell,dai-no-host-mode;
+		};
+
+		fe_i2s5 {
+			compatible = "marvell,map-dailink-2";
+			dai-name = "MAP I2S5 audio";
+			stream-name = "map i2s5";
+			marvell,cpu-dai = <0x54 0x2>;
+			marvell,codec-dai = <0x52 0x5>;
+			marvell,dai-no-host-mode;
+		};
+
+		be_i2s1 {
+			compatible = "marvell,map-dailink-3";
+			dai-name = "MAP AUXI2S audio";
+			stream-name = "BT audio";
+			marvell,cpu-dai = <0x55 0x1>;
+			marvell,codec-dai = <0x56 0x0>;
+			marvell,codec-name = "snd-soc-dummy";
+			marvell,codec-dai-name = "snd-soc-dummy-dai";
+			marvell,dai-no-pcm;
+			marvell,dai-fixup = <0x0>;
+		};
+
+		be_i2s2 {
+			compatible = "marvell,map-dailink-6";
+			dai-name = "MAP TDM hs audio";
+			stream-name = "codec hs audio";
+			marvell,cpu-dai = <0x57 0x1>;
+			marvell,codec-dai = <0x58 0x3>;
+			marvell,playback-only;
+			marvell,dai-no-pcm;
+			marvell,dai-fixup = <0x1>;
+		};
+
+		be_i2s3 {
+			compatible = "marvell,map-dailink-4";
+			dai-name = "MAP TDM speaker audio";
+			stream-name = "codec speaker audio";
+			marvell,cpu-dai = <0x57 0x2>;
+			marvell,codec-dai = <0x58 0x4>;
+			marvell,playback-only;
+			marvell,dai-no-pcm;
+			marvell,dai-fixup = <0x1>;
+		};
+
+		be_i2s4 {
+			compatible = "marvell,map-dailink-5";
+			dai-name = "MAP TDM mic1 audio";
+			stream-name = "codec mic1 audio";
+			marvell,cpu-dai = <0x57 0x3>;
+			marvell,codec-dai = <0x58 0x1>;
+			marvell,capture-only;
+			marvell,dai-no-pcm;
+		};
+
+		be_i2s5 {
+			compatible = "marvell,map-dailink-5";
+			dai-name = "MAP TDM mic2 audio";
+			stream-name = "codec mic2 audio";
+			marvell,cpu-dai = <0x57 0x4>;
+			marvell,codec-dai = <0x58 0x2>;
+			marvell,capture-only;
+			marvell,dai-no-pcm;
+		};
+
+		be_i2s6 {
+			compatible = "marvell,map-dailink-8";
+			dai-name = "MAP PDM SPEAKER audio";
+			stream-name = "PDM audio";
+			marvell,cpu-dai = <0x55 0x2>;
+			marvell,codec-dai = <0x56 0x0>;
+			marvell,codec-name = "snd-soc-dummy";
+			marvell,codec-dai-name = "snd-soc-dummy-dai";
+			marvell,dai-no-pcm;
+			marvell,dai-fixup = <0x1>;
+		};
+
+		be_i2s7 {
+			compatible = "marvell,map-dailink-8";
+			dai-name = "MAP DMIC12 audio";
+			stream-name = "DMIC12 audio";
+			marvell,cpu-dai = <0x55 0x3>;
+			marvell,codec-dai = <0x56 0x0>;
+			marvell,codec-name = "snd-soc-dummy";
+			marvell,codec-dai-name = "snd-soc-dummy-dai";
+			marvell,dai-no-pcm;
+			marvell,dai-fixup = <0x1>;
+		};
+
+		be_i2s8 {
+			compatible = "marvell,map-dailink-8";
+			dai-name = "MAP DMIC34 audio";
+			stream-name = "DMIC34 audio";
+			marvell,cpu-dai = <0x55 0x4>;
+			marvell,codec-dai = <0x56 0x0>;
+			marvell,codec-name = "snd-soc-dummy";
+			marvell,codec-dai-name = "snd-soc-dummy-dai";
+			marvell,dai-no-pcm;
+			marvell,dai-fixup = <0x1>;
+		};
+	};
+
+	r63311 {
+		compatible = "marvell,mmp-r63311";
+		marvell,path-name = "mmp_pnpath";
+		status = "okay";
+		rst_gpio = <0x12 0x62 0x0>;
+		power_gpio = <0x12 0x60 0x0>;
+		marvell,mipi-backlight;
+	};
+
+	hx8394 {
+		compatible = "marvell,mmp-hx8394";
+		marvell,path-name = "mmp_pnpath";
+		panel_esd = <0x0>;
+		status = "okay";
+		rst_gpio = <0x12 0x62 0x0>;
+		avdd-supply = <0x3c>;
+	};
+
+	lg4591 {
+		compatible = "marvell,mmp-lg4591";
+		marvell,path-name = "mmp_pnpath";
+		status = "okay";
+		rst_gpio = <0x12 0x62 0x0>;
+		avdd-supply = <0x3c>;
+	};
+
+	sd8xxx-wlan {
+		drv_mode = <0x5>;
+		cfg80211_wext = <0xc>;
+		sta_name = "wlan";
+		wfd_name = "p2p";
+		max_vir_bss = <0x1>;
+		drvdbg = <0x80007>;
+		dev_cap_mask = <0xffffcfff>;
+		init_cfg = "mrvl/wifi_init_cfg.conf";
+		reg_alpha2 = "US";
+		p2p_enh = <0x1>;
+	};
+
+	sd8xxx-bt {
+		init_cfg = "mrvl/bt_init_cfg.conf";
+	};
+
+	dip {
+		compatible = "marvell,simple-dip";
+		clocks = <0x2 0x34 0x2 0x35 0x2 0x32>;
+		clock-names = "clst0", "clst1", "ddr";
+	};
+
+	vibrator {
+		compatible = "marvell,pwm-vibrator";
+		pwms = <0x59 0x0 0x3e8>;
+		min_timeout = <0x0>;
+		duty_cycle = <0x320>;
+		vibrator-supply = <0x5a>;
+	};
+};
